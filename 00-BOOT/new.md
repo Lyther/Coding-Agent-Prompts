@@ -79,9 +79,13 @@ This command creates the **context infrastructure** that enables smooth vibe cod
 2. **`.cursorignore`**:
     - **Logic**: Aggressively exclude files to save context window tokens.
     - **Include**: lockfiles (`*.lock`), huge assets, build targets, `node_modules`, `venv`.
+    - **Exclude**: workspace files (`*.code-workspace`), key and secret files (`*.env`, `*.pem`, `*.key`, `secrets/`), IDE config files (`*.idea/`, `.vscode/`, `.claude/`, `.obsidian/`, `.cursor/`, `.gemini/`).
 3. **`<project-name>.code-workspace`**:
     - Analyze the project’s code and manifests, then auto-generate or update a VS Code `.code-workspace` with: folders, search/files excludes, `formatOnSave`, per-language default formatters/linters, common build/test/lint tasks, and required launch configurations.
     - Output valid JSONC only.
+4. **`.cursorrules`**:
+    - Make sure the global Cursor rules exist in the project folder. If not, use `ln -sf ~/.cursor/commands/.cursorrules ./` command to link the local device's Cursor rules to the folder root.
+    - Don't use the write tool to create the rules file. Don't use the move or copy command. Symbolic link is the only correct option.
 
 ### Phase 4: Entrypoint Standardization
 

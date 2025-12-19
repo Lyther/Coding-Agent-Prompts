@@ -9,6 +9,7 @@ Git history is a story, not a dump.
 **Your Job**: Dissect current changes into logical, atomic units.
 **The Enemy**: "WIP", "Update files", `git commit -a -m "fix"`.
 **The Law**: If I cannot revert a specific feature without breaking unrelated changes, YOU FAILED.
+**Critical Note**: Most of the git commands are interactive, if you can't input/output the terminal, you should use pipe commands to avoid the interactive mode.
 
 ## VIBE CODING INTEGRATION
 
