@@ -42,7 +42,7 @@ govulncheck ./...                # known-vuln deps — blocking
 go test -race -count=1 ./...
 ```
 
-Install tools via repo-pinned tooling (`tools.go`, `mise`, CI image); avoid unpinned `go install ...@latest`.
+Install tools via repo-pinned tooling (`tools.go`, `mise`, CI image); avoid unpinned `go install ...@latest`. For pre-commit, use the maintained `TekWizely/pre-commit-golang` (pin a rev); `dnephin/pre-commit-golang` was archived 2025-03-12 — do not use it.
 
 ### golangci-lint config (strict set)
 
@@ -96,4 +96,4 @@ formatters:
   enable: [gofumpt, goimports]
 ```
 
-Pin the golangci-lint version and the CI action explicitly (v2 schema). Add `issues.exclude-dirs` for vendored fixtures so linters skip non-code YAML.
+Pin the golangci-lint version and the CI action explicitly (v2 schema). Add `issues.exclude-dirs` for vendored fixtures so linters skip non-code YAML. Validate the config with `golangci-lint config verify`; convert a v1 config with `golangci-lint migrate`.

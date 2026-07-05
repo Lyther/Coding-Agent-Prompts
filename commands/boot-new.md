@@ -155,7 +155,7 @@ This command creates the **context infrastructure** that enables smooth vibe cod
     - Generate `.pre-commit-config.yaml`.
     - **Mandatory Hooks**: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`.
     - **Language Hooks**: `ruff` (Python), `fmt` (Rust), `prettier` (Web).
-    - **Go hooks**: `gofumpt`, `goimports`, `go-mod-tidy`, `go-vet`, `golangci-lint`. Use the **active fork** `TekWizely/pre-commit-golang` — the older `dnephin/pre-commit-golang` is archived (upstream abandoned ~2023) and MUST NOT be used for new projects. If the active fork's hook set is insufficient, prefer a `local` hook that calls `make lint` directly rather than pulling in an archived dep.
+    - **Go hooks**: `gofumpt`, `goimports`, `go-mod-tidy`, `go-vet`, `golangci-lint`. Use the **active fork** `TekWizely/pre-commit-golang` — the older `dnephin/pre-commit-golang` was archived 2025-03-12 (maintainer inactive for years prior) and MUST NOT be used for new projects. If the active fork's hook set is insufficient, prefer a `local` hook that calls `make lint` directly rather than pulling in an archived dep.
     - **Commit message policy**: if Cursor or Claude Code injects attribution without the author's intent, generate a local hook that removes only those Cursor/Claude Code advertising trailers or signatures. Do not strip unrelated human co-authors or unrelated vendor names.
     - **Commit range policy**: if the project needs CI enforcement, generate a range checker that rejects the same Cursor/Claude Code attribution patterns. This protects against local hook drift without turning commit history checks into a broad vendor-name blocklist.
 3. **Scaffold Project Rules**:
