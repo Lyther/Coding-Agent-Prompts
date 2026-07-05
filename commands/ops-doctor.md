@@ -3,7 +3,6 @@ name: ops-doctor
 phase: improve
 description: "Run a health check on the agent-surface repository and local generated surfaces."
 ---
-
 ## OBJECTIVE
 
 Diagnose whether `agent-surface` is internally consistent and whether the local generated surfaces match the current compiler model.

@@ -3,7 +3,7 @@ name: arch-diagram
 phase: decide
 description: "Generate a comprehensive C4-based diagram set that maps the whole system at a glance."
 ---
-## Objective
+## OBJECTIVE
 
 Produce or update a comprehensive diagram set that lets a human or agent grasp the entire system quickly, and link it from `docs/architecture.md`. The goal is coverage at a glance: every major part of the system appears in at least one diagram, and the set reads top-down from a single high-level overview into the parts that need detail.
 

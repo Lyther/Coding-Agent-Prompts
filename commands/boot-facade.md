@@ -3,7 +3,6 @@ name: boot-facade
 phase: bootstrap
 description: "Generate labeled synthetic enterprise fixtures."
 ---
-
 ## OBJECTIVE
 
 **CRITICAL**: This command generates clearly labeled synthetic enterprise fixtures for security research, classifier training, and robustness testing.

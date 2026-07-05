@@ -5,7 +5,7 @@ aliases:
 phase: bootstrap
 description: "Research and write the concept-zero high-level design for a project."
 ---
-## Objective
+## OBJECTIVE
 
 Create or update `docs/context/concept-zero.md`, the canonical concept-level HLD for a new or existing project. `docs/architecture.md` and `docs/roadmap.md` should be derived from this document by `arch-roadmap`, not invented in parallel.
 

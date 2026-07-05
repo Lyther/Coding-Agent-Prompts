@@ -3,7 +3,7 @@ name: arch-model
 phase: decide
 description: "Define the data and domain model: entities, relationships, schema, invariants, and migration posture."
 ---
-## Objective
+## OBJECTIVE
 
 Produce or update the data and domain model and record it where implementers rely on it:
 

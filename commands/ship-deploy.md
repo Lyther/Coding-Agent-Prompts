@@ -3,7 +3,6 @@ name: ship-deploy
 phase: ship
 description: "Deploy verified artifacts with approval and rollback gates."
 ---
-
 ## OBJECTIVE
 
 **THE LAUNCH BUTTON.**

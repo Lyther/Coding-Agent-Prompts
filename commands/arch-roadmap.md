@@ -3,7 +3,7 @@ name: arch-roadmap
 phase: decide
 description: "Convert a concept-zero HLD into a comprehensive architecture and executable roadmap."
 ---
-## Objective
+## OBJECTIVE
 
 Produce or update:
 
