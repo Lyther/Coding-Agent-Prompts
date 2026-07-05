@@ -573,6 +573,7 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
     legacyInstructions: includeInstructions ? legacyInstructions : [],
     mcpEntries: includeMcp
       ? await selectedMcpServiceEntries(true, {
+        mode: "install",
         categoryFilter: options.categoryFilter ?? null,
         optionalServices: options.optionalServices ?? null,
       })

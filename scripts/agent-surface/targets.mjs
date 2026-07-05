@@ -2,6 +2,7 @@
 // (commands/rules/subagents/skills/mcp) into per-target outputs. Imports render/roots/merge/
 // postprocess; the install + check layers import targets/targetOutputs/producers from here.
 import { readFile, stat } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { directDirectories, filesUnder } from "./fs-tree.mjs";
 import { optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
@@ -531,7 +532,20 @@ export async function selectedMcpServiceEntries(defaultEnabled, context) {
       if (!known.has(id)) fail(`missing optional MCP service: ${id}`);
     }
   }
-  return entries.sort(([left], [right]) => left.localeCompare(right));
+  const sorted = entries.sort(([left], [right]) => left.localeCompare(right));
+  // Hosts posix_spawn the stdio MCP command directly (no shell), so a literal "~" is never
+  // expanded and the server fails to launch (ENOENT). At install time, resolve a leading "~/"
+  // to an absolute $HOME path. dist/build keeps "~" so generated output stays machine-agnostic
+  // and reproducible. Clone the service so the cached registry object is never mutated.
+  if (context.mode !== "install") return sorted;
+  return sorted.map(([id, service]) => {
+    const command = service.mcp?.server?.command;
+    if (typeof command !== "string" || !command.startsWith("~/")) return [id, service];
+    return [id, {
+      ...service,
+      mcp: { ...service.mcp, server: { ...service.mcp.server, command: path.join(os.homedir(), command.slice(2)) } },
+    }];
+  });
 }
 
 export async function externalSkillRoots() {

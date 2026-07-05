@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -1267,8 +1268,21 @@ assert.deepEqual(inlineKiloConfig.instructions, [
 ]);
 assert.equal(Object.hasOwn(inlineKiloConfig, "skills"), false);
 assert.equal(Object.hasOwn(inlineKiloConfig, "permission"), false);
-assert.deepEqual(inlineKiloConfig.mcp.synapse.command, ["~/.local/bin/synapse-bridge"]);
+assert.deepEqual(inlineKiloConfig.mcp.synapse.command, [path.join(os.homedir(), ".local", "bin", "synapse-bridge")]);
 rmSync(inlineKiloDest, { recursive: true, force: true });
+
+// Regression: MCP commands must be ABSOLUTE at install time. Hosts posix_spawn the stdio
+// command directly (no shell), so a literal "~" is never expanded → ENOENT on launch.
+// dist/build keeps "~" (portable, reproducible); install resolves it against $HOME.
+const mcpAbsBin = (name) => path.join(os.homedir(), ".local", "bin", name);
+const mcpAbsDest = "/tmp/agent-surface-mcp-abs";
+rmSync(mcpAbsDest, { recursive: true, force: true });
+run(["install", "--target", "droid", "--scope", "user", "--category", "mcps", "--dest", mcpAbsDest]);
+const droidMcpAbs = JSON.parse(readFileSync(path.join(mcpAbsDest, ".factory", "mcp.json"), "utf8"));
+assert.equal(droidMcpAbs.mcpServers.grimoire.command, mcpAbsBin("grimoire-server"));
+assert.equal(droidMcpAbs.mcpServers.synapse.command, mcpAbsBin("synapse-bridge"));
+assert.doesNotMatch(droidMcpAbs.mcpServers.grimoire.command, /^~/, "install MCP command must not contain a literal ~");
+rmSync(mcpAbsDest, { recursive: true, force: true });
 
 const existingCursorMcpDest = "/tmp/agent-surface-cursor-existing-mcp";
 rmSync(existingCursorMcpDest, { recursive: true, force: true });
@@ -1280,7 +1294,7 @@ writeFileSync(
 run(["install", "--target", "cursor", "--dest", existingCursorMcpDest, "--category", "mcps", "--service", "synapse"]);
 const mergedCursorMcp = JSON.parse(readFileSync(path.join(existingCursorMcpDest, ".cursor", "mcp.json"), "utf8"));
 assert.equal(mergedCursorMcp.mcpServers.existing.command, "local-existing");
-assert.equal(mergedCursorMcp.mcpServers.synapse.command, "~/.local/bin/synapse-bridge");
+assert.equal(mergedCursorMcp.mcpServers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
 assert.equal(Object.hasOwn(mergedCursorMcp.mcpServers, "agentmemory"), false);
 rmSync(existingCursorMcpDest, { recursive: true, force: true });
 
@@ -1344,7 +1358,7 @@ for (const fx of mergeFixtures) {
     assert.ok(merged[fx.root]?.existing, `${fx.target}: pre-existing user server preserved`);
     const syn = merged[fx.root].synapse;
     const synCmd = Array.isArray(syn.command) ? syn.command[0] : syn.command;
-    assert.equal(synCmd, "~/.local/bin/synapse-bridge", `${fx.target}: synapse merged`);
+    assert.equal(synCmd, path.join(os.homedir(), ".local", "bin", "synapse-bridge"), `${fx.target}: synapse merged (absolute at install)`);
     assert.equal(Object.hasOwn(merged[fx.root], "agentmemory"), false, `${fx.target}: external/secret-bearing MCP not auto-added`);
     if (fx.keep) fx.keep(merged);
     const beforeRe = readFileSync(path.join(dest, fx.rel), "utf8");
