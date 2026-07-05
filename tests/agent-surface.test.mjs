@@ -342,12 +342,19 @@ const genericRules = run(["check", "rules", "--scenario", "generic-chat"]);
 assert.match(genericRules, /^generic-chat:$/m);
 assert.match(genericRules, /rules\/00-precedence-and-safety\.mdc/);
 assert.doesNotMatch(genericRules, /^errors:$/m);
+// 04-cybersecurity is scoped (alwaysApply:false): it must NOT attach to a generic session.
+assert.doesNotMatch(genericRules, /rules\/04-cybersecurity\.mdc/);
 
 for (const scenario of ["python-source", "python-tooling", "rust-source", "go-ci", "typescript-eslint", "shell-script", "security-exploit", "ordinary-patch"]) {
   const output = run(["check", "rules", "--scenario", scenario]);
   assert.match(output, new RegExp(`^${scenario}:$`, "m"));
   assert.doesNotMatch(output, /^errors:$/m);
-  assert.match(output, /rules\/04-cybersecurity\.mdc/);
+  // 04-cybersecurity attaches only where a security-related path matches its globs.
+  if (scenario === "security-exploit") {
+    assert.match(output, /rules\/04-cybersecurity\.mdc/);
+  } else {
+    assert.doesNotMatch(output, /rules\/04-cybersecurity\.mdc/);
+  }
 }
 
 run(["build", "--target", "all"]);
@@ -381,7 +388,7 @@ assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", "
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "ops-flow", "agents", "openai.yaml"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".codex", "AGENTS.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".codex", "references", "rules", "10-python.md"))), true);
-assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".codex", "references", "rules", "04-cybersecurity.md"))), false);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".codex", "references", "rules", "04-cybersecurity.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".codex", "agents", "boss.toml"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "deepagents", ".deepagents", "agent", "skills", "ops-flow", "SKILL.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "deepagents", ".deepagents", "agent", "AGENTS.md"))), true);
@@ -408,9 +415,9 @@ assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "AGENTS.md"))), false);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "kilo.jsonc"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "rules", "00-precedence-and-safety.md"))), true);
-assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "rules", "04-cybersecurity.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "rules", "04-cybersecurity.md"))), false);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "references", "rules", "14-shell.md"))), true);
-assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "references", "rules", "04-cybersecurity.md"))), false);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "references", "rules", "04-cybersecurity.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "antigravity", "global_workflows", "ops-flow.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "antigravity-cli", "config", "plugins", "agent-surface", "plugin.json"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "antigravity-cli", "config", "plugins", "agent-surface", "skills", "ops-flow.md"))), true);
@@ -449,7 +456,8 @@ const cursorIgnore = readFileSync(path.join(root, "dist", "cursor", ".cursorigno
 assert.match(cursorIgnore, /agent-surface canonical AI-tool ignore baseline/);
 const codexInstructions = readFileSync(path.join(root, "dist", "codex", ".codex", "AGENTS.md"), "utf8");
 assert.match(codexInstructions, /## 00-precedence-and-safety\.mdc/);
-assert.match(codexInstructions, /## 04-cybersecurity\.mdc/);
+// 04-cybersecurity is scoped now: it lives in references/rules/, not the always-on AGENTS.md (like 10-python).
+assert.doesNotMatch(codexInstructions, /## 04-cybersecurity\.mdc/);
 assert.doesNotMatch(codexInstructions, /## 10-python\.mdc/);
 const codexPythonReference = readFileSync(path.join(root, "dist", "codex", ".codex", "references", "rules", "10-python.md"), "utf8");
 assert.match(codexPythonReference, /Scoped agent-surface reference/);
@@ -460,7 +468,6 @@ assert.deepEqual(kiloPreviewConfig.instructions, [
   "./rules/01-response-style.md",
   "./rules/02-agent-workflow.md",
   "./rules/03-project-defaults.md",
-  "./rules/04-cybersecurity.md",
   "./rules/05-tooling.md",
   "./rules/06-test-policy.md",
 ]);
@@ -877,13 +884,13 @@ const liveDest = "/tmp/agent-surface-live";
 rmSync(liveDest, { recursive: true, force: true });
 const liveInstall = run(["install", "--target", "cline", "--dest", liveDest]);
 assert.match(liveInstall, /^installed:$/m);
-assert.match(liveInstall, /wrote: 73/);
+assert.match(liveInstall, /wrote: 74/);
 assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "workflow-boss.md"), "utf8"), /^## OBJECTIVE/);
 assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "verify-readiness.md"), "utf8"), /^## OBJECTIVE/);
 assert.match(readFileSync(path.join(liveDest, ".clineignore"), "utf8"), /agent-surface canonical AI-tool ignore baseline/);
 const liveManifest = JSON.parse(readFileSync(path.join(liveDest, ".agent-surface", "cline-manifest.json"), "utf8"));
 assert.equal(liveManifest.target, "cline");
-assert.equal(liveManifest.managed.length, 73);
+assert.equal(liveManifest.managed.length, 74);
 assert.equal(liveManifest.managed[0].managed_by, "agent-surface");
 rmSync(liveDest, { recursive: true, force: true });
 
@@ -1255,7 +1262,6 @@ assert.deepEqual(inlineKiloConfig.instructions, [
   ".kilo/rules/01-response-style.md",
   ".kilo/rules/02-agent-workflow.md",
   ".kilo/rules/03-project-defaults.md",
-  ".kilo/rules/04-cybersecurity.md",
   ".kilo/rules/05-tooling.md",
   ".kilo/rules/06-test-policy.md",
 ]);
@@ -1403,7 +1409,6 @@ for (const target of [
       ".kilo/rules/01-response-style.md",
       ".kilo/rules/02-agent-workflow.md",
       ".kilo/rules/03-project-defaults.md",
-      ".kilo/rules/04-cybersecurity.md",
       ".kilo/rules/05-tooling.md",
       ".kilo/rules/06-test-policy.md",
     ]);
