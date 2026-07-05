@@ -45,6 +45,10 @@ For greenfield projects with no config, seed `tsconfig.json` from these flags (p
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
     "noUncheckedIndexedAccess": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
@@ -55,6 +59,8 @@ For greenfield projects with no config, seed `tsconfig.json` from these flags (p
   }
 }
 ```
+
+Add `erasableSyntaxOnly: true` only when the project runs Node-native `.ts`/`.mts` (type-stripping); it bans enums, runtime namespaces, and parameter properties, so keep it out of ordinary tsc/bundler configs.
 
 ## Toolchain gate
 
