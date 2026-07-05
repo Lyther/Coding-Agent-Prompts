@@ -3,7 +3,6 @@ name: qa-sec
 phase: review
 description: "Review security evidence and produce advisory findings."
 ---
-
 ## OBJECTIVE
 
 **SECURITY EVIDENCE REVIEW.**

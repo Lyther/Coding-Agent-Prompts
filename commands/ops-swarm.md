@@ -4,7 +4,6 @@ phase: observe
 description: "Coordinate a bounded evidence-led multi-agent investigation."
 aliases:
 ---
-
 ## OBJECTIVE
 
 **BOUNDED SWARM INVESTIGATION.**

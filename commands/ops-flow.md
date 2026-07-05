@@ -3,7 +3,6 @@ name: ops-flow
 phase: decide
 description: "Route a task to the lightest safe agent-surface path."
 ---
-
 ## OBJECTIVE
 
 Route an incoming task to the lightest agent-surface path that can handle it safely.

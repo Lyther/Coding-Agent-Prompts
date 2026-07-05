@@ -3,7 +3,6 @@ name: ops-nuke
 phase: improve
 description: "Plan repository cleanup with explicit deletion approval."
 ---
-
 ## OBJECTIVE
 
 **SAFE REPOSITORY CLEANUP.**

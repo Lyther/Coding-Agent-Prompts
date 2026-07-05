@@ -3,7 +3,7 @@ name: arch-api
 phase: decide
 description: "Define API and interface contracts: boundaries, schemas, errors, versioning, and compatibility."
 ---
-## Objective
+## OBJECTIVE
 
 Produce or update the interface contract for the system and record it where implementers and callers can rely on it:
 
