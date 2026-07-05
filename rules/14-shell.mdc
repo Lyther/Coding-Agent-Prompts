@@ -13,7 +13,7 @@ alwaysApply: false
 
 # Shell
 
-Target the shell declared by the script shebang; do not rewrite POSIX `sh` as Bash without need. Apply shell rules only to shell snippets inside Dockerfiles/workflow YAML.
+Target the shell declared by the script shebang; don't rewrite POSIX `sh` as Bash without need. Apply shell rules only to shell snippets inside Dockerfiles/workflow YAML.
 
 ## Forbidden / default-deny
 
@@ -35,7 +35,7 @@ Use `set -euo pipefail` for standalone Bash scripts. Exceptions (sourced files, 
 
 ## Toolchain gate
 
-Run in order; each green before the next:
+Run in order, each green before the next:
 
 ```bash
 bash -n script.sh        # syntax

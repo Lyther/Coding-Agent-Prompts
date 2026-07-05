@@ -13,7 +13,7 @@ alwaysApply: false
 
 # Python
 
-Use the repository's supported Python version, dependencies, configuration, and scripts. Do not introduce a framework, validator, logger, or typing migration unless the task requires it.
+Use the repo's supported Python version, dependencies, config, and scripts. Don't introduce a framework, validator, logger, or typing migration unless the task requires it.
 
 ## Forbidden / default-deny
 
@@ -36,7 +36,7 @@ Define a meaningful exception hierarchy per package/domain (`ServiceError` → `
 
 ## Toolchain gate
 
-Run in order; each green before the next. Prefer repository scripts (`uv run`, `make check`); otherwise:
+Run in order, each green before the next. Prefer repo scripts (`uv run`, `make check`); otherwise:
 
 ```bash
 ruff format .
@@ -45,7 +45,7 @@ pyright .
 pytest -v
 ```
 
-Use Ruff, Pyright, pytest only when present or required by the repository. If a tool is missing, report `not available` — do not pretend it passed. Security: `pip-audit` or `safety check`.
+Use Ruff, Pyright, pytest only when present or required by the repo. If a tool is missing, report `not available` — don't pretend it passed. Security: `pip-audit` or `safety check`.
 
 ## Ruff config
 

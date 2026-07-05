@@ -12,15 +12,14 @@ alwaysApply: false
 
 # Rust
 
-Use the repository's toolchain, feature set, error conventions, and scripts. Do not migrate stack or tooling unless asked.
+Use the repo's toolchain, feature set, error conventions, and scripts. Don't migrate stack or tooling unless asked.
 
 ## Forbidden / default-deny
 
 These differ from a model's defaults; fix the underlying issue. Genuine exceptions need an inline reason. `#[allow(...)]` is permitted only on a module containing only generated code (e.g. `include!(concat!(env!("OUT_DIR"), ...))`).
 
 - **Silent failures**: no `.unwrap()`/`.expect()` in non-test code, no `let _ = fallible()`, no `if let Ok(x) = result {}` that drops the error. Propagate with `?`, or match and act on `Err`. Tests may panic.
-- **Borrow-checker appeasement**: don't `.clone()`, `Rc<RefCell<T>>` across module boundaries, or reach for `Arc<Mutex<T>>` for non-concurrent data to satisfy the checker. If borrowing is hard, the ownership model is wrong — redesign it.
-- **`.clone()` to bypass the checker** is a design flaw, not a fix.
+- **Borrow-checker appeasement**: don't `.clone()`, `Rc<RefCell<T>>` across module boundaries, or reach for `Arc<Mutex<T>>` for non-concurrent data to satisfy the checker. If borrowing is hard, the ownership model is wrong — redesign it. `.clone()` to bypass the checker is a design flaw, not a fix.
 - **Unfinished paths**: no `todo!()`, `unimplemented!()`, debug `println!()`/`dbg!()`, or `// TODO` standing in for required behavior.
 - **Erased context**: `map_err(|_| Error::Io)` loses information; use `map_err(|e| ConfigError::Read { path, source: e })`.
 - **`Box<dyn Trait>` without justification**: prefer generics; `dyn` is for heterogeneous collections or plugin systems.
@@ -36,7 +35,7 @@ Last resort, maximally isolated behind a safe wrapper that validates preconditio
 
 ## Toolchain gate
 
-Run in order; each green before the next. Prefer repository scripts; otherwise:
+Run in order, each green before the next. Prefer repo scripts; otherwise:
 
 ```bash
 cargo fmt --all --check

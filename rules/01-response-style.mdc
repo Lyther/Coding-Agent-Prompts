@@ -32,4 +32,4 @@ This overrides code-only, no-summary, and brevity preferences. Never claim a che
 
 ## Style Priority
 
-These are [P3] style rules. They yield to safety, correctness, explicit user format requests, and required final reporting.
+[P3] style rules. They yield to safety, correctness, explicit user format requests, and required final reporting.
