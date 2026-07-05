@@ -269,7 +269,7 @@ const inventory = run(["inventory"]);
 assert.match(inventory, /^rules: 12$/m);
 assert.match(inventory, /^commands: 66$/m);
 assert.match(inventory, /^subagents: 6$/m);
-assert.match(inventory, /^external: 7$/m);
+assert.match(inventory, /^external: 6$/m);
 assert.match(inventory, /^schemas: 15$/m);
 
 const registry = JSON.parse(run(["commands", "--json"]));
@@ -574,12 +574,9 @@ const poolMcp = readFileSync(path.join(root, "dist", "pool", ".config", "poolsid
 assert.match(poolMcp, /^mcp_servers:/m);
 assert.match(poolMcp, /^ {2}synapse:/m);
 assert.match(poolMcp, /command: ~\/\.local\/bin\/grimoire-server/);
-// F001: `--category mcps` without `--service` selects first-party only; external (agentmemory) needs explicit --service.
+// F001: `--category mcps` selects the first-party MCPs (grimoire, synapse); no external MCP is auto-added.
 const mcpsDefaultPlan = run(["install", "--target", "vscodium", "--dest", "/tmp/agent-surface-f001", "--category", "mcps", "--dry-run"]);
 assert.match(mcpsDefaultPlan, /MCP \+= grimoire, synapse/);
-assert.doesNotMatch(mcpsDefaultPlan, /agentmemory/);
-const mcpsServicePlan = run(["install", "--target", "vscodium", "--dest", "/tmp/agent-surface-f001", "--category", "mcps", "--service", "agentmemory", "--dry-run"]);
-assert.match(mcpsServicePlan, /MCP \+= agentmemory/);
 const sourceKinds = JSON.parse(readFileSync(path.join(root, "registry", "source-kinds.json"), "utf8"));
 assert.equal(Object.hasOwn(sourceKinds.source_kinds, "mcps"), false);
 assert.equal(Object.hasOwn(sourceKinds.source_kinds, "subagents"), true);
@@ -794,16 +791,13 @@ const deepagentsMcpPlan = run([
   "deepagents",
   "--category",
   "mcps",
-  "--service",
-  "agentmemory",
   "--dest",
   "/tmp/agent-surface-deepagents-mcp",
   "--dry-run",
 ]);
 assert.match(deepagentsMcpPlan, /^target: deepagents$/m);
 assert.match(deepagentsMcpPlan, /^categories: mcps$/m);
-assert.match(deepagentsMcpPlan, /^services: agentmemory$/m);
-assert.match(deepagentsMcpPlan, /\.deepagents\/\.mcp\.json MCP \+= agentmemory/);
+assert.match(deepagentsMcpPlan, /\.deepagents\/\.mcp\.json MCP \+= grimoire, synapse/);
 assert.doesNotMatch(deepagentsMcpPlan, /workflow-boss\/SKILL\.md/);
 
 const multiRuntimeRulesPlan = run([

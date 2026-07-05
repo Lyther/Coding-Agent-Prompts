@@ -1178,7 +1178,7 @@
           "paths": [
             ".factory/mcp.json"
           ],
-          "notes": "Optional MCP output is generated from registry/optional-services.json and currently preserves the local agentmemory wiring."
+          "notes": "Optional MCP output is generated from registry/optional-services.json and non-destructively preserves any existing local MCP wiring."
         },
         "external": {
           "support": "native",
