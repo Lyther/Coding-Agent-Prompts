@@ -521,7 +521,7 @@ export async function selectedMcpServiceEntries(defaultEnabled, context) {
   const registry = await readOptionalServices();
   // Opt-in contract: external/secret-bearing MCPs are included ONLY when named explicitly
   // via --service. `--category mcps` alone (no --service) selects first-party MCPs only —
-  // it must never auto-add agentmemory or any other non-first-party server.
+  // it must never auto-add any non-first-party server.
   const entries = Object.entries(registry.services)
     .filter(([, service]) => service.kind === "mcp")
     .filter(([id]) => !context.optionalServices || context.optionalServices.has(id))

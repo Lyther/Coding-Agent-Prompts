@@ -8,7 +8,6 @@ The authoritative optional-service inventory is `registry/optional-services.json
 
 | Service | Path | Kind | Local wiring |
 | --- | --- | --- | --- |
-| agentmemory | `external/agentmemory` | MCP memory service | Codex, Cursor, Gemini, Claude Code, and OpenCode MCP configs point at `~/.local/bin/agentmemory-mcp` |
 | sanyuan-skills | `external/sanyuan-skills` | skill pack | Codex/agent and Claude skill symlinks for all six skills |
 | andrej-karpathy-skills | `external/andrej-karpathy-skills` | skill pack | Codex/agent and Claude skill symlinks for `karpathy-guidelines` |
 | ctf-skills | `external/ctf-skills` | skill pack | Codex/agent and Claude CTF skill symlinks |
@@ -16,6 +15,5 @@ The authoritative optional-service inventory is `registry/optional-services.json
 
 ## Security Notes
 
-- `agentmemory` is optional-caution. The public upstream had multiple security issues in the 0.9.14 and 0.9.15 artifacts documented by the private disclosure bundle at `/tmp/agentmemory-disclosure-0.9.15/`. Use the locally patched installed binary for MCP wiring; do not replace it with npm latest without review.
 - `pua` is optional-caution. It can increase token usage and may reduce model performance on ordinary tasks, so only the narrow `pua` and `pua-en` skills are wired by default.
 - Do not commit private disclosure files, secrets, local MCP credentials, or generated agent config files from home-directory installs.

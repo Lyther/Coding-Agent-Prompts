@@ -61,7 +61,7 @@ outside the repo or to force a specific root. A direct HTTP session (no bridge) 
    autostarts the lock-elected sidecar on demand, so no service is needed. For an always-on sidecar, an optional
    reference systemd *user* unit is provided at [deploy/systemd/synapse-sidecar.service](deploy/systemd/synapse-sidecar.service).
 2. **`agent-surface build` / `install`** writes or safely merges the first-party `synapse` stdio entry into verified MCP config surfaces: Claude Code (`~/.claude.json` or project `.mcp.json`), Codex (`.codex/config.toml`), Deep Agents (`.deepagents/.mcp.json`), Cursor (`.cursor/mcp.json`), Droid (`.factory/mcp.json`), Gemini CLI (`.gemini/settings.json`), Cline (`.cline/mcp.json`), Kilo (`kilo.jsonc` `mcp.synapse`), OpenCode (`opencode.json` `mcp.synapse`), VS Code (`mcp.json` `servers.synapse`), Trae (`.trae/mcp.json`), Windsurf (`mcp_config.json`), and Zed (`settings.json` `context_servers.synapse`).
-3. **External or secret-bearing MCPs** remain opt-in. `agentmemory` and other non-first-party MCP services render only when explicitly requested with `--category mcps --service <id>` or an equivalent reviewed install.
+3. **External or secret-bearing MCPs** remain opt-in — any non-first-party MCP service renders only when explicitly requested with `--category mcps --service <id>` or an equivalent reviewed install.
 4. **Update** = re-run step 1 (rebuild + service restart) and step 2 (regenerate or merge configs).
 
 ### Pending target wiring

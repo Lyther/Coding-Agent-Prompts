@@ -1,6 +1,3 @@
-[submodule "external/agentmemory"]
-	path = external/agentmemory
-	url = https://github.com/rohitg00/agentmemory.git
 [submodule "external/sanyuan-skills"]
 	path = external/sanyuan-skills
 	url = https://github.com/sanyuan0704/sanyuan-skills.git
