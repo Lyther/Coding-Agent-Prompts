@@ -1,6 +1,18 @@
 ---
-description: "Authorized offensive security: red-team, CTF/exploit-dev, AI/ML red-teaming, kernel security, bug bounty, and coordinated disclosure"
-alwaysApply: true
+description: "Authorized offensive security: red-team, CTF/exploit-dev, AI/ML red-teaming, kernel security, bug bounty, and coordinated disclosure. Attaches on offensive-security file contexts (exploits, CTF/pwn, pentest findings, AI red-team configs); pull it in explicitly for scope/ROE-authorized work with no matching file yet."
+globs:
+  - "**/exploit*"
+  - "**/poc*"
+  - "**/pwn*"
+  - "**/shellcode*"
+  - "ctf/**"
+  - "**/ctf/**"
+  - "pentest/**"
+  - "**/pentest*"
+  - "findings/**"
+  - "**/*.nmap"
+  - "**/.garak.*"
+alwaysApply: false
 ---
 # Cybersecurity
 
