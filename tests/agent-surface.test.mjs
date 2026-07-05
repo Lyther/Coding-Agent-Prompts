@@ -254,11 +254,11 @@ try {
 }
 try {
   const mutated = JSON.parse(optionalServicesOriginal);
-  mutated.services["anthropic-cybersecurity-skills"].served_by = ["claude-osint"]; // not an mcp service
+  mutated.services["anthropic-cybersecurity-skills"].served_by = ["codex-redteam-mode"]; // a skill-pack, not an mcp service
   writeFileSync(optionalServicesPath, `${JSON.stringify(mutated, null, 2)}\n`);
   const r = status(["check"]);
   assert.equal(r.status, 1, "served_by must reference a first-party mcp service");
-  assert.match(`${r.stdout}${r.stderr}`, /server "claude-osint" must be a first-party mcp service/);
+  assert.match(`${r.stdout}${r.stderr}`, /server "codex-redteam-mode" must be a first-party mcp service/);
 } finally {
   writeFileSync(optionalServicesPath, optionalServicesOriginal);
 }
@@ -268,7 +268,7 @@ const inventory = run(["inventory"]);
 assert.match(inventory, /^rules: 12$/m);
 assert.match(inventory, /^commands: 66$/m);
 assert.match(inventory, /^subagents: 6$/m);
-assert.match(inventory, /^external: 8$/m);
+assert.match(inventory, /^external: 7$/m);
 assert.match(inventory, /^schemas: 15$/m);
 
 const registry = JSON.parse(run(["commands", "--json"]));
