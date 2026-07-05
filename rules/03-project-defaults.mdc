@@ -5,11 +5,11 @@ alwaysApply: true
 
 # Project Defaults
 
-These are [P2] defaults. Existing repository evidence overrides them. Do not migrate stack, database, UI framework, package manager, or tooling unless the user asks.
+[P2] defaults. Existing repository evidence overrides them. Do not migrate stack, database, UI framework, package manager, or tooling unless the user asks.
 
 ## Reliability
 
-- Handle, propagate, or convert errors explicitly. Do not silently discard fallible results.
+- Handle, propagate, or convert errors explicitly; do not silently discard fallible results.
 - Libraries return errors instead of exiting the process.
 - Avoid crash-only handling in production paths unless the invariant is proven and local convention supports it.
 
@@ -17,7 +17,7 @@ These are [P2] defaults. Existing repository evidence overrides them. Do not mig
 
 - Validate external input at trust boundaries.
 - Use parameterized database queries.
-- Prefer platform secret stores or environment-provided secrets. Never hardcode credentials.
+- Prefer platform secret stores or environment-provided secrets; never hardcode credentials.
 - Prefer PostgreSQL for new persistent datastores in this project family, but preserve existing datastore choices.
 
 ## Frontend and Node
