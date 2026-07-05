@@ -729,7 +729,7 @@ export function validateGeneratedTarget(target, outputs) {
   } else if (target === "pi") {
     requireContains(path.join(".pi", "agent", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".pi", "agent", "AGENTS.md"), /agent-surface Pi rules/);
-    requireContains(path.join(".pi", "agent", "skills", "offensive-osint", "SKILL.md"), skillFrontmatter);
+    requireContains(path.join(".pi", "agent", "skills", "ctf-web", "SKILL.md"), skillFrontmatter);
   } else if (target === "pool") {
     requireContains(path.join(".config", "poolside", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".config", "poolside", ".poolside"), /agent-surface Poolside rules/);
@@ -793,7 +793,7 @@ export function validateGeneratedTarget(target, outputs) {
   } else if (target === "windsurf") {
     requirePath(path.join(".codeium", "windsurf", "global_workflows", "ops-flow.md"));
     requireContains(path.join(".codeium", "windsurf", "memories", "global_rules.md"), /agent-surface Windsurf rules/);
-    requireContains(path.join(".codeium", "windsurf", "skills", "osint-methodology", "SKILL.md"), skillFrontmatter);
+    requireContains(path.join(".codeium", "windsurf", "skills", "ctf-osint", "SKILL.md"), skillFrontmatter);
   } else if (target === "zed") {
     requireContains(path.join(".agents", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".config", "zed", "AGENTS.md"), /agent-surface Zed rules/);

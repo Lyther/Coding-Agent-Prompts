@@ -213,24 +213,6 @@
         "The upstream tree is intentionally not emitted as Agent Skills because the catalog is too large for default runtime startup attention; grimoire indexes it for on-demand retrieval instead."
       ]
     },
-    "claude-osint": {
-      "status": "required",
-      "source_url": "https://github.com/elementalsouls/Claude-OSINT",
-      "path": "external/claude-osint",
-      "commit": "833aee29af7cd42675cf2eddf0b1e75f0eb2eec0",
-      "kind": "skill-pack",
-      "optional": false,
-      "skill_roots": [
-        "external/claude-osint/skills/*"
-      ],
-      "local_wiring": [
-        "Agent Skills runtimes: mirror offensive-osint and osint-methodology into each target's native skill directory.",
-        "Windsurf skills: ~/.codeium/windsurf/skills/<skill-name> or .windsurf/skills/<skill-name>."
-      ],
-      "notes": [
-        "Required OSINT skill pack requested as an external asset."
-      ]
-    },
     "codex-redteam-mode": {
       "status": "required",
       "source_url": "https://github.com/chAng-L19/codex-redteam-mode",
