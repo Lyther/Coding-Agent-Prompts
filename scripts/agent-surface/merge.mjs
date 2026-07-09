@@ -4,7 +4,7 @@
 // calls these; each merger preserves user-owned siblings/comments and throws (→ blocked, never
 // clobber) on an ambiguous shape.
 import { tomlString } from "./format.mjs";
-import { mergeJsoncRootObjectProperty, parseJsoncResult } from "./jsonc.mjs";
+import { parseJsoncResult, setJsoncRootObjectProperty } from "./jsonc.mjs";
 import { fail } from "./util.mjs";
 
 export function renderMcpConfig(format, entries) {
@@ -62,18 +62,22 @@ function renderCodexMcpServer(id, service) {
 // is agent-surface-owned and the merged value is fully regenerated, while user-owned
 // sibling servers under the same key are preserved by value. Bad config shapes block
 // rather than clobber.
-export function mergeJsonMcpConfig(text, format, entries) {
+export function mergeJsonMcpConfig(text, format, entries, removeIds = []) {
   const parsed = parseJsoncResult(text);
   if (!parsed.ok) throw new Error(`invalid JSON/JSONC: ${parsed.error.message}`);
   if (parsed.value === null || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
     throw new Error("config must be an object");
   }
   const key = mcpConfigRootKey(format);
+  if (!Object.hasOwn(parsed.value, key) && entries.length === 0) return text;
   const current = parsed.value[key] ?? {};
   if (current === null || typeof current !== "object" || Array.isArray(current)) {
     throw new Error(`${key} must be an object`);
   }
-  return mergeJsoncRootObjectProperty(text, key, optionalServiceMcpServers(entries, format));
+  const next = { ...current };
+  for (const id of removeIds) delete next[id];
+  Object.assign(next, optionalServiceMcpServers(entries, format));
+  return setJsoncRootObjectProperty(text, key, next);
 }
 
 function mcpConfigRootKey(format) {
@@ -109,14 +113,15 @@ function renderYamlMcpConfig(format, entries) {
 // under `rootKey`. Preserves every other key, comment, and sibling server. Owned servers are
 // replaced in place (idempotent). Refuses (throws → blocked) on tabs or a flow/inline rootKey
 // value so we never corrupt an unexpected shape rather than guess.
-export function mergeYamlMcpConfig(text, format, entries) {
+export function mergeYamlMcpConfig(text, format, entries, removeIds = []) {
+  if (entries.length === 0 && removeIds.length === 0) return text;
   if (text.includes("\t")) throw new Error("YAML indented with tabs; refusing to edit");
   const rootKey = yamlMcpRootKey(format);
   const owned = new Map(entries.map(([id, service]) => [id, yamlMcpServerEntry(format, id, service)]));
-  const ownedIds = [...owned.keys()];
+  const ownedIds = uniqueStrings([...owned.keys(), ...removeIds]);
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   const lines = text.split(/\r?\n/);
-  const renderOwned = (indent) => ownedIds.flatMap((id) => owned.get(id).map((l) => (l === "" ? "" : " ".repeat(indent) + l)));
+  const renderOwned = (indent) => [...owned.keys()].flatMap((id) => owned.get(id).map((l) => (l === "" ? "" : " ".repeat(indent) + l)));
 
   const headerRe = new RegExp(`^${rootKey}:[ \\t]*(#.*)?$`);
   const inlineRe = new RegExp(`^${rootKey}:[ \\t]*\\S`);
@@ -127,6 +132,7 @@ export function mergeYamlMcpConfig(text, format, entries) {
   }
 
   if (headerIdx === -1) {
+    if (entries.length === 0) return text;
     const base = text.length === 0 ? "" : (text.endsWith("\n") ? text : text + eol);
     return `${base}${rootKey}:${eol}${renderOwned(2).join(eol)}${eol}`;
   }
@@ -143,7 +149,7 @@ export function mergeYamlMcpConfig(text, format, entries) {
   }
   if (childIndent === null) childIndent = 2;
 
-  const ownedKeyRe = new RegExp(`^${" ".repeat(childIndent)}(${ownedIds.join("|")}):[ \\t]*(#.*)?$`);
+  const ownedKeyRe = new RegExp(`^${" ".repeat(childIndent)}(${ownedIds.map(escapeRegExp).join("|")}):[ \\t]*(#.*)?$`);
   const body = lines.slice(headerIdx + 1, end);
   const kept = [];
   for (let i = 0; i < body.length;) {
@@ -162,12 +168,21 @@ export function mergeYamlMcpConfig(text, format, entries) {
   return out;
 }
 
-export function mergeCodexMcpToml(text, entries) {
-  const ids = entries.map(([id]) => id);
+export function mergeCodexMcpToml(text, entries, removeIds = []) {
+  const ids = uniqueStrings([...entries.map(([id]) => id), ...removeIds]);
   const cleaned = stripCodexMcpTomlBlocks(text, ids);
+  if (entries.length === 0) return cleaned;
   const block = entries.map(([id, service]) => renderCodexMcpServer(id, service)).join("\n").trimEnd();
   const joiner = cleaned.trim().length === 0 ? "" : "\n\n";
   return `${cleaned.trimEnd()}${joiner}${block}\n`;
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values)].sort();
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function stripCodexMcpTomlBlocks(text, ids) {

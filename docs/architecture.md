@@ -4,7 +4,7 @@ Status: IMPLEMENTED · Last updated: 2026-07-02 · Scope: the compiler under `sc
 
 ## What it is
 
-agent-surface is a **source-to-native compiler**. Author each surface once — commands, rules, subagents, external skill packs, ignore files, and first-party MCP services — and it renders them into the native formats of **20 agent-host targets**, then installs them non-destructively. One source tree instead of twenty bespoke configs. It is a set of zero-dependency Node ES modules behind one CLI entry point; **registries are the source of truth**, JSON Schemas validate them, and `check` gates every invariant.
+agent-surface is a **source-to-native compiler**. Author each surface once — commands, rules, subagents, external skill packs, ignore files, and first-party MCP services — and it renders them into the native formats of **21 agent-host targets**, then installs them non-destructively. One source tree instead of twenty-one bespoke configs. It is a set of zero-dependency Node ES modules behind one CLI entry point; **registries are the source of truth**, JSON Schemas validate them, and `check` gates every invariant.
 
 ## System context
 
@@ -42,7 +42,7 @@ scripts/agent-surface.mjs   - CLI entry: arg dispatch over the command modules (
 scripts/agent-surface/      - the compiler, split into focused zero-dependency ES modules:
   targets.mjs               - the engine: the per-target adapter table + producers + output planning.
   render.mjs · merge.mjs · postprocess.mjs · jsonc.mjs - emit: per-target renderers; non-destructive MCP merge (JSON/TOML/YAML); JSONC parse + surgical root-property merge (Kilo/OpenCode/Zed/VS Code); external-skill normalization.
-  install.mjs               - build (→ dist/) + install (planner, config merges, strict-sync, backups, manifest).
+  install.mjs               - build (→ dist/) + install (planner, config merges, strict-sync, manifest).
   check.mjs                 - the validators behind `check` (registry/schema/producer coherence, generated output, references, workflow fixtures).
   workflow.mjs · evidence.mjs · doctor.mjs - workflow-ledger subcommands; `run` evidence capture (redaction/approval); environment + MCP health.
   commands.mjs · rules.mjs · source-primitives.mjs - source readers (commands + frontmatter, rules, subagents/ignores).
@@ -65,9 +65,9 @@ tests/agent-surface.test.mjs - the snapshot/behaviour suite (repo `npm test`).
 ## Data and state
 
 - **`dist/`** — build output for inspection/CI; never installed from directly.
-- **Install manifest** (`.agent-surface/<target>-manifest.json` under each install root) — records every managed output with its sha256. On the next full install, **strict-sync** removes previously-managed outputs that are no longer generated (sha-guarded; user-modified files are kept), so de-scoped assets self-prune.
+- **Install manifest** (`.agent-surface/<target>-manifest.json` under each install root) — records generated files and owned config entries. On the next full install, **strict-sync** removes previously managed files that are no longer generated and removes previously owned config entries that are no longer desired.
 - **Config merges** — MCP wiring is merged, not overwritten, per format: JSON `mcpServers`/`servers`/`context_servers`, Codex TOML, JSONC `mcp` (Kilo/OpenCode), and YAML `extensions`/`mcp_servers` (Goose/Poolside). Merges preserve siblings/comments and are idempotent; a malformed or flow-style/tab-indented target **blocks** rather than corrupts.
-- **Backups** land in `.agent-surface/backups/` before any overwrite or removal.
+- **Config ownership** is tracked in the same manifest. Current owned entries are overwritten from source, previously owned entries that are no longer generated are removed, and unknown sibling entries are preserved.
 
 ## Interfaces (CLI)
 
@@ -75,7 +75,7 @@ tests/agent-surface.test.mjs - the snapshot/behaviour suite (repo `npm test`).
 
 ## First-party MCP distribution
 
-MCP services declared `first_party kind:"mcp"` in `optional-services.json` are auto-rendered and non-destructively merged into **all 17 MCP-capable hosts**. First-party secretless services (synapse, grimoire) are default-on; external/secret-bearing MCPs are opt-in via `--category mcps --service <id>`. A `served_by` link ties a de-scoped `source-pack` (e.g. `anthropic-cybersecurity-skills`) to the MCP that serves it just-in-time, enforced by the `checkServedBy` rule. Full matrix: [reference/targets.md](reference/targets.md).
+MCP services declared `first_party kind:"mcp"` in `optional-services.json` are auto-rendered and non-destructively merged into **all 18 MCP-capable hosts**. First-party secretless services (synapse, grimoire) are default-on; external/secret-bearing MCPs are opt-in via `--category mcps --service <id>`. A `served_by` link ties a de-scoped `source-pack` (e.g. `anthropic-cybersecurity-skills`) to the MCP that serves it just-in-time, enforced by the `checkServedBy` rule. Full matrix: [reference/targets.md](reference/targets.md).
 
 ## Quality gates
 

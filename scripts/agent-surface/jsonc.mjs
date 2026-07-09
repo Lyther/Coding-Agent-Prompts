@@ -38,6 +38,17 @@ export function mergeJsoncRootObjectProperty(text, key, entries) {
   return insertJsoncRootProperty(text, tokens, key, merged);
 }
 
+export function setJsoncRootObjectProperty(text, key, value) {
+  const parsed = parseJsonc(text, key);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${key}: root config must be an object`);
+  }
+  const tokens = jsoncTokens(text);
+  const range = findJsoncPropertyObject(tokens, key);
+  if (range) return replaceJsoncValue(text, range, value);
+  return insertJsoncRootProperty(text, tokens, key, value);
+}
+
 function stripJsonc(text) {
   return removeJsonTrailingCommas(removeJsoncComments(text));
 }

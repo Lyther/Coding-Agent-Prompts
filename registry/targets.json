@@ -131,6 +131,17 @@
         "mcps"
       ]
     },
+    "openhands": {
+      "status": "implemented",
+      "build_supported": true,
+      "install_supported": true,
+      "renders": [
+        "skills",
+        "rules",
+        "external",
+        "mcps"
+      ]
+    },
     "vscode": {
       "status": "implemented",
       "build_supported": true,

@@ -6,12 +6,12 @@ Implemented target paths:
 
 - user: `~/.config/kilo/commands/*.md`
 - user: `~/.config/kilo/agents/*.md`
-- user: `~/.config/kilo/rules/*.md` for the 7 always-on rules
+- user: `~/.config/kilo/rules/*.md` for the 6 always-on rules
 - user: `~/.config/kilo/references/rules/*.md` for scoped language references
 - user merge: `~/.config/kilo/kilo.jsonc` `instructions += "./rules/<rule>.md"` for always-on rules and `mcp.{synapse,grimoire}` for first-party MCP
 - project: `.kilo/commands/*.md`
 - project: `.kilo/agents/*.md`
-- project: `.kilo/rules/*.md` for the 7 always-on rules
+- project: `.kilo/rules/*.md` for the 6 always-on rules
 - project: `.kilo/references/rules/*.md` for scoped language references
 - project merge: `kilo.jsonc` `instructions += ".kilo/rules/<rule>.md"` for always-on rules and `mcp.{synapse,grimoire}` for first-party MCP
 - project: `.kilocodeignore` (rendered from `ignores/default.ignore`; user-scope installs skip it as non-applicable)

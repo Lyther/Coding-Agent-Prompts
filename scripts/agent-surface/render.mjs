@@ -172,8 +172,8 @@ export async function renderWindsurfWorkflow(source) {
 export async function renderSharedAgentSkill(source) {
   return renderSkillMarkdown(source, {
     invocationPrefix: null,
-    generatedFor: "Codex and Zed",
-    hostInstruction: `For explicit invocation, use the current host's Agent Skill syntax, such as \`$${source.name}\` in Codex or \`/${source.name}\` in Zed. Treat slash-command syntax below as portable command documentation unless the host supports it directly.`,
+    generatedFor: "Codex, OpenHands, and Zed",
+    hostInstruction: `For explicit invocation, use the current host's Agent Skill syntax, such as \`$${source.name}\` in Codex, \`invoke_skill(${source.name})\` in OpenHands, or \`/${source.name}\` in Zed. Treat slash-command syntax below as portable command documentation unless the host supports it directly.`,
   });
 }
 
