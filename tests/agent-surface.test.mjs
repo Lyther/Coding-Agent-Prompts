@@ -11,6 +11,9 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = path.join(root, "scripts", "agent-surface.mjs");
 const stripAiAttributionHook = path.join(root, "hooks", "strip-ai-attribution.sh");
+const opsServerCommandPath = path.join(root, "commands", "ops-server.md");
+const hasLocalOpsServerCommand = existsSync(opsServerCommandPath);
+const expectedCommandCount = hasLocalOpsServerCommand ? 67 : 66;
 
 function run(args, options = {}) {
   return execFileSync(process.execPath, [cli, ...args], {
@@ -267,13 +270,13 @@ assert.equal(run(["check"]).trim(), "check: ok");
 
 const inventory = run(["inventory"]);
 assert.match(inventory, /^rules: 12$/m);
-assert.match(inventory, /^commands: 66$/m);
+assert.match(inventory, new RegExp(`^commands: ${expectedCommandCount}$`, "m"));
 assert.match(inventory, /^subagents: 6$/m);
 assert.match(inventory, /^external: 6$/m);
 assert.match(inventory, /^schemas: 15$/m);
 
 const registry = JSON.parse(run(["commands", "--json"]));
-assert.equal(registry.count, 66);
+assert.equal(registry.count, expectedCommandCount);
 const readinessCommand = registry.commands.find((command) => command.name === "verify-readiness");
 assert.ok(readinessCommand);
 assert.equal(readinessCommand.phase, "verify");
@@ -325,6 +328,22 @@ assert.equal(bootConceptCommand.targets.pi, path.join(".pi", "agent", "skills", 
 assert.equal(bootConceptCommand.targets.pool, path.join(".config", "poolside", "skills", "boot-concept", "SKILL.md"));
 assert.equal(bootConceptCommand.targets.windsurf, path.join(".codeium", "windsurf", "global_workflows", "boot-concept.md"));
 assert.equal(bootConceptCommand.targets.zed, path.join(".agents", "skills", "boot-concept", "SKILL.md"));
+
+const opsServerCommand = registry.commands.find((command) => command.name === "ops-server");
+if (hasLocalOpsServerCommand) {
+  assert.ok(opsServerCommand);
+  assert.equal(opsServerCommand.phase, "improve");
+  assert.deepEqual(opsServerCommand.lazy_body, {
+    type: "file",
+    path: "commands/ops-server.md",
+    frontmatter_stripped: true,
+  });
+  assert.equal(opsServerCommand.targets["claude-code"], path.join(".claude", "commands", "ops", "server.md"));
+  assert.equal(opsServerCommand.targets.codex, path.join(".agents", "skills", "ops-server", "SKILL.md"));
+  assert.equal(opsServerCommand.targets.cursor, path.join(".cursor", "commands", "ops-server.md"));
+} else {
+  assert.equal(opsServerCommand, undefined);
+}
 
 const shipCommands = JSON.parse(run(["commands", "--phase", "ship", "--json"]));
 assert.equal(shipCommands.commands.every((command) => command.phase === "ship"), true);
@@ -879,13 +898,13 @@ const liveDest = "/tmp/agent-surface-live";
 rmSync(liveDest, { recursive: true, force: true });
 const liveInstall = run(["install", "--target", "cline", "--dest", liveDest]);
 assert.match(liveInstall, /^installed:$/m);
-assert.match(liveInstall, /wrote: 74/);
+assert.match(liveInstall, new RegExp(`wrote: ${hasLocalOpsServerCommand ? 75 : 74}`));
 assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "workflow-boss.md"), "utf8"), /^## OBJECTIVE/);
 assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "verify-readiness.md"), "utf8"), /^## OBJECTIVE/);
 assert.match(readFileSync(path.join(liveDest, ".clineignore"), "utf8"), /agent-surface canonical AI-tool ignore baseline/);
 const liveManifest = JSON.parse(readFileSync(path.join(liveDest, ".agent-surface", "cline-manifest.json"), "utf8"));
 assert.equal(liveManifest.target, "cline");
-assert.equal(liveManifest.managed.length, 74);
+assert.equal(liveManifest.managed.length, hasLocalOpsServerCommand ? 75 : 74);
 assert.equal(liveManifest.managed[0].managed_by, "agent-surface");
 rmSync(liveDest, { recursive: true, force: true });
 
@@ -1424,7 +1443,10 @@ for (const target of [
   rmSync(targetDest, { recursive: true, force: true });
 }
 
-assert.equal(existsSync(path.join(root, "commands", "ops-server.md")), false);
+assert.match(readFileSync(path.join(root, ".gitignore"), "utf8"), /^commands\/ops-server\.md$/m);
+if (hasLocalOpsServerCommand) {
+  execFileSync("git", ["check-ignore", "commands/ops-server.md"], { cwd: root, encoding: "utf8" });
+}
 
 rmSync(path.join(root, "dist"), { recursive: true, force: true });
 
