@@ -138,9 +138,9 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
     failure mode being fixed. Reference the offending commit when fixing.
 
     Fixes: <12-hex> ("subject of bad commit")
-    Cc: stable@vger.kernel.org # 6.x+   (only if backport intended)
-    Reported-by: Name <email>            (when applicable)
-    Reviewed-by: ...                     (only after review actually given)
+    Cc: stable@vger.kernel.org    (only if backport intended)
+    Reported-by: Name <email>     (when applicable)
+    Reviewed-by: ...              (only after review actually given)
     Signed-off-by: Your Name <you@example.org>
     ```
 
@@ -158,12 +158,17 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
 
     # Kernel: DCO sign-off (mandatory). GPG optional but encouraged.
     git commit -s -S -m "subsystem: imperative subject" \
-                  -m "Body paragraph explaining why."
+                     -m "Body paragraph explaining why."
     ```
 
     Use `-F <file>` (or repeated `-m`) for multi-paragraph bodies — never invoke `git commit` without `-m`/`-F` from an LLM, since it will block on `$EDITOR`.
 
-4. **Handle Hook Failure**:
+4. **Read Back the Actual Commit Message**:
+    - Immediately after each successful commit, inspect the committed text, not the draft you intended.
+    - Verify it contains no AI/vendor attribution, advertising, generated-by trailers, emoji watermarks, or assistant branding. Hooks, editor integrations, and hosted tools can mutate commit text after you draft it.
+    - If an unpublished local commit contains banned text, fix the message before any push, PR/MR, patch export, or handoff.
+
+5. **Handle Hook Failure**:
     - Read the hook output → fix the file → re-stage → retry. Create a NEW commit; do NOT `--amend` blindly when a pre-commit hook aborted (the previous commit may not exist).
     - ⛔ Never `--no-verify`. If the hook is wrong, fix the hook in a separate commit, with justification.
 
@@ -220,6 +225,7 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
 - Small PRs (≤ 400 LOC of meaningful change). Clear description. Link mission/spec/issue.
 - Do not open the PR if any 🔴 finding from `/qa:review` is unresolved.
 - Do not claim `stable`, `production-ready`, `release-ready`, `deployment-ready`, `E2E passed`, `100% implemented`, or `all features supported` in the commit body, PR/MR text, release notes, or reviewer handoff unless a scoped `verify-readiness` PASS artifact or explicitly equivalent real-run proof artifact exists. Otherwise use the narrower claim that was actually proven, such as `tests passed`, `local smoke passed`, or `install dry-run passed`.
+- After opening or updating a PR/MR, read back the actual title/body/comments from the hosting service or CLI output and verify no AI/vendor attribution or advertising was inserted by templates, integrations, or assistants. Fix it before handing the PR/MR to the user.
 
 ## OUTPUT FORMAT
 
@@ -276,7 +282,8 @@ For **kernel mode**, replace the Execution block with `git format-patch …` and
 9. **NO AUTO-EMAIL**: `git send-email`, SMTP, or any patch broadcast requires explicit user authorization. Prepare locally, present recipient list, then stop.
 10. **NO AUTO-PUSH**: Same rule for `git push`. Print the command, wait for the green light.
 11. **NO READINESS OVERCLAIMS**: Broad readiness claims require `verify-readiness` PASS or equivalent real-run proof; otherwise state the narrower checks that passed.
-12. **HEURISTICS OVER HARD-CODES**: Treat the example commands as illustrations, not scripts. Pick the right tool for the detected stack (uv, cargo, go, kbuild). When the heuristic is ambiguous, ask.
+12. **READ BACK PUBLISHED TEXT**: Before push, patch export, PR/MR handoff, or release handoff, re-check the actual commit messages and submitted PR/MR/release text for AI/vendor attribution or advertising.
+13. **HEURISTICS OVER HARD-CODES**: Treat the example commands as illustrations, not scripts. Pick the right tool for the detected stack (uv, cargo, go, kbuild). When the heuristic is ambiguous, ask.
 
 ## AI GUARDRAILS
 
