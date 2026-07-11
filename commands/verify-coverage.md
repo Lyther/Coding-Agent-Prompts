@@ -1,75 +1,137 @@
 ---
 name: verify-coverage
 phase: verify
-description: "Identify logic gaps, unreachable code, and untested failure paths."
+description: "Judge whether tests discriminate real faults — not whether lines were touched."
 ---
 ## OBJECTIVE
 
-**NO PLACE TO HIDE.**
-Code that isn't executed by tests is a bug waiting to happen.
-**Your Goal**: Identify **Logic Gaps**, **Unreachable Code**, and **Sad Paths** that are ignored by the test suite.
-**The Standard**: 100% Branch Coverage on Domain Logic. 0% Coverage on Boilerplate is fine.
+Measure whether the suite would catch lies, stubs, and real faults — not whether code was merely executed.
 
-## CONTEXT STRATEGY (TOKEN ECONOMICS)
+Use this when someone asks “are the tests good enough?”, after `verify-spec` / `verify-test`, or before `verify-prove` / `verify-readiness` when acceptance depends on the suite.
 
-1. **Targeted Analysis**:
-    - Don't paste the full LCOV report.
-    - **Prompt**: "Summarize coverage for `src/auth`. Ignore UI components."
-2. **Gap Visualization**:
-    - Show the *exact lines* missed, not just the percentage.
+Branch or line coverage is an input signal only. A green suite with high coverage can still be circular (AI wrote code and tests), weak-oracled, or blind to production-kill paths.
+
+## CORE RULE
+
+Coverage without discrimination is vanity.
+
+PASS requires:
+
+- Critical domain / trust-boundary paths have tests that assert observable outcomes or invariants.
+- At least one discrimination check shows the suite would fail under a realistic fault (mutation, fault injection, stubbed success, or known-bug characterization).
+- Untested sad paths on Critical/High surfaces are listed as gaps, not ignored.
+- No new tests exist solely to touch lines, weaken assertions, or green a gate.
+
+FAIL if discrimination was not attempted on the scoped critical surface, or if the suite stays green under an injected realistic fault.
+
+## INPUTS
+
+- Scope: package, module, command, adapter, MCP, or changed paths.
+- Risk surface: auth, money, merge/install, persistence, concurrency, secrets, external I/O.
+- Existing suite commands and coverage tooling available in the repo.
+- Known bugs, prior incidents, or characterization tests if any.
+
+Missing tooling is not a free PASS. Report `BLOCKED` for that discrimination method and use another, or fail the claim that “tests are good enough.”
 
 ## PROTOCOL
 
-### Phase 1: Measurement
+### Phase 1: Risk Surface First
 
-1. **Run Coverage Tool**:
-    - **TS/JS**: `npm test -- --coverage`
-    - **Python**: `pytest --cov=src`
-    - **Rust**: `cargo tarpaulin`
-2. **Filter Noise**:
-    - Exclude: `*.d.ts`, `migrations/`, `config/`, `test/`.
+Do not start from a global percentage.
 
-### Phase 2: Analysis (The Gaps)
+1. List Critical and High surfaces in scope (auth, money, merge/clobber, install identity, persistence, secrets, concurrency, parsers at trust boundaries).
+2. Map each surface to the tests that claim to protect it.
+3. Mark surfaces with no protective test as `UNPROTECTED`.
 
-1. **Identify Misses**:
-    - **Branch Miss**: `if (user.isAdmin)` covered, `else` not covered.
-    - **Function Miss**: Entire function unused in tests.
-    - **Statement Miss**: Error handling catch blocks often missed.
-2. **Categorize**:
-    - **Critical**: Domain logic, Auth, Money. -> **MUST FIX**.
-    - **Trivial**: Logging, simple getters. -> **IGNORE**.
+`UNPROTECTED` Critical/High surfaces are FAIL for any “tests are good enough” claim.
 
-### Phase 3: Remediation
+### Phase 2: Measurement (Supporting Only)
 
-1. **Write Tests**:
-    - Use `verify-spec` command to generate tests for the missing paths.
-    - Focus on **Edge Cases** and **Error States**.
-2. **Delete Dead Code**:
-    - If code is unreachable and unreachable in production -> **DELETE**.
+Run the repo’s coverage tool when available (e.g. `npm test -- --coverage`, `pytest --cov`, `cargo tarpaulin` / `cargo llvm-cov`).
+
+Filter noise: generated code, migrations, pure config, type-only files, test helpers.
+
+Record branch misses on Critical/High surfaces only. Ignore boilerplate getters and log lines unless they gate security or data integrity.
+
+### Phase 3: Discrimination (Required)
+
+Pick at least one method that fits the stack. Prefer computational sensors.
+
+| Method | What it proves | Prefer when |
+|--------|----------------|-------------|
+| Mutation / semantic fault injection | Suite kills realistic bugs | Unit/domain logic with fast tests |
+| Stubbed-success / no-op path | Suite fails if production path is bypassed | Services with DI or clear entry points |
+| Assertion-weakening probe | Suite fails if expects are diluted | Recent AI-authored tests |
+| Known-bug characterization | Suite fails on a documented past bug | Regression after an incident |
+| Property / invariant check | Random or exhaustive inputs preserve invariants | Parsers, merges, balances, idempotency |
+
+Rules:
+
+1. Inject one realistic fault at a time on a Critical/High path.
+2. The suite must fail (or the property must fail) for that fault. If it stays green, record `SURVIVING_FAULT` — FAIL.
+3. Do not claim discrimination from coverage percentages alone.
+4. If mutation tooling is unavailable, use stubbed-success or characterization. Name the substitute.
+
+### Phase 4: Oracle Quality Audit
+
+For tests that “cover” Critical/High paths, check:
+
+- Asserts observable behavior or environment outcome — not only that a function was called.
+- Does not use `expect(true)`, empty asserts, snapshot-of-nothing, or “does not throw” as the sole check on a trust boundary.
+- Oracle is not circular: for high-risk paths, prefer approved fixtures, human-locked expectations, preexisting failing characterizations, or properties independent of the implementation under test.
+- AI-authored tests written in the same session as the implementation are suspect until a discrimination check passes.
+
+### Phase 5: Gap Classification
+
+Classify each gap:
+
+| Class | Meaning | Gate impact |
+|-------|---------|-------------|
+| `KILL` | Untested or undiscriminated path that can break production or trust | FAIL |
+| `SAD` | Missing error/timeout/auth failure handling on a supported path | FAIL for readiness-adjacent claims; must fix or defer explicitly |
+| `EDGE` | Boundary/input class untested | Fix or hand to `verify-edge` |
+| `NOISE` | Boilerplate / unreachable / intentional dead | IGNORE with one-line reason |
 
 ## OUTPUT FORMAT
 
 ```markdown
-# ☂️ COVERAGE REPORT
+# COVERAGE / DISCRIMINATION REPORT
 
-## Summary
-- **Overall**: 85%
-- **Critical Gaps**: 2 found
+## Scope
+- <paths or subsystem>
+
+## Critical surfaces
+- <surface>: protected|unprotected — <tests or gap>
+
+## Measurement (supporting)
+- Branch coverage (scoped): <n>% or not run
+- Critical branch misses: <list or none>
+
+## Discrimination
+- Method: mutation|stubbed-success|assertion-probe|characterization|property
+- Fault injected: <one sentence>
+- Suite result: failed-as-required|SURVIVING_FAULT|not run
+- Evidence: <command + key output ref>
+
+## Oracle audit
+- Suspect tests: <list or none>
+- Independent oracle used: yes|no — <what>
 
 ## Gaps
-1. **`src/auth/service.ts`**:
-   - Lines 45-48: `catch (e) { ... }` (Database connection error)
-   - *Risk*: We don't know if the app handles DB downtime gracefully.
-   - *Action*: Add test case simulating DB failure.
+- KILL: ...
+- SAD: ...
+- EDGE: ...
+- NOISE: ...
 
-2. **`src/utils/math.ts`**:
-   - Lines 12-15: `if (value < 0)`
-   - *Risk*: Negative value handling untested.
-   - *Action*: Add test case `expect(calc(-1)).toThrow()`.
+## Verdict
+PASS|FAIL|BLOCKED
 ```
 
-## EXECUTION RULES
+## HARD RULES
 
-1. **IGNORE BOILERPLATE**: Do not obsess over 100% coverage on DTOs.
-2. **FOCUS ON BRANCHES**: Line coverage is a vanity metric. Branch coverage matters.
-3. **NO CHEATING**: Do not write tests just to touch lines. Test behavior.
+1. Never treat line or branch percentage as a PASS criterion by itself.
+2. Never write or keep tests whose only job is to touch lines or silence a coverage gate.
+3. Never claim “tests are good enough” when a Critical/High surface is `UNPROTECTED` or has a `SURVIVING_FAULT`.
+4. Prefer fixing oracles and discrimination over adding more weak examples.
+5. Hand remaining hostile I/O to `verify-edge`; hand shipped-bit proof to `verify-prove`.
+6. If discrimination tooling or environment is missing, verdict is `BLOCKED` or `FAIL` for the quality claim — not a silent skip.

@@ -1,97 +1,124 @@
 ---
 name: verify-prove
 phase: verify
-description: "Prove source, artifact, bundle, and live behavior still match."
+description: "Prove shipped bits under real user journeys, robustness, and adversary pressure."
 ---
 ## OBJECTIVE
 
-**TALK IS CHEAP. SHOW ME THE SHIPPED SYSTEM.**
-Unit tests prove the repo. `PROVE` proves the exact bits a user or cluster will run.
-**Your Goal**: Start from a built artifact or customer bundle, execute the core loop, and collect evidence that source, artifact, bundle, and live system still match.
-**The Enemy**: Repo-only demos, mutable tags, stale manifests, local-only assets, and deployments whose digest does not match the tested build.
+Prove the exact bits a user or cluster will run — not a repo demo.
+
+`verify-test` proves the suite. `verify-prove` proves artifact identity, clean-room install, real journeys, outcomes in the world, robustness, UX adequacy, and adversary resistance on the shipped thing.
+
+## CORE RULE
+
+HTTP 200 / exit 0 on a happy path is smoke, not proof.
+
+PASS requires all of:
+
+- Frozen identity of the shipped artifact (digest/checksum), not a mutable tag.
+- Clean-room boot from that artifact (no source-tree or hidden dev cache dependency).
+- Real user/host entry points for every journey claimed in scope.
+- Environment outcomes verified (DB/file/config/process state), not agent or UI narration alone.
+- Robustness and adversary checks relevant to the claim — not optional footnotes.
+- Multi-trial evidence when the path is nondeterministic.
+
+FAIL if identity is ambiguous, the flow needs the checkout to work, outcomes were not checked, or Critical/High robustness/adversary gaps remain in scope.
+
+## INPUTS
+
+- Claimed journeys and support matrix slice under proof.
+- Artifact: image digest, binary checksum, bundle hash, generated output identity, installer, or installed service path.
+- Real dependencies required (services, credentials, hosts). Missing → `BLOCKED`, not guessed.
+- Prior `verify-coverage` / `verify-test` evidence when the suite is part of the trust story.
 
 ## PROTOCOL
 
 ### Phase 1: Freeze Identity
 
-*No identity, no proof.*
+1. Record git SHA, version/build string, image digest or binary/bundle checksum, schema/protocol/mode IDs when applicable.
+2. Reject mutable references (`latest`, floating branch installs) as proof identity.
+3. If the bundle/manifest/artifact does not exist, stop with FAIL or BLOCKED.
 
-1. **Record the Release Identity**:
-    - Git SHA
-    - Version / build string
-    - Image digest or binary checksum
-    - Bundle checksum / manifest
-    - Expected mode, protocol version, schema version, or license ID when applicable
-2. **Reject Ambiguity**:
-    - If the target is only identified by a mutable tag like `latest`, stop.
-    - If the bundle or manifest does not exist, stop.
+### Phase 2: Artifact-First Clean Room
 
-### Phase 2: Artifact-First Boot
+1. Install/unpack/boot only from the shipped artifact.
+2. Fresh environment: no mounted source tree, no developer caches, no local override files that users would not have.
+3. Wait on readiness/health signals — no fixed sleeps as the sole gate.
+4. If the flow only works with the repo checkout, mark FAIL.
 
-*Boot the thing that actually ships.*
+### Phase 3: Real Journeys (User Experience)
 
-1. **Start from the Shipped Thing**:
-    - OCI: `image@sha256:...`
-    - CLI / desktop / mobile: signed package or release bundle
-2. **Cold Environment**:
-    - Fresh environment only. No mounted source tree, hidden dev cache, or local override files.
-3. **Wait by Readiness**:
-    - Poll health or readiness endpoints. No fixed sleeps.
+Define journeys as user-visible goals, not internal API tours.
 
-### Phase 3: Clean-Room Acceptance
+For each journey in scope:
 
-*Simulate the customer path, not the developer path.*
+1. Name the persona and goal (e.g. “operator installs MCP and sees tools in host”).
+2. Invoke the real entry point (CLI, installer, UI, MCP client, HTTP API as customers use it).
+3. Assert UX adequacy with an explicit rubric — not only transport success:
 
-1. **Install / Unpack Exactly What Users Receive**.
-2. **Run the Core Workflow End to End**:
-    - Register -> login -> buy
-    - Create -> read -> update -> export
-    - Upload -> process -> download
-3. **Verify Every Customer-Facing Output That Must Ship**:
-    - HTTP responses
-    - CLI exit codes
-    - Reports, archives, or generated files
-    - UI pages or installer outcomes
-4. **Cover the Real Matrix**:
-    - If the product has multiple supported engines, versions, modes, exporters, or code paths, prove each supported path explicitly.
+| UX check | Pass means |
+|----------|------------|
+| Goal completed | User-visible success state achieved |
+| Feedback honest | Errors are actionable; no false success |
+| No dead ends | Required next step is available or clearly blocked |
+| No privileged leakage | Secrets/internal paths not shown in user-facing output |
+| Time bound | Completes within an explicit budget or fails loudly |
 
-### Phase 4: Deep Evidence
+4. Cover the real matrix: every supported mode/engine/version/exporter claimed in this prove scope needs at least one journey.
 
-*Passing requests are not enough. Confirm the side effects.*
+Minimum journey set for a product-like claim (adapt to domain):
 
-1. **Persistence Check**:
-    - Verify the real backing service state: DB rows, queue messages, blob uploads, emitted events.
-2. **Runtime Check**:
-    - Inspect logs, traces, and metrics for the new version only.
-3. **Bundle Check**:
-    - Confirm required files exist: docs, manifests, schemas, signatures, migration notes.
-    - Confirm forbidden files are absent: source tree, test fixtures, prompt leakage, internal-only endpoints, debug secrets.
+- Primary happy path (core value).
+- At least one failure path with honest user feedback.
+- At least one recovery/retry or restart path when lifecycle is claimed.
+
+### Phase 4: Outcome Evidence (World State)
+
+Passing responses are not enough.
+
+1. Persistence: verify real backing state (rows, blobs, queues, manifests, merged config keys).
+2. Runtime: logs/traces/metrics for this version only; redact secrets.
+3. Bundle: required files present; forbidden files absent (source tree, fixtures-as-prod, prompt leakage, debug secrets).
+4. Treat agent/self-report and marketing copy as untrusted. Grade the environment.
 
 ### Phase 5: Live Identity Check
 
-*The workflow is not enough if the wrong build is running.*
+Confirm the running system matches the frozen record (digest, version, checksum, config family). A green journey on the wrong bits is FAIL.
 
-1. **Verify Live Identity Against the Frozen Record**:
-    - Running digest
-    - Reported version / build SHA
-    - Bundle or manifest checksum
-    - Expected config family or license ID when applicable
-2. **Fail on Any Mismatch**:
-    - A passing flow on the wrong digest is still a release failure.
+### Phase 6: Robustness
 
-### Phase 6: Hardening & Short Load
+Run breakage the user will hit:
 
-*Run the boring breakage checks before users do.*
+| Check | Requirement |
+|-------|-------------|
+| Concurrency | 2–5 parallel critical-path operations; zero correctness failures |
+| Dependency fault | Timeout/down/denied dependency yields controlled failure, not corruption or false success |
+| Restart / upgrade | If install/service lifecycle is claimed, restart or upgrade path works or is BLOCKED with reason |
+| Idempotency / replay | Where claimed, replay does not double-apply destructive effects |
+| Resource pressure | Short bounded stress relevant to the claim (optional only if claim excludes it) |
 
-1. **Short Concurrency Smoke**:
-    - Run 2-5 parallel requests or jobs on the critical path.
-2. **Security-Sensitive Checks**:
-    - AuthN / AuthZ
-    - Secret redaction
-    - Outbound / SSRF restrictions
-    - Unsafe prompt or template exposure
-3. **Fail on Regressions**:
-    - Data races, correctness failures, rate-limit collapse, or leaked internals.
+Fixed sleeps are not robustness proof. Prefer readiness probes and explicit deadlines.
+
+### Phase 7: Adversary Challenge
+
+Assume a hostile user or compromised tool path. Scope to authorized local/staging only.
+
+Minimum set when the surface can accept untrusted input, tools, or configs:
+
+1. AuthZ negative: disallowed action denied.
+2. Injection / path / merge abuse relevant to the product (e.g. config clobber, path escape, prompt/tool exfil).
+3. Secret exposure: secrets do not appear in logs, errors, MCP memory, or generated user configs.
+4. One domain-specific abuse case that would look “healthy” if only exit codes were checked.
+
+If adversary testing is out of authorization scope, mark those items `BLOCKED` and do not claim security or production readiness for them.
+
+### Phase 8: Multi-Trial When Needed
+
+If the path uses models, races, or other nondeterminism:
+
+- Run N trials (default ≥3 for nondeterministic; 1 may suffice for fully deterministic).
+- Report pass count / N, not a single lucky PASS.
+- A flaky journey is FAIL until stabilized or excluded from the claim.
 
 ## OUTPUT FORMAT
 
@@ -99,35 +126,46 @@ Unit tests prove the repo. `PROVE` proves the exact bits a user or cluster will 
 # PROOF COMPLETE
 
 ## Identity
-- git_sha: `abc123...`
-- artifact: `ghcr.io/OWNER/IMAGE@sha256:...`
-- bundle_sha256: `...`
-- version: `1.2.3`
-- live_digest_match: yes
+- git_sha: `...`
+- artifact: `...@sha256:...` or checksum
+- version: `...`
+- live_identity_match: yes|no
 
-## Core Loop
-- `POST /register`: 201
-- `POST /buy`: 200
-- `GET /orders/123`: 200
+## Clean room
+- install path: <cmd>
+- source-tree dependency: no|yes (yes → FAIL)
 
-## Evidence
-- DB row present: yes
-- required bundle files present: yes
-- forbidden files absent: yes
-- logs / traces clean: yes
+## Journeys
+- <journey>: PASS|FAIL — UX rubric notes — evidence
+- failure-path: ...
+- recovery-path: ...
 
-## Hardening
-- parallel smoke: 5 concurrent requests, 0 failures
-- auth / redaction / SSRF checks: pass
+## Outcomes
+- persistence: ...
+- bundle required/forbidden: ...
+- logs/traces: clean|issues
+
+## Robustness
+- concurrency: ...
+- dependency fault: ...
+- restart/upgrade: ...
+
+## Adversary
+- <case>: PASS|FAIL|BLOCKED
+
+## Trials
+- deterministic|N=<n> pass=<k>
 
 ## Verdict
-**PASS** or **FAIL**
+PASS|FAIL|BLOCKED
 ```
 
-## EXECUTION RULES
+## HARD RULES
 
-1. **ARTIFACT OR BUNDLE ONLY**: Release proof starts from the shipped thing, not the repo checkout.
-2. **NO MUTABLE REFERENCES**: `latest` proves nothing. Use digests or checksums.
-3. **NO CLEAN ROOM, NO PASS**: If the flow depends on local source files or hidden dev state, mark it FAIL.
-4. **EVIDENCE OVER CLAIMS**: Show the live digest, version, and one concrete business result.
-5. **TEST THE REAL MATRIX**: Every supported user-visible mode, version, or exporter needs at least one proof path.
+1. Artifact or clean installed bits only — repo checkout demos are not prove PASS.
+2. No mutable tags as identity.
+3. Outcome over transcript: world state must match the journey claim.
+4. UX rubric is mandatory for user-facing journeys; transport success alone is FAIL for UX claims.
+5. Robustness and adversary phases are in-scope by default; excluding them requires narrowing the claim.
+6. Do not call smoke “E2E” or “production-level proof.”
+7. Hand suite discrimination to `verify-coverage`; hand claim certification to `verify-readiness`.

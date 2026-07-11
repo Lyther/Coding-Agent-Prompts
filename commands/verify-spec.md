@@ -1,148 +1,97 @@
 ---
 name: verify-spec
 phase: verify
-description: "Turn the definition of done into executable checks."
+description: "Write the definition of done as tests that fail for the right reason before code exists."
 ---
 ## OBJECTIVE
 
-**RED LIGHT. (Write the Test First)**
-You are the QA Engineer from Hell.
-Read the mission, write code that **FAILS**.
-If the test passes immediately, you failed.
-**Your Goal**: Define the "Definition of Done" as executable code.
+Turn the requirement into executable checks that fail on today's tree and will only pass when the behavior is actually correct.
 
-## CONTEXT STRATEGY (TOKEN ECONOMICS)
+This is the RED step: spec first, implementation later. A spec that passes immediately, or fails only because a symbol is missing, has proven nothing. The test must fail because the **behavior** is wrong, and it must be hard to make pass by cheating.
 
-*Don't spec the ocean. Spec the drop.*
+## CORE RULE
 
-1. **Atomic Scope**:
-    - Spec **one** feature or component at a time.
-    - **Prompt**: "Create a spec for `AuthService.login` only."
-2. **Interface First**:
-    - Define the *Shape* (Types/Interfaces) before the *Behavior* (Tests).
-    - This allows the LLM to hallucinate valid method calls in the test.
-3. **Progressive Disclosure**:
-    - Don't write 50 test cases. Write the **Critical 3** (Happy, Sad, Edge).
-    - Once those pass, ask for more.
+A spec is trustworthy only if it discriminates.
 
-## VIBE CODING INTEGRATION
+PASS (spec accepted) requires:
 
-This is **Step 1** of the implementation loop:
+- Each new test **fails on the current tree for the intended behavioral reason** — not merely a compile/import error.
+- Success, failure, boundary, and invariant behavior are all specified, not just the happy path.
+- The oracle is independent of the implementation under test (spec-derived expectations, injected fakes, or properties) — never values pasted from a future run.
+- The spec cannot be satisfied by a tautology, a hard-coded return, or a weakened assertion.
 
-```text
-spec (RED) → feature (GREEN) → refactor (CLEAN) → commit
-```
+FAIL the spec if it only checks the happy path, asserts identity/`true`, or would pass against a stub that returns a constant.
 
-**Rule**: You are NOT allowed to write implementation code in this phase. Only Tests and Interfaces.
+## INPUTS
+
+- The requirement (mission file if present, otherwise exact user intent) and its acceptance criteria.
+- The interface/contract shape (types, inputs, outputs, error classes) for the unit under spec.
+- Risk surface: money, auth, persistence, concurrency, parsing, idempotency.
+
+## RULE: NO IMPLEMENTATION
+
+You may write tests, interfaces, and in-memory fakes only. Do not write the production implementation in this phase — that is `dev-feature`'s job.
 
 ## PROTOCOL
 
-### Phase 1: The Blueprint (Interface Design)
+### Phase 1: Contract First
 
-*Before testing X, we must define what X looks like.*
+1. Define the types/interfaces for inputs, outputs, and **typed errors** (not string errors).
+2. Prefer dependency injection over `jest.mock()`/monkeypatch: a DB becomes a `Repository` interface, time becomes a `Clock`. Generate in-memory fakes for them so tests stay hermetic without mocking the unit under test.
 
-1. **Define Types/Interfaces**:
-    - Create the file `src/features/X/types.ts` or equivalent.
-    - Define inputs, outputs, and errors.
-2. **Scaffold Test File**:
-    - Create `src/features/X/__tests__/X.spec.ts`.
-    - Import the types.
+### Phase 2: Behavior Classes (all four, not "the critical three")
 
-### Phase 2: Isolation Strategy (The "No Mock" Policy)
+Specify each class that applies to the surface:
 
-**We do not use `jest.mock()`. We use Dependency Injection.**
+- **Happy path**: valid input → correct, asserted output shape and value.
+- **Sad path**: invalid input / dependency failure → the correct typed error, and safe state (fails closed, nothing half-written).
+- **Boundary / equivalence partitions**: for each input, one representative from each valid class plus the edges and the invalid side — empty, null, min, max, min−1, max+1, huge, unicode/RTL, duplicates.
+- **Invariants (properties)**: state what must hold *for all* inputs and encode it with property-based testing (`fast-check`, `hypothesis`, QuickCheck) — e.g. "a withdrawal never yields a negative balance", "encode∘decode is identity", "the operation is idempotent under retry". Prefer these for money, crypto, serialization, merges, and idempotency.
 
-1. **Identify Dependencies**:
-    - Does it need a DB? -> `UserRepository` interface.
-    - Does it need Time? -> `Clock` interface.
-2. **Generate Fakes**:
-    - Use the `fake` command to generate in-memory implementations.
-    - `class InMemoryUserRepo implements UserRepository { ... }`
+When there is no obvious oracle, use a **metamorphic relation** instead of a hard-coded expectation: assert a relationship between runs (e.g. `sort(xs)` and `sort(shuffle(xs))` are equal; `GET` twice returns the same result) so the test does not depend on knowing the exact right answer.
 
-### Phase 3: The Test Suite (The Requirements)
+### Phase 3: Prove the Spec Bites (RED, for the right reason)
 
-Translate requirements (from `.cursor/mission.md` if present, otherwise from user intent) into `it()` blocks.
+1. Run the new tests against the current tree.
+2. Each must FAIL — and the failure must be a **behavioral assertion failure**, not just "symbol not defined". If the only failure is a missing import, add a minimal stub that returns a wrong/constant value and confirm the test still fails; a test a constant-returning stub can satisfy is too weak.
+3. Record the observed red failure per test as evidence for the downstream `verify-test` regression check.
 
-**A. The Happy Path (0-1)**
+### Phase 4: Anti-Cheat Guard
 
-- Input: Valid data.
-- Output: Success result.
-- *Check*: Does it return the correct shape?
-
-**B. The Sad Path (Error Handling)**
-
-- Input: Invalid data / System failure.
-- Output: **Typed Error** (not just string).
-- *Check*: Does it throw/reject with the correct error class?
-
-**C. The Edge Cases (The Boundary)**
-
-- Input: `null`, empty string, `MAX_INT`, boundary dates.
-- Output: Graceful failure or handling.
-
-**D. The Invariant (Property)**
-
-- "A successful login always returns a token > 0 length."
-- "A withdrawal never results in negative balance."
-
-### Phase 4: Data Builders
-
-*Don't clutter tests with huge JSON objects.*
-
-1. **Factory Pattern**:
-    - Create `makeUser({ ...overrides })` helpers.
-    - Use sensible defaults for required fields.
+- No `expect(true).toBe(true)`, identity assertions, or empty test bodies.
+- No expected values copied from a run of the (unwritten or draft) implementation.
+- Readable intent names: `it('rejects a just-expired token')`, not `test1`.
+- No `setTimeout`/real clock/real network flakiness — use the injected `Clock` and fakes.
+- Data builders/factories (`makeUser({...overrides})`) instead of giant inline literals, so the assertion, not the fixture noise, is what's under review.
 
 ## OUTPUT FORMAT
 
-**The Spec File**
+```markdown
+# SPEC (RED)
 
-```typescript
-// src/features/auth/__tests__/login.spec.ts
-import { LoginService } from '../login.service'; // Red: Doesn't exist
-import { InMemoryUserRepo } from '../__fakes__/user-repo';
-import { FakeClock } from '@/test-utils/clock';
+## Contract
+- interface + typed errors defined
 
-describe('Login Feature', () => {
-  let service: LoginService;
-  let repo: InMemoryUserRepo;
+## Behavior classes
+- happy: <it names>
+- sad: <it names> (typed error + safe state)
+- boundary: <partitions covered>
+- invariants/properties: <property names + tool>
+- metamorphic: <relations, if oracle-free>
 
-  beforeEach(() => {
-    repo = new InMemoryUserRepo();
-    service = new LoginService(repo, new FakeClock());
-  });
+## RED proof
+- <test>: fails on current tree — reason: behavioral (not just missing symbol)
+- constant-stub check: still fails → discriminating
 
-  // Requirement: User must exist
-  it('should throw InvalidCredentials when user not found', async () => {
-    // Arrange
-    const email = 'ghost@example.com';
-
-    // Act & Assert
-    await expect(service.login(email, 'pass')).rejects.toThrow('InvalidCredentials');
-  });
-
-  // Requirement: Password must match
-  it('should return token when credentials match', async () => {
-    // Arrange
-    await repo.create(makeUser({ email: 'bob@test.com', password: 'hash123' }));
-
-    // Act
-    const result = await service.login('bob@test.com', 'raw-password');
-
-    // Assert
-    expect(result.token).toBeDefined();
-  });
-});
+## Verdict
+SPEC READY | NEEDS STRENGTHENING
 ```
 
-## EXECUTION RULES
+## HARD RULES
 
-1. **ASSERT FAILURE**: Run the test. It MUST fail (compilation error or runtime error).
-2. **NO IMPLEMENTATION**: Do NOT write the class implementation. Just the `import`.
-3. **READABLE NAMES**: `it('should X when Y')`.
-4. **NO FLAKINESS**: No `setTimeout`. Use `FakeClock`.
-5. **NO CHEATING**: Do not use `expect(true).toBe(true)` to make a test green.
-
-## NEXT STEP
-
-Run `dev-feature` to implement the code that satisfies this spec.
+1. **Red for the right reason.** A test that only fails on a missing import is not yet a spec; make a constant-returning stub still fail it.
+2. **All four behavior classes**, not just the happy path. Sad/boundary/invariant are where AI code breaks.
+3. **Independent oracle.** Never derive expected values from the implementation; prefer spec constants, properties, or metamorphic relations.
+4. **No implementation here.** Only tests, interfaces, and fakes.
+5. **No cheating to green.** Tautologies, identity asserts, and empty tests are rejected.
+6. Hand implementation to `dev-feature`, discrimination scoring to `verify-coverage`, hostile inputs to `verify-edge`.

@@ -1,159 +1,189 @@
 ---
 name: verify-readiness
 phase: verify
-description: "Certify scoped stable, production-ready, E2E, deployment-ready, or fully-supported claims with real evidence."
+description: "Certify scoped readiness claims with severity-first evidence — design kills block PASS."
 ---
 ## OBJECTIVE
 
 Certify or reject high-level readiness claims with real, scoped proof.
 
-Use this command when anyone wants to say a product, subsystem, MCP, adapter, benchmark harness, deployment path, or release is `stable`, `production-ready`, `release-ready`, `deployment-ready`, `E2E passed`, `100% implemented`, `all features supported`, or equivalent.
+Use when anyone wants to say a product, subsystem, MCP, adapter, harness, deployment path, or release is `stable`, `production-ready`, `release-ready`, `deployment-ready`, `E2E passed`, `100% implemented`, `all features supported`, or equivalent.
 
-Do not use this for ordinary narrow edits. Use `verify-test`, `verify-edge`, `verify-performance`, `qa-review`, or `verify-prove` for narrower proof. `verify-readiness` is the final gate that decides whether a broad readiness claim is true for the declared support matrix.
+Do not use for ordinary narrow edits. Use `verify-test`, `verify-coverage`, `verify-edge`, `verify-performance`, `qa-review`, `qa-trace`, or `verify-prove` for narrower proof. `verify-readiness` is the final gate for the declared support matrix — after discrimination, prove, and a design/security pass when those apply.
 
 ## CORE RULE
 
-Readiness is scoped. A PASS means:
+Readiness is scoped and severity-ordered.
 
-- The declared support matrix is complete and honest.
+A PASS means:
+
+- The support matrix is complete and honest.
 - Every supported path has real proof through the actual entry point and dependency path.
-- Unsupported, unimplemented, blocked, mocked, fixture-only, or not-run paths are excluded from the support claim or listed as blockers.
-- The shipped artifact, generated output, installed service, or deployed revision is the thing that was exercised.
+- No open Critical or High design, security, or production-break findings remain in scope.
+- Unsupported / unimplemented / blocked / mocked / fixture-only / not-run paths are excluded from the claim or listed as blockers.
+- The shipped artifact, generated output, installed service, or deployed revision is what was exercised.
+- Hygiene items (docs nits, low-severity style, minor permission polish) never outrank design kills.
 
-If any of those are false, the verdict is FAIL or BLOCKED, not PASS.
+If any of those are false, the verdict is FAIL or BLOCKED — not PASS.
+
+Narrowing the claim is allowed only when the narrowed claim is stated explicitly and matching docs/configs do not still overclaim. Narrowing is not a way to hide a known production-break bug in the original claim’s surface.
 
 ## INPUTS
 
-Collect these before running checks:
-
-- Claim under test: exact sentence or release note wording being certified.
+- Claim under test (exact sentence).
 - Scope: repo path, subsystem, product, target, service, adapter, MCP, command, or deployment.
-- Git identity: branch, commit, dirty status, staged status, and relevant submodule or external pack pins.
-- Support matrix: every runtime, target, OS, model, feature, protocol, install mode, config format, deployment mode, and dependency path claimed as supported.
-- Artifact identity when applicable: bundle, binary, package, image digest, generated output directory, installer, service file, config file, checksum, version, and build command.
-- Required real dependencies: local services, external APIs, credentials, databases, queues, browsers, devices, hosts, or human approval.
-- Existing evidence: test logs, build logs, workflow artifacts, reviewer artifacts, `verify-prove` output, deployment logs, generated manifests, and docs.
+- Git identity: branch, commit, dirty status, submodule/pack pins.
+- Support matrix: runtimes, targets, OS, features, protocols, install modes, config formats, deployment modes, dependency paths.
+- Artifact identity when applicable.
+- Required real dependencies; missing → UNKNOWN/BLOCKED, not guessed.
+- Evidence: `verify-prove`, `verify-coverage`, `verify-test`, `qa-trace` / `qa-review`, build/deploy logs, manifests, docs.
 
-Missing input is not a reason to guess. Mark it UNKNOWN, then decide whether it blocks the claim.
+## SEVERITY GATE (NON-NEGOTIABLE)
+
+Use the same severity language as `qa-trace`:
+
+| Severity | Examples |
+|----------|----------|
+| Critical | auth bypass, data loss/corruption, RCE, cross-tenant access, destructive write, install that clobbers user state |
+| High | strong business-logic bypass, exploitable race, sensitive leakage, false-success on trust boundaries |
+| Medium | bounded abuse, fragile defense, validation gaps |
+| Low / Info | hygiene, docs polish, limited smell |
+
+Before any PASS:
+
+1. Run or ingest a hostile design/security pass on the scoped surface (`qa-trace` preferred; `qa-review --focus security,logic` acceptable if equivalent evidence exists).
+2. Any open Critical or High finding in scope → FAIL (or BLOCKED only if proof literally cannot run and the claim is not asserted).
+3. Medium findings must be fixed, explicitly deferred with owner/date, or must force claim narrowing.
+4. Low/Info never decide PASS alone and must not dominate the report over kill findings.
+
+If no design/security pass was run, readiness-critical claims default to `NOT_RUN` → cannot PASS.
 
 ## PROTOCOL
 
 ### Phase 1: Define The Claim Boundary
 
-Write the claim in one sentence. Then rewrite it as a measurable support matrix.
-
-Examples:
+Write the claim in one sentence. Rewrite as a measurable support matrix.
 
 - Bad: `Synapse is production-ready.`
 - Good: `Synapse is production-ready for local macOS user installs through synapse-bridge, launchd sidecar, and generated MCP configs for the verified targets listed below.`
 
-For each support item, classify it:
+Classify each matrix item: `supported` | `unsupported` | `deferred` | `blocked`.
 
-- `supported`: must be proven.
-- `unsupported`: must not appear in docs, generated configs, release notes, or acceptance claims as supported.
-- `deferred`: known future work, not part of PASS.
-- `blocked`: intended support exists, but proof needs a missing dependency, credential, environment, approval, or external condition.
-
-If the claim uses absolute language such as `all`, `100%`, `complete`, or `production-ready`, the support matrix must be explicit. Hidden exclusions are a FAIL.
+Absolute language (`all`, `100%`, `complete`, `production-ready`) requires an explicit matrix. Hidden exclusions are FAIL.
 
 ### Phase 2: Source And Scope Integrity
 
-Check that the reviewed source is coherent before proving runtime behavior:
+- Record working tree; identify unrelated dirty files.
+- Generated files, lockfiles, schemas, registries, docs consistent with the claim.
+- No production placeholders, `todo!()`, hard-coded success, forced pass, disabled gate, or no-op required path.
+- No mock/fake/fixture/synthetic/recorded substitute used as acceptance proof outside tests.
+- Dependency risk evidence when deps changed.
+- Repo checks appropriate to the surface — green tests are evidence for tested gates only.
 
-- Working tree status is recorded.
-- Unrelated dirty files are identified and excluded from the claim or treated as risk.
-- Generated files, lockfiles, schemas, registry entries, and docs are consistent with the claim.
-- No production path contains placeholders, `todo!()`, `unimplemented!()`, TODO/FIXME standing in for required behavior, hard-coded success, forced pass, disabled gate, or no-op implementation.
-- No mock, fake, fixture, synthetic, recorded, or substitute execution is used outside tests as acceptance proof.
-- Test-only doubles remain under tests, fixtures, local emulators, contract fixtures, failure injection, or explicitly labeled diagnostic work.
-- Dependency additions or updates have proportionate risk evidence: maintenance, license, advisories, install scripts, native binaries, transitive footprint, compatibility, and lockfile impact.
+### Phase 3: Design And Production-Break Hunt
 
-Run the repo's narrow and broad checks appropriate to the touched surface. Green tests are evidence for tested gates only; they are not the readiness verdict.
+This phase is mandatory and ordered before hygiene.
 
-### Phase 3: Artifact Or Installed-System Identity
+Hunt for:
 
-When the claim involves shipped software, distribution, installability, generated target outputs, deployment, or user-facing execution, prove the exact thing that users run.
+- Wrong architecture or trust-boundary placement that makes correct local tests irrelevant.
+- Silent wrong success (operation reports OK while world state is wrong).
+- Features claimed supported but unimplemented, stubbed, or host-incompatible.
+- Merge/install paths that can destroy user config or data.
+- Concurrency/idempotency holes on claimed multi-agent or multi-client use.
+- Security sinks: authz gaps, secret leakage, unsafe defaults.
 
-Use `verify-prove` when there is a release artifact, package, image, bundle, generated output, installer, or live service. Record:
+Catastrophic failure catalog:
 
-- Build command and source commit.
-- Artifact or generated output path.
-- SHA256, image digest, package version, service identity, or installed binary path.
-- Config files emitted or merged.
-- Required files present and forbidden files absent.
-- Whether the proof used source checkout state, local developer caches, generated dist files, or a clean-room install.
+| Class | Kill question |
+|-------|---------------|
+| Data loss / corruption | Can one normal or retry path destroy, duplicate, or silently corrupt user state? |
+| Auth / tenant break | Can one user, agent, plugin, or token cross an authorization or tenancy boundary? |
+| Unbounded cost / resource burn | Can a loop, retry, queue, model call, or autoscale path run without a hard budget or circuit breaker? |
+| Single point of failure | Does one dependency, config file, queue, host, key, or human action stop every supported path? |
+| Unobservable failure | Can the system be broken while health checks, logs, metrics, or user-visible status still report success? |
+| No rollback / recovery | If rollout, install, migration, or config merge fails, is there a tested path back to the previous working state? |
+| Destructive automation | Can an automated agent/tool delete, overwrite, publish, spend, deploy, or notify without the intended approval and scope controls? |
+| Irreversible external effect | Can the workflow send email, mutate production data, charge money, rotate secrets, or disclose data without replay-safe evidence and approval? |
 
-Mutable tags, source-tree-only runs, or hidden dev overrides cannot prove release, deployment, or production readiness.
+Treat any plausible `yes` on Critical/High surfaces as a candidate design finding. Prove it is mitigated, narrow the claim, or FAIL.
 
-### Phase 4: Real Acceptance Matrix
+Record findings with severity + confidence. Critical/High open → FAIL.
 
-For every `supported` matrix item, run at least one real acceptance path through the actual user or host entry point.
+Do not spend the bulk of the report on Low docs/style while Critical/High remain unchecked.
 
-Acceptance proof must include:
+### Phase 4: Artifact Or Installed-System Identity
 
-- Command or scenario name.
-- CWD or target environment.
-- Entry point invoked by a real user, host, service, adapter, installer, API, CLI, MCP client, or deployment.
-- Real implementation path, not a mock-only or fixture-only substitute.
-- Required dependencies actually used, or the item marked BLOCKED.
-- Observable expected result: output file, response, DB row, message, generated config, installed service, running process, UI state, report, or external side effect.
-- Exit code, duration, and relevant output reference.
+When the claim involves shipped software, distribution, installability, generated outputs, deployment, or user-facing execution, require `verify-prove` (or equivalent evidence meeting prove’s hard rules).
 
-For target matrices, every target claimed as supported must be covered. A representative target is not enough for an `all targets` claim.
+Record build command, commit, artifact path, digest/checksum, configs emitted/merged, required/forbidden files, clean-room vs source-tree.
 
-### Phase 5: Security, Operations, And Failure Paths
+Mutable tags, source-only runs, or hidden dev overrides cannot prove release/deployment/production readiness.
 
-Run controls that are relevant to the scoped claim:
+### Phase 5: Real Acceptance Matrix
 
-- Secret scan or targeted secret inspection for changed/generated/shipped artifacts.
-- Secret redaction in logs, reports, MCP memory, evidence files, and generated configs.
-- Auth/authz checks when identity or permissions are involved.
-- File permissions for tokens, DBs, sockets, service files, caches, and generated configs.
-- Restart, update, rollback, or cleanup path when install/deploy/service lifecycle is claimed.
-- Health/readiness checks when a service is claimed usable.
-- Short concurrency or multi-client smoke when concurrent agents, requests, workers, or sessions are claimed.
+For every `supported` item, at least one real acceptance path through the actual user/host entry point:
+
+- Command/scenario, cwd/environment, real entry point, real implementation path.
+- Real dependencies used, or item BLOCKED.
+- Observable expected result (file, response, DB row, config, service, UI state).
+- Exit code, duration, evidence ref.
+
+For target matrices, every claimed target must be covered. A representative target is not enough for `all targets`.
+
+Prefer journeys and outcomes from `verify-prove` over transport-only checks.
+
+### Phase 6: Suite Discrimination (When Tests Underwrite The Claim)
+
+If the readiness claim rests on “tests prove it,” require `verify-coverage` discrimination evidence for Critical/High surfaces (surviving fault = FAIL). Coverage percentage alone is insufficient.
+
+### Phase 7: Security, Operations, And Failure Paths
+
+Run controls that trace to actual assets and failure impact:
+
+- Secret scan/redaction on changed/generated/shipped artifacts.
+- Auth/authz when identity is in scope.
+- File permissions on tokens/DBs/sockets/service files/configs.
+- Restart/update/rollback/cleanup when lifecycle is claimed.
+- Health/readiness when a service is claimed usable.
+- Short concurrency when concurrent use is claimed.
 - Error-path proof for expected dependency failures.
-- Docs and README drift check for supported/unsupported/deferred features.
+- Docs/README drift for supported vs unsupported features.
 
-Do not add irrelevant compliance ceremony. Controls must trace to the actual assets, users, dependencies, and failure impact in scope.
+These are necessary but not sufficient. A clean secret scan does not override an open Critical design finding.
 
-### Phase 6: Claim Audit
+### Phase 8: Claim Audit
 
-List the major claims made by peers, docs, PR text, release notes, or prior reports. Mark each one:
+List major claims from peers, docs, PR/release text, prior reports. Mark each:
 
-- `PROVEN`: evidence exists from this run or a bound artifact.
-- `FALSE`: evidence contradicts the claim.
-- `NOT_RUN`: not checked.
-- `BLOCKED`: cannot be checked without named human action, credential, environment, approval, or external condition.
+- `PROVEN` | `FALSE` | `NOT_RUN` | `BLOCKED`
 
-Any readiness-critical `FALSE`, `NOT_RUN`, or `BLOCKED` item prevents PASS unless the claim is narrowed to exclude it.
+Any readiness-critical `FALSE`, `NOT_RUN`, or `BLOCKED` prevents PASS unless the claim is honestly narrowed and docs/configs match.
 
-### Phase 7: Verdict
+### Phase 9: Verdict
 
-Use exactly one verdict:
+Exactly one:
 
-- `PASS`: all supported matrix items have real proof, high-level claims match evidence, no readiness blocker remains, and docs/configs do not overclaim.
-- `FAIL`: the implementation, artifact, docs, support matrix, or evidence contradicts the claim.
-- `BLOCKED`: proof cannot be completed because a concrete external dependency, credential, environment, human approval, or missing artifact is required.
+- `PASS`: supported matrix proven; no open Critical/High in scope; claims match evidence; docs/configs do not overclaim.
+- `FAIL`: implementation, artifact, design, docs, matrix, or evidence contradicts the claim — including open Critical/High.
+- `BLOCKED`: concrete missing dependency/credential/environment/approval/artifact prevents completion.
 
-Never use `mostly ready`, `core complete`, `production-ready except`, or similar wording. Narrow the scope or report the blocker.
+Never use `mostly ready`, `core complete`, or `production-ready except`. Narrow the scope or report the blocker.
 
 ## OUTPUT ARTIFACTS
 
-Write a readiness report when the repo or workflow has an evidence directory. Prefer:
+Prefer:
 
 ```text
 .agent-surface/readiness/<target-or-scope>/<timestamp>/readiness.json
 .agent-surface/readiness/<target-or-scope>/<timestamp>/summary.md
 ```
 
-If no evidence directory is appropriate, include the same information in chat.
-
 Minimum JSON shape:
 
 ```json
 {
-  "schema_version": "readiness.v1",
+  "schema_version": "readiness.v2",
   "claim": "",
   "scope": "",
   "git": {
@@ -171,6 +201,16 @@ Minimum JSON shape:
       "blocker": ""
     }
   ],
+  "design_security": {
+    "source": "qa-trace|qa-review|equivalent",
+    "open_critical": 0,
+    "open_high": 0,
+    "findings": []
+  },
+  "discrimination": {
+    "status": "proven|failed|not_run|not_applicable",
+    "evidence": ""
+  },
   "checks": [
     {
       "name": "",
@@ -204,15 +244,20 @@ Minimum JSON shape:
 
 ## CHAT OUTPUT
 
-Use this concise format:
-
 ```markdown
 Readiness: PASS|FAIL|BLOCKED
 Claim: <exact scoped claim>
 Scope: <repo/subsystem/target/deployment>
 
+Design/security gate:
+- source: qa-trace|qa-review|...
+- open Critical: <n> — open High: <n>
+- blockers: <none or list>
+
 Supported matrix:
 - <id>: proven|failed|not run|blocked — <evidence or blocker>
+
+Discrimination: proven|failed|not run|n/a — <evidence>
 
 Checks:
 - `<command or scenario>` -> passed|failed|not run
@@ -226,10 +271,13 @@ Blockers:
 
 ## HARD RULES
 
-1. A readiness PASS must be scoped. If the scope is vague, the verdict is BLOCKED until the support matrix is explicit.
-2. Do not certify a path that used mocks, fakes, fixtures, synthetic data, local substitutes, recorded responses, or renamed equivalents as real acceptance proof.
-3. Do not certify a release, install, or deployment claim from a source-tree-only run.
-4. Do not certify `all targets`, `all features`, or `100% implemented` unless every supported item is listed and proven.
-5. Do not hide blockers in notes. Any blocker that prevents the claim is part of the verdict.
-6. Do not broaden a narrow pass. `tests passed`, `build passed`, and `local smoke passed` are useful evidence but not production readiness by themselves.
-7. Prefer narrowing the claim over forcing a PASS. If only macOS local install was proven, say exactly that.
+1. Vague scope → BLOCKED until the matrix is explicit.
+2. Open Critical/High in scope → FAIL (cannot PASS via hygiene greens or claim narrowing that still markets the broken surface).
+3. No design/security pass → cannot PASS production-ready / stable / E2E / deployment-ready claims.
+4. Do not certify mock/fixture/synthetic/recorded substitutes as real acceptance.
+5. Do not certify release/install/deployment from source-tree-only runs.
+6. Do not certify `all targets` / `all features` / `100%` unless every supported item is listed and proven.
+7. Do not hide blockers in notes.
+8. Do not let Low/Info findings dominate the report while Critical/High are unchecked or open.
+9. Prefer honest narrower claims only when docs/configs/release text are updated to match.
+10. `tests passed` / `build passed` / `local smoke` are not production readiness.

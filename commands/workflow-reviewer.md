@@ -72,6 +72,14 @@ Specialist QA commands are helper functions, not mandatory serial phases and not
 
 If the BOSS goal, worker report, docs, release text, PR text, or chat handoff claims `stable`, `production-ready`, `release-ready`, `deployment-ready`, `E2E passed`, `100% implemented`, `all features supported`, or equivalent, require a scoped `verify-readiness` PASS artifact or an explicitly equivalent real-run proof artifact.
 
+That artifact must show:
+
+- No open Critical/High design or security findings in scope (prefer `qa-trace` evidence).
+- Real acceptance / `verify-prove` evidence for shipped paths when distribution or install is claimed.
+- Discrimination evidence when “tests prove it” underwrites the claim (`verify-coverage`), not coverage % alone.
+
+Reject readiness PASS that is only hygiene greens, claim-narrowing without matching docs, or source-tree smoke.
+
 - Treat `all tests passed`, `build passed`, unit/integration test success, mock-only proof, fixture-only proof, or source-tree-only smoke as insufficient for readiness by itself.
 - Check that the readiness proof names the exact scope, support matrix, real entry points, dependencies, artifacts or installed outputs, and unsupported/deferred/blocked paths.
 - If a readiness-critical matrix item is missing, not run, false, mocked, fixture-only, or blocked, the readiness claim is UNKNOWN or FAIL even if the code change itself may be otherwise acceptable.

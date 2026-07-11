@@ -96,7 +96,18 @@ Readiness triggers:
 stable, production-ready, release-ready, deployment-ready, E2E passed, 100% implemented, all features supported
 ```
 
-When a task asks to certify one of those claims, route to `verify-readiness` after implementation and review evidence exists. Use `verify-prove` as an artifact/runtime proof primitive inside that path when there is a shipped artifact, generated output, install bundle, deployment, or live service.
+When a task asks to certify one of those claims, route to `verify-readiness` after implementation and review evidence exists. Prefer this ladder before readiness PASS:
+
+```text
+verify-spec / verify-test
+  → verify-coverage (discrimination on Critical/High)
+  → verify-edge / verify-performance (when I/O or SLO in scope)
+  → verify-prove (shipped bits, UX, robustness, adversary)
+  → qa-trace or equivalent (no open Critical/High)
+  → verify-readiness (severity-first claim gate)
+```
+
+Use `verify-prove` as the artifact/runtime proof primitive when there is a shipped artifact, generated output, install bundle, deployment, or live service. Do not treat green unit tests or coverage % as readiness.
 
 ## AUTONOMY
 

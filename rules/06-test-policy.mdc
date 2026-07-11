@@ -12,10 +12,13 @@ alwaysApply: true
 - Test doubles are allowed for external services, time/random/IO providers, failure injection, local emulators, and contract fixtures.
 - Avoid mock theater: assert observable behavior, not internal call choreography.
 - Snapshot tests are acceptable for UI or stable generated output when reviewed.
+- Discrimination over coverage: line/branch % is supporting evidence only. Prefer mutation, stubbed-success, characterization, or property checks that fail under realistic faults (`verify-coverage`).
+- Prefer independent oracles on Critical/High surfaces (approved fixtures, human-locked expectations, invariants) over circular AI-authored example pairs.
+- Outcome over transcript: acceptance grades world state, not agent or UI narration alone (`verify-prove`).
 
 ## Acceptance Evidence
 
 - Never present a mock, fixture, synthetic data, local substitute, recorded response, or renamed equivalent as evidence for real end-to-end, production readiness, deployment readiness, security proof, or external-integration success.
-- Green tests are not E2E. `E2E passed` requires the real entry point, production implementation path, required real dependency instances, data created through that workflow, and an observed expected result.
-- Stable, production-ready, release-ready, deployment-ready, 100% implemented, and all-features-supported claims require a scoped readiness proof such as `verify-readiness`; otherwise state the narrower test/build/smoke result.
+- Green tests are not E2E. `E2E passed` requires the real entry point, production implementation path, required real dependency instances, data created through that workflow, and an observed expected result — plus UX/robustness/adversary evidence when those are in the claim (`verify-prove`).
+- Stable, production-ready, release-ready, deployment-ready, 100% implemented, and all-features-supported claims require a scoped readiness proof such as `verify-readiness` with no open Critical/High design or security findings in scope; otherwise state the narrower test/build/smoke result.
 - If a requested acceptance claim needs an unavailable dependency, credential, service, or environment, report it as `BLOCKED`. Narrower local checks may still be run and reported honestly.
