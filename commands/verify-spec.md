@@ -17,7 +17,7 @@ PASS (spec accepted) requires:
 
 - Each new test **fails on the current tree for the intended behavioral reason** — not merely a compile/import error.
 - Success, failure, boundary, and invariant behavior are all specified, not just the happy path.
-- The oracle is independent of the implementation under test (spec-derived expectations, injected fakes, or properties) — never values pasted from a future run.
+- The oracle is independent of the implementation under test (spec-derived expectations, standards-derived vectors, or properties) — never values pasted from a future run.
 - The spec cannot be satisfied by a tautology, a hard-coded return, or a weakened assertion.
 
 FAIL the spec if it only checks the happy path, asserts identity/`true`, or would pass against a stub that returns a constant.
@@ -30,14 +30,15 @@ FAIL the spec if it only checks the happy path, asserts identity/`true`, or woul
 
 ## RULE: NO IMPLEMENTATION
 
-You may write tests, interfaces, and in-memory fakes only. Do not write the production implementation in this phase — that is `dev-feature`'s job.
+You may write tests and interfaces only. Do not write the production implementation in this phase — that is `dev-feature`'s job. Non-real substitutes are default-denied and require the full test-policy necessity record; their output remains diagnostic and cannot make the spec ready.
 
 ## PROTOCOL
 
 ### Phase 1: Contract First
 
 1. Define the types/interfaces for inputs, outputs, and **typed errors** (not string errors).
-2. Prefer dependency injection over `jest.mock()`/monkeypatch: a DB becomes a `Repository` interface, time becomes a `Clock`. Generate in-memory fakes for them so tests stay hermetic without mocking the unit under test.
+2. Use dependency injection only to make boundaries explicit. Do not automatically generate a mock, fake, fixture, stub, in-memory implementation, or monkeypatch for the interface.
+3. If an exact assertion cannot safely and deterministically use the real component or a disposable real instance, add the smallest substitute only with a complete `SUBSTITUTE_JUSTIFICATION`. Generic "hermetic unit test" reasoning is invalid, and the substitute-backed run cannot satisfy RED proof.
 
 ### Phase 2: Behavior Classes (all four, not "the critical three")
 
@@ -53,16 +54,17 @@ When there is no obvious oracle, use a **metamorphic relation** instead of a har
 ### Phase 3: Prove the Spec Bites (RED, for the right reason)
 
 1. Run the new tests against the current tree.
-2. Each must FAIL — and the failure must be a **behavioral assertion failure**, not just "symbol not defined". If the only failure is a missing import, add a minimal stub that returns a wrong/constant value and confirm the test still fails; a test a constant-returning stub can satisfy is too weak.
+2. Each must FAIL — and the failure must be a **behavioral assertion failure**, not just "symbol not defined". If the only failure is a missing import, report `NEEDS SKELETON`; do not add a stub and call the result proof.
 3. Record the observed red failure per test as evidence for the downstream `verify-test` regression check.
+4. A temporary deliberately wrong implementation may challenge the oracle only as a labeled diagnostic with a complete necessity record. Revert it afterward; killing it cannot qualify the spec or supply verification evidence.
 
 ### Phase 4: Anti-Cheat Guard
 
 - No `expect(true).toBe(true)`, identity assertions, or empty test bodies.
 - No expected values copied from a run of the (unwritten or draft) implementation.
 - Readable intent names: `it('rejects a just-expired token')`, not `test1`.
-- No `setTimeout`/real clock/real network flakiness — use the injected `Clock` and fakes.
-- Data builders/factories (`makeUser({...overrides})`) instead of giant inline literals, so the assertion, not the fixture noise, is what's under review.
+- No `setTimeout`/real clock/real network flakiness. Use a controlled clock only when its necessity record explains why the real clock cannot serve the exact assertion.
+- Generated or fixed input data is a substitute when it replaces a real source. It requires the same necessity record and cannot prove the real data path.
 
 ## OUTPUT FORMAT
 
@@ -81,7 +83,7 @@ When there is no obvious oracle, use a **metamorphic relation** instead of a har
 
 ## RED proof
 - <test>: fails on current tree — reason: behavioral (not just missing symbol)
-- constant-stub check: still fails → discriminating
+- substitutes: none | justified diagnostic only (excluded from verdict)
 
 ## Verdict
 SPEC READY | NEEDS STRENGTHENING
@@ -89,9 +91,9 @@ SPEC READY | NEEDS STRENGTHENING
 
 ## HARD RULES
 
-1. **Red for the right reason.** A test that only fails on a missing import is not yet a spec; make a constant-returning stub still fail it.
+1. **Red for the right reason.** A test that only fails on a missing import is not yet a spec; report `NEEDS SKELETON` rather than manufacturing proof with a stub.
 2. **All four behavior classes**, not just the happy path. Sad/boundary/invariant are where AI code breaks.
 3. **Independent oracle.** Never derive expected values from the implementation; prefer spec constants, properties, or metamorphic relations.
-4. **No implementation here.** Only tests, interfaces, and fakes.
+4. **No implementation here.** Only tests and interfaces; necessary substitutes remain diagnostic and need the full justification record.
 5. **No cheating to green.** Tautologies, identity asserts, and empty tests are rejected.
 6. Hand implementation to `dev-feature`, discrimination scoring to `verify-coverage`, hostile inputs to `verify-edge`.

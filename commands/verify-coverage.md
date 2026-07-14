@@ -18,7 +18,7 @@ Coverage without discrimination is vanity.
 PASS requires:
 
 - Critical domain / trust-boundary paths have tests that assert observable outcomes or invariants.
-- At least one discrimination check shows the suite would fail under a realistic fault (mutation, fault injection, stubbed success, or known-bug characterization).
+- At least one evidence-bearing discrimination check shows the suite fails on a real pre-fix/known-bug implementation or under a real dependency failure.
 - Untested sad paths on Critical/High surfaces are listed as gaps, not ignored.
 - No new tests exist solely to touch lines, weaken assertions, or green a gate.
 
@@ -57,20 +57,21 @@ Record branch misses on Critical/High surfaces only. Ignore boilerplate getters 
 
 Pick at least one method that fits the stack. Prefer computational sensors.
 
-| Method | What it proves | Prefer when |
-|--------|----------------|-------------|
-| Mutation / semantic fault injection | Suite kills realistic bugs | Unit/domain logic with fast tests |
-| Stubbed-success / no-op path | Suite fails if production path is bypassed | Services with DI or clear entry points |
-| Assertion-weakening probe | Suite fails if expects are diluted | Recent AI-authored tests |
-| Known-bug characterization | Suite fails on a documented past bug | Regression after an incident |
-| Property / invariant check | Random or exhaustive inputs preserve invariants | Parsers, merges, balances, idempotency |
+| Method | Evidence role | Prefer when |
+|--------|---------------|-------------|
+| Real pre-fix / historical buggy tree | PASS evidence: suite catches behavior that actually existed | Regression after a fix or incident |
+| Real disposable dependency failure | PASS evidence: real boundary handles down/denied/timeout state | Service integration paths |
+| Property / invariant check on real implementation | PASS evidence: real code preserves invariant across generated inputs | Parsers, merges, balances, idempotency |
+| Mutation / planted fault / stubbed-success | Diagnostic only: may expose a weak oracle, never supply PASS evidence | Challenging recent tests |
+| Assertion-weakening probe | Diagnostic only: may expose assertion fragility | Recent AI-authored tests |
 
 Rules:
 
-1. Inject one realistic fault at a time on a Critical/High path.
-2. The suite must fail (or the property must fail) for that fault. If it stays green, record `SURVIVING_FAULT` — FAIL.
+1. Prefer a real pre-fix tree, documented historical bug, or actual failure of a disposable real dependency.
+2. The suite must fail for the real faulty behavior. If it stays green, record `SURVIVING_FAULT` — FAIL.
 3. Do not claim discrimination from coverage percentages alone.
-4. If mutation tooling is unavailable, use stubbed-success or characterization. Name the substitute.
+4. A planted fault or other substitute requires `SUBSTITUTE_JUSTIFICATION`. If the suite stays green, the diagnostic can reject the quality claim; if the suite kills it, that result still cannot contribute PASS evidence.
+5. If no real-fault discrimination method is available, verdict is `BLOCKED` for the "tests are good enough" claim. Do not promote substitute diagnostics into evidence.
 
 ### Phase 4: Oracle Quality Audit
 
@@ -78,7 +79,7 @@ For tests that “cover” Critical/High paths, check:
 
 - Asserts observable behavior or environment outcome — not only that a function was called.
 - Does not use `expect(true)`, empty asserts, snapshot-of-nothing, or “does not throw” as the sole check on a trust boundary.
-- Oracle is not circular: for high-risk paths, prefer approved fixtures, human-locked expectations, preexisting failing characterizations, or properties independent of the implementation under test.
+- Oracle is not circular: for high-risk paths, prefer human-locked spec expectations, standards-derived vectors, preexisting failing characterizations, or properties independent of the implementation under test. A fixture that replaces real data remains a substitute and cannot prove that data path.
 - AI-authored tests written in the same session as the implementation are suspect until a discrimination check passes.
 
 ### Phase 5: Gap Classification
@@ -108,10 +109,11 @@ Classify each gap:
 - Critical branch misses: <list or none>
 
 ## Discrimination
-- Method: mutation|stubbed-success|assertion-probe|characterization|property
-- Fault injected: <one sentence>
+- Evidence method: real-pre-fix|historical-bug|real-dependency-failure|property
+- Real faulty behavior exercised: <one sentence>
 - Suite result: failed-as-required|SURVIVING_FAULT|not run
 - Evidence: <command + key output ref>
+- Substitute diagnostics: none | <method + justification + result, excluded from PASS>
 
 ## Oracle audit
 - Suspect tests: <list or none>
@@ -135,3 +137,4 @@ PASS|FAIL|BLOCKED
 4. Prefer fixing oracles and discrimination over adding more weak examples.
 5. Hand remaining hostile I/O to `verify-edge`; hand shipped-bit proof to `verify-prove`.
 6. If discrimination tooling or environment is missing, verdict is `BLOCKED` or `FAIL` for the quality claim — not a silent skip.
+7. Substitute diagnostics are asymmetric: surviving them can expose weakness, but killing them never proves real behavior or contributes PASS evidence.

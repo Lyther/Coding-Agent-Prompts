@@ -50,8 +50,10 @@ Sending content to an external service publishes it; it may be cached, logged, o
 
 Default-deny means allowed only for listed exceptions or clear repo precedent. If used, name the exception in the final report when it matters.
 
-- Test doubles: allowed for external service boundaries, time/random/IO providers, failure injection, and contract fixtures. Test observable behavior, not internal call choreography.
-- Mock, fake, fixture, fabricated, synthetic, recorded, or substitute execution outside tests is default-denied as acceptance evidence. Use real runs for implementation proof; if a non-real run aids diagnosis, label it explicitly and do not present it as production, E2E, integration, deployment, or readiness proof.
+- A test substitute is any non-real replacement for code, data, a dependency, a service, time, randomness, I/O, or an external effect. The policy is label-independent: mock, fake, fixture, stub, spy, emulator, in-memory implementation, monkeypatch, recorded response, synthetic data, sandbox, test mode, and renamed equivalents are the same class.
+- Test substitutes are default-denied. They are allowed only when the exact assertion cannot be exercised safely and deterministically with the real component or a disposable real instance. Every declaration or use must have a traceable `SUBSTITUTE_JUSTIFICATION` that names what is replaced, why the real option is impossible for this test, the proof limitation, and the real test required for the replaced boundary.
+- Speed, convenience, easier setup, offline CI, missing credentials, and an unreliable dependency are not sufficient necessity. Missing real prerequisites make the integration, E2E, or acceptance layer `BLOCKED`; they do not authorize substitute-backed proof.
+- Substitute-backed execution is diagnostic only. It may expose a weak test, but it cannot satisfy implementation, integration, E2E, acceptance, security, readiness, deployment, or completion evidence. A test or file named `e2e`, `integration`, `real`, or equivalent does not change this rule.
 - Debug prints: allowed for user-facing CLI output. Diagnostics go to stderr or structured logs.
 - Type assertions, casts, `any`, `unknown`, `unwrap`, `expect`, `panic`, `.clone()`, raw SQL, TODO/FIXME, and shell strict-mode exceptions require local justification and a relevant check when they affect behavior, safety, or performance.
 

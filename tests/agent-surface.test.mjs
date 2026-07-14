@@ -479,9 +479,27 @@ const cursorIgnore = readFileSync(path.join(root, "dist", "cursor", ".cursorigno
 assert.match(cursorIgnore, /agent-surface canonical AI-tool ignore baseline/);
 const codexInstructions = readFileSync(path.join(root, "dist", "codex", ".codex", "AGENTS.md"), "utf8");
 assert.match(codexInstructions, /## 00-precedence-and-safety\.mdc/);
+assert.match(codexInstructions, /A test substitute is any non-real replacement/);
+assert.match(codexInstructions, /SUBSTITUTE_JUSTIFICATION/);
+assert.match(codexInstructions, /A suite called `e2e_test`/);
+assert.match(codexInstructions, /Missing real prerequisites make the integration, E2E, or acceptance layer `BLOCKED`/);
 // 04-cybersecurity is scoped now: it lives in references/rules/, not the always-on AGENTS.md (like 10-python).
 assert.doesNotMatch(codexInstructions, /## 04-cybersecurity\.mdc/);
 assert.doesNotMatch(codexInstructions, /## 10-python\.mdc/);
+const codexVerifyTest = readFileSync(path.join(root, "dist", "codex", ".agents", "skills", "verify-test", "SKILL.md"), "utf8");
+assert.match(codexVerifyTest, /No substitute-backed proof on any path/);
+assert.match(codexVerifyTest, /Substitute-backed results excluded from evidence/);
+const claudeDevFeature = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "dev", "feature.md"), "utf8");
+assert.doesNotMatch(claudeDevFeature, /Test doubles are allowed in tests when appropriate/);
+assert.match(claudeDevFeature, /SUBSTITUTE_JUSTIFICATION/);
+const claudeVerifyTest = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "verify", "test.md"), "utf8");
+assert.match(claudeVerifyTest, /No substitute-backed proof on any path/);
+assert.match(claudeVerifyTest, /Substitute-backed results excluded from evidence/);
+const claudeVerifyReadiness = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "verify", "readiness.md"), "utf8");
+assert.match(claudeVerifyReadiness, /A suite called `e2e_test`/);
+const claudeSelfCritique = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "qa", "self-critique.md"), "utf8");
+assert.match(claudeSelfCritique, /SUBSTITUTE_JUSTIFICATION' \{\{target\}\}/);
+assert.doesNotMatch(claudeSelfCritique, /SUBSTITUTE_JUSTIFICATION' tests\//);
 const codexPythonReference = readFileSync(path.join(root, "dist", "codex", ".codex", "references", "rules", "10-python.md"), "utf8");
 assert.match(codexPythonReference, /Scoped agent-surface reference/);
 assert.match(codexPythonReference, /^# Python$/m);

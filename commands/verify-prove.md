@@ -18,11 +18,12 @@ PASS requires all of:
 - Frozen identity of the shipped artifact (digest/checksum), not a mutable tag.
 - Clean-room boot from that artifact (no source-tree or hidden dev cache dependency).
 - Real user/host entry points for every journey claimed in scope.
+- Real implementation, dependencies, data paths, and external effects throughout every evidence-bearing journey; no substitutes under any label.
 - Environment outcomes verified (DB/file/config/process state), not agent or UI narration alone.
 - Robustness and adversary checks relevant to the claim — not optional footnotes.
 - Multi-trial evidence when the path is nondeterministic.
 
-FAIL if identity is ambiguous, the flow needs the checkout to work, outcomes were not checked, or Critical/High robustness/adversary gaps remain in scope.
+FAIL if identity is ambiguous, the flow needs the checkout to work, a required path is substituted, outcomes were not checked, or Critical/High robustness/adversary gaps remain in scope.
 
 ## INPUTS
 
@@ -45,6 +46,7 @@ FAIL if identity is ambiguous, the flow needs the checkout to work, outcomes wer
 2. Fresh environment: no mounted source tree, no developer caches, no local override files that users would not have.
 3. Wait on readiness/health signals — no fixed sleeps as the sole gate.
 4. If the flow only works with the repo checkout, mark FAIL.
+5. Inventory every component, dependency, data source, and external effect in the journey. Any mock, fake, fixture, stub, spy, emulator, in-memory replacement, monkeypatch, recorded/synthetic response, sandbox imitation, test mode, or renamed equivalent makes the journey non-E2E and ineligible for PASS.
 
 ### Phase 3: Real Journeys (User Experience)
 
@@ -139,6 +141,7 @@ If the path uses models, races, or other nondeterminism:
 - <journey>: PASS|FAIL — UX rubric notes — evidence
 - failure-path: ...
 - recovery-path: ...
+- substitutes: none | <replacement> (any entry = FAIL for E2E/prove)
 
 ## Outcomes
 - persistence: ...
@@ -168,4 +171,5 @@ PASS|FAIL|BLOCKED
 4. UX rubric is mandatory for user-facing journeys; transport success alone is FAIL for UX claims.
 5. Robustness and adversary phases are in-scope by default; excluding them requires narrowing the claim.
 6. Do not call smoke “E2E” or “production-level proof.”
-7. Hand suite discrimination to `verify-coverage`; hand claim certification to `verify-readiness`.
+7. A suite or file named `e2e_test`, `integration`, `real`, or `live` is not real proof when any required path is substituted. Missing prerequisites are `BLOCKED`.
+8. Hand suite discrimination to `verify-coverage`; hand claim certification to `verify-readiness`.

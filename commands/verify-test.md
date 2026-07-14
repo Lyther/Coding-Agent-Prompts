@@ -15,12 +15,13 @@ Green is a claim, not a verdict.
 
 PASS requires all of:
 
-- The relevant scope ran hermetically (isolated state; real or ephemeral dependencies for integration paths) and passed.
+- The evidence-bearing scope ran the real implementation with real or disposable real dependencies, isolated state, and passed.
 - The suite was not weakened to pass this change: no newly skipped/`xfail`/`only`/deleted tests, no loosened assertions, no disabled gate.
 - For fix/regression work, a test exists that **fails on the pre-fix tree** and passes after — proof it catches the bug.
 - Nondeterministic paths ran enough times to show stability, with seeds captured.
+- Every non-real substitute is inventoried and has a complete `SUBSTITUTE_JUSTIFICATION`; substitute-backed results are labeled diagnostic and excluded from PASS evidence.
 
-FAIL if green was achieved by removing a gate, diluting an assertion, mocking away a critical path, or a "regression" test that also passes on the unpatched code.
+FAIL if green was achieved by removing a gate, diluting an assertion, substituting any required path, using an unjustified substitute, calling a substitute-backed suite E2E/integration/real, or a "regression" test that also passes on the unpatched code.
 
 ## INPUTS
 
@@ -28,8 +29,9 @@ FAIL if green was achieved by removing a gate, diluting an assertion, mocking aw
 - Test/coverage commands and container/service tooling the repo provides.
 - Baseline: the pre-change tree (or protected branch) for skip/assert/regression diffing.
 - Risk surface: auth, money, persistence, concurrency, secrets, external I/O.
+- Substitute inventory: mocks, fakes, fixtures, stubs, spies, emulators, in-memory implementations, monkeypatches, recorded/synthetic responses, sandboxes, test modes, and renamed equivalents.
 
-Missing integration tooling (no container runtime, no ephemeral service) is `BLOCKED` for that layer — not a silent pass on mocks.
+Missing integration tooling, credentials, services, or environments are `BLOCKED` for that layer — never a silent pass on a substitute.
 
 ## PROTOCOL
 
@@ -37,7 +39,7 @@ Missing integration tooling (no container runtime, no ephemeral service) is `BLO
 
 1. Set the test environment explicitly (`NODE_ENV=test`, `APP_ENV=test`, or equivalent).
 2. Reset and seed state (DB / queue / blob) before the suite; no shared `localhost` databases.
-3. Integration layers use real or ephemeral dependencies (Testcontainers, disposable service), not in-process fakes standing in for the real thing.
+3. Integration layers use real or disposable real dependencies (Testcontainers, disposable service). Any substituted required component makes that layer non-integration and ineligible for evidence.
 4. Record identity when the suite builds/installs an artifact; hand shipped-artifact and clean-room journey proof to `verify-prove`.
 
 ### Phase 2: Layered Run (fail fast, then widen)
@@ -53,7 +55,9 @@ Diff the suite against the baseline and inspect how green was achieved:
 - **Skip/exclusion sweep**: new `skip` / `xfail` / `.only` / `it.skip` / `t.Skip` / deleted or renamed tests since baseline. Any that hide the change's behavior is a REJECT-level finding; a skip without a tracked reason is unacceptable.
 - **Assertion strength**: no assertion loosened, no `assert True` / `expect(true).toBe(true)` / "does not throw" as the sole check on a trust boundary, no mock-was-called as the only assertion on a critical path.
 - **Oracle honesty**: expected values trace to the spec, not pasted from current (possibly buggy) output; snapshots reviewed, not blindly regenerated in the same change that altered behavior.
-- **Mock reality**: auth/money/persistence paths have at least one real-dependency test; a critical path proven only by mocks is unproven.
+- **Substitute sweep**: search code, config, helpers, and service setup for every non-real replacement regardless of label. Include test modes and local servers that imitate a dependency.
+- **Necessity records**: each substitute has a complete `SUBSTITUTE_JUSTIFICATION`. "Fast", "easy", "hermetic", "offline", "CI", "flaky service", or "missing credentials" is not necessity. Missing records invalidate the affected test.
+- **Reality classification**: exclude every substitute-backed result from PASS evidence. A substitute may help diagnose local logic or expose a weak oracle; it never proves the replaced code, service, data path, or external effect.
 - **Gate integrity**: no disabled lint/type/coverage gate, no `continue-on-error` slipped into CI, no weakened threshold.
 
 If the change is a fix, prove the regression test bites: run the test against the pre-fix tree (revert the fix), confirm it FAILS, restore the fix, confirm it PASSES. A regression test that is green on the unpatched code is a false negative — REJECT.
@@ -83,7 +87,10 @@ If the change is a fix, prove the regression test bites: run the test against th
 - Skips/xfail/deleted since baseline: none | <list>
 - Loosened assertions / disabled gates: none | <list>
 - Regression test fails on pre-fix tree: yes | no (no = REJECT)
-- Critical path mock-only: no | <path>
+- Substitutes found: none | <symbol/path + label>
+- Necessity record: n/a | valid | invalid (invalid = FAIL)
+- Substitute-backed results excluded from evidence: yes | no (no = FAIL)
+- Required real layers missing: none | BLOCKED <layer + unblock path>
 
 ## Flake
 - retries: 0 | FLAKY <test> | BROKEN <test>
@@ -101,8 +108,8 @@ PASS | FAIL | BLOCKED
 1. **Fix work needs a test that fails on the unpatched tree.** No pre-fix failure, no regression proof.
 2. **Never modify tests to go green.** Weakened assertions, new skips, deleted gates, or diluted thresholds are FAIL, not housekeeping.
 3. **Outcome over transcript** for integration paths: query the backing service; a response body or log line is not proof.
-4. **No mock-only proof** for auth, money, or persistence.
+4. **No substitute-backed proof on any path.** Labels do not matter; each necessary substitute needs a complete justification and remains diagnostic only.
 5. **No network in unit; isolated DB/state for integration** — ephemeral or transactional, not a shared host database.
 6. **Flaky is broken.** Report FLAKY/BROKEN honestly; do not average away a nondeterministic failure.
-7. Missing integration tooling → `BLOCKED` for that layer, never a silent mock substitute.
+7. Missing real prerequisites → `BLOCKED` for that layer, never a silent substitute or downgraded claim.
 8. Hand discrimination to `verify-coverage`, hostile I/O to `verify-edge`, shipped journeys to `verify-prove`.

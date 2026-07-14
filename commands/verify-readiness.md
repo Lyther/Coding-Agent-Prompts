@@ -20,7 +20,7 @@ A PASS means:
 - The support matrix is complete and honest.
 - Every supported path has real proof through the actual entry point and dependency path.
 - No open Critical or High design, security, or production-break findings remain in scope.
-- Unsupported / unimplemented / blocked / mocked / fixture-only / not-run paths are excluded from the claim or listed as blockers.
+- Unsupported / unimplemented / blocked / substitute-backed / not-run paths are excluded from the claim or listed as blockers.
 - The shipped artifact, generated output, installed service, or deployed revision is what was exercised.
 - Hygiene items (docs nits, low-severity style, minor permission polish) never outrank design kills.
 
@@ -76,7 +76,8 @@ Absolute language (`all`, `100%`, `complete`, `production-ready`) requires an ex
 - Record working tree; identify unrelated dirty files.
 - Generated files, lockfiles, schemas, registries, docs consistent with the claim.
 - No production placeholders, `todo!()`, hard-coded success, forced pass, disabled gate, or no-op required path.
-- No mock/fake/fixture/synthetic/recorded substitute used as acceptance proof outside tests.
+- Inventory every mock/fake/fixture/stub/spy/emulator/in-memory/recorded/synthetic/test-mode or renamed substitute, including those inside tests. Each needs a complete `SUBSTITUTE_JUSTIFICATION`; every substitute-backed result is diagnostic only and excluded from readiness evidence.
+- Any required real dependency, data path, or external effect replaced by a substitute keeps that matrix item `BLOCKED` until the real path runs. A suite called `e2e_test`, `integration`, `real`, or equivalent does not change the classification.
 - Dependency risk evidence when deps changed.
 - Repo checks appropriate to the surface — green tests are evidence for tested gates only.
 
@@ -274,7 +275,7 @@ Blockers:
 1. Vague scope → BLOCKED until the matrix is explicit.
 2. Open Critical/High in scope → FAIL (cannot PASS via hygiene greens or claim narrowing that still markets the broken surface).
 3. No design/security pass → cannot PASS production-ready / stable / E2E / deployment-ready claims.
-4. Do not certify mock/fixture/synthetic/recorded substitutes as real acceptance.
+4. Do not certify any substitute-backed run as acceptance, regardless of its label or location. Every necessary substitute requires the full justification record and remains diagnostic only.
 5. Do not certify release/install/deployment from source-tree-only runs.
 6. Do not certify `all targets` / `all features` / `100%` unless every supported item is listed and proven.
 7. Do not hide blockers in notes.
