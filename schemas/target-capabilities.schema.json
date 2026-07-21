@@ -74,6 +74,12 @@
                 "settings",
                 "ignores",
                 "plugins",
+                "hooks",
+                "scheduling",
+                "connectors",
+                "provider-settings",
+                "runtime-subagents",
+                "agent-teams",
                 "external",
                 "recipes"
               ]

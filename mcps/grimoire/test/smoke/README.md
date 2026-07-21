@@ -35,7 +35,7 @@ real result in that host's UI/CLI. Record the date + host version.
 | Deep Agents | `~/.deepagents/.mcp.json` | | | |
 | Cursor | `~/.cursor/mcp.json` | | | |
 | Droid | `~/.factory/mcp.json` | | | |
-| Cline | `~/.cline/mcp.json` | | | |
+| Cline | `~/.cline/data/settings/cline_mcp_settings.json` (user-scope) | | | |
 | Kilo | `~/.config/kilo/kilo.jsonc` | | | |
 | OpenCode | `~/.config/opencode/opencode.json` | | | |
 | VS Code | `…/Code/User/mcp.json` | | | |

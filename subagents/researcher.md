@@ -7,6 +7,7 @@ targets:
   claude-code: true
   codex: true
   deepagents: false
+  cline: true
   cursor: true
   droid: true
   kilo: true

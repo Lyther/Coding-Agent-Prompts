@@ -34,6 +34,21 @@ export function renderClaudeSubagent(source) {
   ].join("\n");
 }
 
+export function renderClineSubagent(source) {
+  const tools = clineSubagentAccess(source.metadata.access);
+  return [
+    "---",
+    `name: ${source.metadata.name}`,
+    `description: "${yamlString(source.metadata.description)}"`,
+    "tools:",
+    ...tools.map((tool) => `  - ${tool}`),
+    "---",
+    "",
+    source.body.trim(),
+    "",
+  ].join("\n");
+}
+
 export function renderKiloSubagent(source) {
   const mapped = kiloSubagentAccess(source.metadata.access);
   const lines = [
@@ -374,6 +389,15 @@ export function claudeSubagentAccess(access) {
   if (access === "read-only") return { tools: "Read, Glob, Grep", maxTurns: 20 };
   if (access === "read-write") return { tools: "Read, Glob, Grep, Edit, Write", maxTurns: 30 };
   if (access === "read-write-shell") return { tools: "Read, Glob, Grep, Edit, Write, Bash", maxTurns: 40 };
+  fail(`unsupported subagent access: ${access}`);
+}
+
+export function clineSubagentAccess(access) {
+  const readOnly = ["read_file", "search_files", "use_skill"];
+  if (access === "read-only") return readOnly;
+  const readWrite = [...readOnly, "replace_in_file", "write_to_file"];
+  if (access === "read-write") return readWrite;
+  if (access === "read-write-shell") return [...readWrite, "execute_command"];
   fail(`unsupported subagent access: ${access}`);
 }
 

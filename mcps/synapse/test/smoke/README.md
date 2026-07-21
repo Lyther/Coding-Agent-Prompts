@@ -49,7 +49,7 @@ then it is **config-verified** (the synapse entry is correctly generated/merged)
 | codex | `.codex/config.toml` `mcp_servers.synapse` | ✅ tested | pending | pending | pending | config-verified |
 | cursor | `.cursor/mcp.json` `mcpServers.synapse` | ✅ tested | pending | pending | pending | config-verified |
 | gemini-cli | `.gemini/settings.json` `mcpServers.synapse` | ✅ tested | pending | pending | pending | config-verified |
-| cline | `.cline/mcp.json` `mcpServers.synapse` | ✅ tested | pending | pending | pending | config-verified |
+| cline | `.cline/data/settings/cline_mcp_settings.json` `mcpServers.synapse` (user-scope) | ✅ tested | pending | pending | pending | config-verified |
 | kilo | `kilo.jsonc` `mcp.synapse` | ✅ tested | pending | pending | pending | config-verified |
 | opencode | `.opencode/opencode.json` `mcp.synapse` | ✅ tested | pending | pending | pending | config-verified |
 | vscode | `mcp.json` `servers.synapse` | ✅ tested | pending | pending | pending | config-verified |

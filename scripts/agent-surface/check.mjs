@@ -731,8 +731,17 @@ export function validateGeneratedTarget(target, outputs) {
     requireContains(path.join(".config", "poolside", ".poolside"), /agent-surface Poolside rules/);
     requireContains(path.join(".config", "poolside", "skills", "redteam-web-detail-pack", "SKILL.md"), skillFrontmatter);
   } else if (target === "cline") {
-    requirePath(path.join(".cline", "data", "workflows", "ops-flow.md"));
+    requirePath(path.join(".cline", "workflows", "ops-flow.md"));
     requireContains(path.join(".cline", "rules", "agent-surface.md"), /agent-surface Cline global rules/);
+    requireContains(path.join(".cline", "agents", "boss.yaml"), /^---\nname: boss\n/);
+    requireContains(path.join(".cline", "skills", "karpathy-guidelines", "SKILL.md"), skillFrontmatter);
+    const mcp = requireJson(path.join(".cline", "data", "settings", "cline_mcp_settings.json"));
+    if (mcp && mcp.mcpServers?.synapse?.command !== "~/.local/bin/synapse-bridge") {
+      errors.push("Cline synapse MCP must use the first-party local bridge binary");
+    }
+    if (byPath.has(path.join(".cline", "mcp.json"))) {
+      errors.push("Cline must not emit the obsolete .cline/mcp.json route");
+    }
     requireContains(".clineignore", /agent-surface canonical AI-tool ignore baseline/);
   } else if (target === "kilo") {
     requirePath(path.join(".config", "kilo", "commands", "ops-flow.md"));

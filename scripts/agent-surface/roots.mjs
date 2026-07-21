@@ -125,7 +125,15 @@ export function claudeMcpPath(context) {
 }
 
 export function clineWorkflowRoot(context) {
-  return context.scope === "user" ? path.join(".cline", "data", "workflows") : path.join(".clinerules", "workflows");
+  return context.scope === "user" ? path.join(".cline", "workflows") : path.join(".clinerules", "workflows");
+}
+
+export function clineSkillRoot(_context) {
+  return path.join(".cline", "skills");
+}
+
+export function clineAgentRoot(_context) {
+  return path.join(".cline", "agents");
 }
 
 export function deepagentsSkillRoot(context) {
@@ -190,8 +198,8 @@ export function clineRuleRoot(context) {
   return context.scope === "user" ? path.join(".cline", "rules") : ".clinerules";
 }
 
-export function clineMcpPath(context) {
-  return context.scope === "user" ? path.join(".cline", "mcp.json") : path.join(".cline", "mcp.json");
+export function clineMcpPath(_context) {
+  return path.join(".cline", "data", "settings", "cline_mcp_settings.json");
 }
 
 export function kiloWorkflowRoot(context) {

@@ -179,6 +179,14 @@ assertStripAiAttributionHook();
 assert.equal(run(["check"]).trim(), "check: ok");
 assert.match(run(["check", "commands"]), /commands check: ok/);
 
+const targetCapabilities = JSON.parse(readFileSync(path.join(root, "registry", "target-capabilities.json"), "utf8"));
+const clineCapabilities = targetCapabilities.targets.cline;
+assert.ok(clineCapabilities.generated_render_tokens.includes("subagents"));
+assert.equal(clineCapabilities.surfaces.subagents.generation, "generated");
+assert.match(clineCapabilities.surfaces.subagents.notes, /subagents\/\*\.md source primitive compiles to Cline Configured Agents/);
+assert.equal(clineCapabilities.surfaces["runtime-subagents"].generation, "not-applicable");
+assert.match(clineCapabilities.surfaces["runtime-subagents"].notes, /separate from Configured Agents/);
+
 // renders validation: registry must not claim a surface token that no producer emits
 const targetsRegistryPath = path.join(root, "registry", "targets.json");
 const targetsRegistryOriginal = readFileSync(targetsRegistryPath, "utf8");
@@ -289,7 +297,7 @@ assert.equal(Object.hasOwn(opsFlowCommand, "body"), false);
 assert.equal(opsFlowCommand.targets["claude-code"], path.join(".claude", "commands", "ops", "flow.md"));
 assert.equal(opsFlowCommand.targets.codex, path.join(".agents", "skills", "ops-flow", "SKILL.md"));
 assert.equal(opsFlowCommand.targets.deepagents, path.join(".deepagents", "agent", "skills", "ops-flow", "SKILL.md"));
-assert.equal(opsFlowCommand.targets.cline, path.join(".cline", "data", "workflows", "ops-flow.md"));
+assert.equal(opsFlowCommand.targets.cline, path.join(".cline", "workflows", "ops-flow.md"));
 assert.equal(opsFlowCommand.targets.kilo, path.join(".config", "kilo", "commands", "ops-flow.md"));
 assert.equal(opsFlowCommand.targets["antigravity-cli"], path.join("config", "plugins", "agent-surface", "skills", "ops-flow.md"));
 assert.equal(Object.hasOwn(opsFlowCommand.targets, "gemini-cli"), false);
@@ -312,7 +320,7 @@ assert.equal(bootConceptCommand.metadata_source, "frontmatter");
 assert.equal(bootConceptCommand.targets["claude-code"], path.join(".claude", "commands", "boot", "concept.md"));
 assert.equal(bootConceptCommand.targets.codex, path.join(".agents", "skills", "boot-concept", "SKILL.md"));
 assert.equal(bootConceptCommand.targets.deepagents, path.join(".deepagents", "agent", "skills", "boot-concept", "SKILL.md"));
-assert.equal(bootConceptCommand.targets.cline, path.join(".cline", "data", "workflows", "boot-concept.md"));
+assert.equal(bootConceptCommand.targets.cline, path.join(".cline", "workflows", "boot-concept.md"));
 assert.equal(bootConceptCommand.targets.kilo, path.join(".config", "kilo", "commands", "boot-concept.md"));
 assert.equal(bootConceptCommand.targets["antigravity-cli"], path.join("config", "plugins", "agent-surface", "skills", "boot-concept.md"));
 assert.equal(Object.hasOwn(bootConceptCommand.targets, "gemini-cli"), false);
@@ -428,7 +436,11 @@ assert.equal(generated.some((file) => file.includes(`${path.sep}dist${path.sep}g
 assert.equal(generated.some((file) => file.includes(`${path.sep}.gemini${path.sep}extensions${path.sep}agent-surface${path.sep}`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}.agent-surface${path.sep}claude-plugin${path.sep}`)), false);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "rules", "agent-surface.md"))), true);
-assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "data", "workflows", "verify-readiness.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "workflows", "verify-readiness.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "agents", "boss.yaml"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "skills", "karpathy-guidelines", "SKILL.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "data", "settings", "cline_mcp_settings.json"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "mcp.json"))), false);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "commands", "ops-flow.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "agents", "boss.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "kilo", ".config", "kilo", "AGENTS.md"))), false);
@@ -575,6 +587,16 @@ assert.equal(/^ {2}- Create$/m.test(droidBossAgent), false);
 assert.equal(/^ {2}- Edit$/m.test(droidBossAgent), false);
 const droidWorkerAgent = readFileSync(path.join(root, "dist", "droid", ".factory", "droids", "worker.md"), "utf8");
 assert.match(droidWorkerAgent, /^ {2}- Execute$/m);
+const clineBossAgent = readFileSync(path.join(root, "dist", "cline", ".cline", "agents", "boss.yaml"), "utf8");
+assert.match(clineBossAgent, /^name: boss$/m);
+assert.match(clineBossAgent, /^ {2}- read_file$/m);
+assert.match(clineBossAgent, /^ {2}- search_files$/m);
+assert.match(clineBossAgent, /^ {2}- use_skill$/m);
+assert.doesNotMatch(clineBossAgent, /^ {2}- execute_command$/m);
+assert.doesNotMatch(clineBossAgent, /^ {2}- write_to_file$/m);
+const clineWorkerAgent = readFileSync(path.join(root, "dist", "cline", ".cline", "agents", "worker.yaml"), "utf8");
+assert.match(clineWorkerAgent, /^ {2}- execute_command$/m);
+assert.match(clineWorkerAgent, /^ {2}- write_to_file$/m);
 const droidMcp = JSON.parse(readFileSync(path.join(root, "dist", "droid", ".factory", "mcp.json"), "utf8"));
 assert.equal(Object.hasOwn(droidMcp.mcpServers, "agentmemory"), false);
 // First-party synapse MCP is auto-wired by default; external MCPs remain opt-in.
@@ -588,6 +610,8 @@ assert.match(codexMcp, /\[mcp_servers\.synapse\]/);
 assert.match(codexMcp, /command = "~\/\.local\/bin\/synapse-bridge"/);
 const deepagentsMcp = JSON.parse(readFileSync(path.join(root, "dist", "deepagents", ".deepagents", ".mcp.json"), "utf8"));
 assert.equal(deepagentsMcp.mcpServers.synapse.command, "~/.local/bin/synapse-bridge");
+const clineMcp = JSON.parse(readFileSync(path.join(root, "dist", "cline", ".cline", "data", "settings", "cline_mcp_settings.json"), "utf8"));
+assert.equal(clineMcp.mcpServers.synapse.command, "~/.local/bin/synapse-bridge");
 const cursorMcp = JSON.parse(readFileSync(path.join(root, "dist", "cursor", ".cursor", "mcp.json"), "utf8"));
 assert.equal(cursorMcp.mcpServers.synapse.command, "~/.local/bin/synapse-bridge");
 const kiloMcp = JSON.parse(readFileSync(path.join(root, "dist", "kilo", ".config", "kilo", "kilo.jsonc"), "utf8"));
@@ -608,6 +632,7 @@ assert.equal(claudeMcp.mcpServers.grimoire.command, "~/.local/bin/grimoire-serve
 assert.match(codexMcp, /\[mcp_servers\.grimoire\]/);
 assert.match(codexMcp, /command = "~\/\.local\/bin\/grimoire-server"/);
 assert.equal(deepagentsMcp.mcpServers.grimoire.command, "~/.local/bin/grimoire-server");
+assert.equal(clineMcp.mcpServers.grimoire.command, "~/.local/bin/grimoire-server");
 assert.equal(cursorMcp.mcpServers.grimoire.command, "~/.local/bin/grimoire-server");
 assert.deepEqual(kiloMcp.mcp.grimoire.command, ["~/.local/bin/grimoire-server"]);
 assert.deepEqual(opencodeMcp.mcp.grimoire.command, ["~/.local/bin/grimoire-server"]);
@@ -681,7 +706,17 @@ assert.match(clinePlan, /\.clinerules\/workflows\/workflow-boss\.md <- commands\
 assert.match(clinePlan, /\.clinerules\/workflows\/workflow-orchestrator\.md <- commands\/workflow-orchestrator\.md/);
 assert.match(clinePlan, /\.clinerules\/agent-surface\.md <- rules\/\*\.mdc/);
 assert.match(clinePlan, /\.clinerules\/references\/rules\/10-python\.md <- rules\/10-python\.mdc/);
+assert.match(clinePlan, /\.cline\/agents\/boss\.yaml <- subagents\/boss\.md/);
+assert.match(clinePlan, /\.cline\/skills\/karpathy-guidelines\/SKILL\.md/);
+assert.doesNotMatch(clinePlan, /cline_mcp_settings\.json MCP/);
 assert.match(clinePlan, /\.agent-surface\/cline-manifest\.json/);
+
+const clineUserMcpPlan = run([
+  "install", "--target", "cline", "--scope", "user", "--dest", "/tmp/agent-surface-cline-user-mcp",
+  "--category", "mcps", "--dry-run",
+]);
+assert.match(clineUserMcpPlan, /\.cline\/data\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
+assert.doesNotMatch(clineUserMcpPlan, /\.cline\/mcp\.json/);
 
 const kiloPlan = run(["install", "--target", "kilo", "--dest", "/tmp/agent-surface-kilo", "--dry-run"]);
 assert.match(kiloPlan, /^target: kilo$/m);
@@ -943,13 +978,16 @@ const liveDest = "/tmp/agent-surface-live";
 rmSync(liveDest, { recursive: true, force: true });
 const liveInstall = run(["install", "--target", "cline", "--dest", liveDest]);
 assert.match(liveInstall, /^installed:$/m);
-assert.match(liveInstall, new RegExp(`wrote: ${hasLocalOpsServerCommand ? 75 : 74}`));
 assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "workflow-boss.md"), "utf8"), /^## OBJECTIVE/);
 assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "verify-readiness.md"), "utf8"), /^## OBJECTIVE/);
+assert.match(readFileSync(path.join(liveDest, ".cline", "agents", "boss.yaml"), "utf8"), /^---\nname: boss\n/);
+assert.match(readFileSync(path.join(liveDest, ".cline", "skills", "karpathy-guidelines", "SKILL.md"), "utf8"), /^---\n/);
 assert.match(readFileSync(path.join(liveDest, ".clineignore"), "utf8"), /agent-surface canonical AI-tool ignore baseline/);
 const liveManifest = JSON.parse(readFileSync(path.join(liveDest, ".agent-surface", "cline-manifest.json"), "utf8"));
 assert.equal(liveManifest.target, "cline");
-assert.equal(liveManifest.managed.length, hasLocalOpsServerCommand ? 75 : 74);
+const clineWrote = liveInstall.match(/^  wrote: (\d+)$/m);
+assert.ok(clineWrote);
+assert.equal(Number(clineWrote[1]), liveManifest.managed.length);
 assert.equal(Object.hasOwn(liveManifest.managed[0], "managed_by"), false);
 assert.equal(Object.hasOwn(liveManifest.managed[0], "sha256"), false);
 rmSync(liveDest, { recursive: true, force: true });
@@ -1222,7 +1260,10 @@ mkdirSync(userScopeHome, { recursive: true });
 const userScopeEnv = { ...process.env, HOME: userScopeHome };
 const clineUserScope = status(["install", "--target", "cline", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(clineUserScope.status, 0, `${clineUserScope.stdout}${clineUserScope.stderr}`);
-assert.match(clineUserScope.stdout, /\.cline\/data\/workflows\/workflow-boss\.md <- commands\/workflow-boss\.md/);
+assert.match(clineUserScope.stdout, /\.cline\/workflows\/workflow-boss\.md <- commands\/workflow-boss\.md/);
+assert.match(clineUserScope.stdout, /\.cline\/agents\/boss\.yaml <- subagents\/boss\.md/);
+assert.match(clineUserScope.stdout, /\.cline\/skills\/karpathy-guidelines\/SKILL\.md/);
+assert.match(clineUserScope.stdout, /\.cline\/data\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
 
 const kiloUserScope = status(["install", "--target", "kilo", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(kiloUserScope.status, 0, `${kiloUserScope.stdout}${kiloUserScope.stderr}`);
@@ -1451,6 +1492,67 @@ assert.deepEqual(obsoleteCursorManifest.config_entries, [
 ]);
 rmSync(obsoleteCursorMcpDest, { recursive: true, force: true });
 
+/*
+SUBSTITUTE_JUSTIFICATION
+- substitute: seeded obsolete .cline/mcp.json and cline-manifest.json inputs for user- and project-scope migration cases
+- replaces: a historical Cline profile containing both agent-surface-owned entries and an unrelated user-owned MCP server
+- necessity: the current installer cannot create the retired route, and modifying an actual user profile to recreate stale ownership would risk destructive config changes
+- real-option: a disposable install from the current tree was considered, but it cannot produce the historical route; a live profile is unsafe and nondeterministic migration input
+- proof-limit: this diagnoses production migration logic on a real disposable filesystem but does not prove Cline task execution or either MCP server's health
+- real-proof: BLOCKED: requires an actual pre-migration profile; unblock by snapshotting one and authorizing migration of the isolated copy
+*/
+for (const scope of ["user", "project"]) {
+  const obsoleteClineMcpDest = `/tmp/agent-surface-cline-obsolete-mcp-route-${scope}`;
+  rmSync(obsoleteClineMcpDest, { recursive: true, force: true });
+  mkdirSync(path.join(obsoleteClineMcpDest, ".cline"), { recursive: true });
+  mkdirSync(path.join(obsoleteClineMcpDest, ".agent-surface"), { recursive: true });
+  writeFileSync(
+    path.join(obsoleteClineMcpDest, ".cline", "mcp.json"),
+    `${JSON.stringify({
+      mcpServers: {
+        existing: { command: "local-existing", args: ["--keep"] },
+        grimoire: { command: "old-grimoire", args: [] },
+        synapse: { command: "old-synapse", args: [] },
+      },
+    }, null, 2)}\n`,
+  );
+  writeFileSync(
+    path.join(obsoleteClineMcpDest, ".agent-surface", "cline-manifest.json"),
+    `${JSON.stringify({
+      target: "cline",
+      scope,
+      managed: [],
+      config_entries: [{ path: ".cline/mcp.json", format: "mcpServers", ids: ["grimoire", "synapse"] }],
+    }, null, 2)}\n`,
+  );
+  const installArgs = ["install", "--target", "cline", "--scope", scope, "--dest", obsoleteClineMcpDest];
+  const obsoleteClinePlan = run([...installArgs, "--dry-run"]);
+  assert.match(obsoleteClinePlan, /\.cline\/mcp\.json MCP -= grimoire, synapse/);
+  if (scope === "user") {
+    assert.match(obsoleteClinePlan, /\.cline\/data\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
+  } else {
+    assert.doesNotMatch(obsoleteClinePlan, /cline_mcp_settings\.json MCP \+=/);
+  }
+  run(installArgs);
+  const obsoleteClineMcp = JSON.parse(readFileSync(path.join(obsoleteClineMcpDest, ".cline", "mcp.json"), "utf8"));
+  assert.equal(obsoleteClineMcp.mcpServers.existing.command, "local-existing");
+  assert.equal(Object.hasOwn(obsoleteClineMcp.mcpServers, "grimoire"), false);
+  assert.equal(Object.hasOwn(obsoleteClineMcp.mcpServers, "synapse"), false);
+  const migratedClineManifest = JSON.parse(readFileSync(path.join(obsoleteClineMcpDest, ".agent-surface", "cline-manifest.json"), "utf8"));
+  if (scope === "user") {
+    const currentClineMcp = JSON.parse(readFileSync(path.join(obsoleteClineMcpDest, ".cline", "data", "settings", "cline_mcp_settings.json"), "utf8"));
+    assert.equal(currentClineMcp.mcpServers.grimoire.command, path.join(os.homedir(), ".local", "bin", "grimoire-server"));
+    assert.equal(currentClineMcp.mcpServers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
+    assert.deepEqual(migratedClineManifest.config_entries, [
+      { path: ".cline/data/settings/cline_mcp_settings.json", format: "mcpServers", ids: ["grimoire", "synapse"] },
+    ]);
+  } else {
+    assert.equal(existsSync(path.join(obsoleteClineMcpDest, ".cline", "data", "settings", "cline_mcp_settings.json")), false);
+    assert.deepEqual(migratedClineManifest.config_entries, []);
+  }
+  rmSync(obsoleteClineMcpDest, { recursive: true, force: true });
+}
+
 const legacyOwnedConfigPath = path.join(root, "registry", "legacy-owned.json");
 const legacyOwnedConfigOriginal = readFileSync(legacyOwnedConfigPath, "utf8");
 const legacyOwnedCursorMcpDest = "/tmp/agent-surface-cursor-legacy-owned-mcp-route";
@@ -1530,9 +1632,18 @@ rmSync(existingCodexMcpDest, { recursive: true, force: true });
 // second merge must be a no-op (idempotent). Cursor + Codex are covered explicitly
 // above; this loop closes the remaining eight (claude-code, cline, kilo,
 // opencode, trae, vscode, windsurf, zed).
+/*
+SUBSTITUTE_JUSTIFICATION
+- substitute: mergeFixtures pre-existing config objects for claude-code, cline, kilo, opencode, trae, vscode, windsurf, and zed
+- replaces: user-owned sibling settings needed to exercise non-destructive and idempotent MCP merges for each config format
+- necessity: the exact preservation assertion requires controlled unknown sibling entries and repeated writes; modifying real host profiles could corrupt user configuration
+- real-option: disposable current installs were considered, but they cannot create unknown user-owned entries; live profiles are unsafe and vary by machine
+- proof-limit: only the seeded input state is synthetic; the production installer, parsers, merge code, and filesystem writes are real, but host discovery and MCP service health are not proved
+- real-proof: BLOCKED: requires owner-approved snapshots and host-level discovery runs for every listed host
+*/
 const mergeFixtures = [
   { target: "claude-code", rel: ".mcp.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
-  { target: "cline", rel: ".cline/mcp.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
+  { target: "cline", scope: "user", rel: ".cline/data/settings/cline_mcp_settings.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
   {
     target: "kilo", rel: "kilo.jsonc", root: "mcp", pre: { $schema: "keep", mcp: { existing: { type: "local", command: ["local-existing"], enabled: true } } },
     keep: (parsed) => assert.equal(parsed.$schema, "keep", "kilo $schema preserved")
@@ -1554,9 +1665,11 @@ for (const fx of mergeFixtures) {
   try {
     mkdirSync(path.join(dest, path.dirname(fx.rel)), { recursive: true });
     writeFileSync(path.join(dest, fx.rel), `${JSON.stringify(fx.pre, null, 2)}\n`);
-    const firstPlan = run(["install", "--target", fx.target, "--dest", dest, "--category", "mcps", "--service", "synapse", "--dry-run"]);
+    const installArgs = ["install", "--target", fx.target, "--dest", dest, "--category", "mcps", "--service", "synapse"];
+    if (fx.scope) installArgs.push("--scope", fx.scope);
+    const firstPlan = run([...installArgs, "--dry-run"]);
     assert.match(firstPlan, new RegExp(`${fx.rel.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")} MCP \\+= synapse`), `${fx.target}: dry-run announces synapse merge`);
-    run(["install", "--target", fx.target, "--dest", dest, "--category", "mcps", "--service", "synapse"]);
+    run(installArgs);
     const merged = JSON.parse(readFileSync(path.join(dest, fx.rel), "utf8"));
     assert.ok(merged[fx.root]?.existing, `${fx.target}: pre-existing user server preserved`);
     const syn = merged[fx.root].synapse;
@@ -1565,7 +1678,7 @@ for (const fx of mergeFixtures) {
     assert.equal(Object.hasOwn(merged[fx.root], "agentmemory"), false, `${fx.target}: external/secret-bearing MCP not auto-added`);
     if (fx.keep) fx.keep(merged);
     const beforeRe = readFileSync(path.join(dest, fx.rel), "utf8");
-    run(["install", "--target", fx.target, "--dest", dest, "--category", "mcps", "--service", "synapse"]);
+    run(installArgs);
     const afterRe = readFileSync(path.join(dest, fx.rel), "utf8");
     assert.equal(afterRe, beforeRe, `${fx.target}: re-merge is idempotent (no-op diff)`);
   } finally {

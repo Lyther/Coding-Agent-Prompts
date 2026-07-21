@@ -35,6 +35,7 @@
         "claude-code",
         "codex",
         "deepagents",
+        "cline",
         "cursor",
         "droid",
         "kilo",
@@ -50,6 +51,9 @@
           "type": "boolean"
         },
         "deepagents": {
+          "type": "boolean"
+        },
+        "cline": {
           "type": "boolean"
         },
         "cursor": {

@@ -1,5 +1,5 @@
 {
-  "reviewed_at": "2026-07-09",
+  "reviewed_at": "2026-07-21",
   "targets": {
     "claude-code": {
       "summary": "Claude Code supports native slash commands, subagents, MCP, and skills; agent-surface generates commands, subagents, first-party MCP wiring (Synapse + Grimoire), and external skills.",
@@ -518,25 +518,67 @@
       }
     },
     "cline": {
-      "summary": "Cline supports workflows, rules, skills, MCP, and newer global configuration roots; agent-surface generates workflows, rules, ignore files, and first-party MCP wiring (Synapse + Grimoire) while leaving skills manual.",
+      "summary": "Cline supports workflows, rules, Agent Skills, Configured Agents, MCP, plugins, hooks, scheduling, connectors, built-in spawn_agent delegation, and agent teams. The agent-surface subagents primitive compiles to Cline Configured Agent YAML; spawn_agent is separate runtime behavior that needs no generated artifact. agent-surface also generates workflows, rules, external skills, the ignore file, and user-global first-party MCP wiring.",
       "generated_render_tokens": [
         "commands-as-workflows",
         "rules",
+        "subagents",
         "ignores",
+        "external",
         "mcps"
       ],
       "evidence": [
         {
+          "label": "Cline configuration roots",
+          "url": "https://docs.cline.bot/getting-started/config"
+        },
+        {
           "label": "Cline workflows",
-          "url": "https://docs.cline.bot/features/slash-commands/workflows"
+          "url": "https://docs.cline.bot/customization/workflows"
         },
         {
           "label": "Cline rules",
-          "url": "https://docs.cline.bot/features/cline-rules"
+          "url": "https://docs.cline.bot/customization/cline-rules"
         },
         {
-          "label": "Cline MCP",
-          "url": "https://docs.cline.bot/mcp/configuring-mcp-servers"
+          "label": "Cline skills",
+          "url": "https://docs.cline.bot/customization/skills"
+        },
+        {
+          "label": "Cline plugins",
+          "url": "https://docs.cline.bot/customization/plugins"
+        },
+        {
+          "label": "Cline hooks",
+          "url": "https://docs.cline.bot/customization/hooks"
+        },
+        {
+          "label": "Cline scheduling",
+          "url": "https://docs.cline.bot/cli/scheduling"
+        },
+        {
+          "label": "Cline connectors",
+          "url": "https://docs.cline.bot/cli/connectors"
+        },
+        {
+          "label": "Cline built-in subagents",
+          "url": "https://docs.cline.bot/features/subagents"
+        },
+        {
+          "label": "Cline agent teams",
+          "url": "https://docs.cline.bot/cli/agent-teams"
+        },
+        {
+          "label": "Cline runtime path resolver",
+          "url": "https://github.com/cline/cline/blob/c92d4e7553a5660eaef8472778add9880419ebd7/sdk/packages/shared/src/storage/paths.ts"
+        },
+        {
+          "label": "Cline configured-agent loader",
+          "url": "https://github.com/cline/cline/blob/c92d4e7553a5660eaef8472778add9880419ebd7/sdk/packages/core/src/extensions/tools/team/configured-agent-config.ts"
+        },
+        {
+          "label": "Cline MCP settings loader",
+          "url": "https://github.com/cline/cline/blob/c92d4e7553a5660eaef8472778add9880419ebd7/sdk/packages/core/src/extensions/mcp/config-loader.ts"
         }
       ],
       "surfaces": {
@@ -548,10 +590,10 @@
             "project"
           ],
           "paths": [
-            "~/.cline/data/workflows/*.md",
+            "~/.cline/workflows/*.md",
             ".clinerules/workflows/*.md"
           ],
-          "notes": "User-global workflows use the current Cline data root; project workflows retain the documented .clinerules compatibility surface."
+          "notes": "The current runtime resolver scans ~/.cline/workflows even though the configuration guide still shows ~/.cline/data/workflows; project workflows retain the supported .clinerules compatibility route."
         },
         "rules": {
           "support": "native",
@@ -564,7 +606,20 @@
             "~/.cline/rules/agent-surface.md",
             ".clinerules/agent-surface.md"
           ],
-          "notes": "Generated rules remain a single bundled rules document."
+          "notes": "Always-on rules are bundled into one directly discovered file. Scoped rules remain reference-only because Cline's rules loader does not recursively discover the references directory."
+        },
+        "subagents": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.cline/agents/*.yaml",
+            ".cline/agents/*.yaml"
+          ],
+          "notes": "The agent-surface subagents/*.md source primitive compiles to Cline Configured Agents. Cline only discovers .yaml/.yml definitions; generated tool allowlists preserve normalized read-only, read-write, and shell access. These definitions are distinct from the built-in spawn_agent runtime tool."
         },
         "ignores": {
           "support": "native",
@@ -579,26 +634,107 @@
         },
         "skills": {
           "support": "native",
-          "generation": "manual",
-          "scope": [
-            "user",
-            "project"
-          ],
-          "paths": [],
-          "notes": "Skill packs need separate activation semantics and are not derived from command workflows."
-        },
-        "mcp": {
-          "support": "native",
           "generation": "generated",
           "scope": [
             "user",
             "project"
           ],
           "paths": [
-            "~/.cline/mcp.json",
-            ".cline/mcp.json"
+            "~/.cline/skills/<skill>/...",
+            ".cline/skills/<skill>/..."
           ],
-          "notes": "First-party secretless MCP services are generated/merged; external or secret-bearing MCPs remain opt-in."
+          "notes": "Pinned external Agent Skill packs are mirrored into Cline's native skill root; command sources remain workflows and are not duplicated as skills."
+        },
+        "mcp": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.cline/data/settings/cline_mcp_settings.json"
+          ],
+          "notes": "The current shared CLI/SDK/IDE loader resolves one user-global settings file. First-party secretless MCP services are merged there; external or secret-bearing MCPs remain opt-in. Documentation mentioning .cline/mcp.json is not backed by the current runtime loader."
+        },
+        "plugins": {
+          "support": "native",
+          "generation": "not-generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.cline/plugins/",
+            ".cline/plugins/"
+          ],
+          "notes": "Cline plugins are executable code. agent-surface has no Cline plugin source primitive and does not generate or install them."
+        },
+        "hooks": {
+          "support": "native",
+          "generation": "not-generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.cline/hooks/",
+            ".cline/hooks/"
+          ],
+          "notes": "Hooks are executable files. agent-surface has no hook primitive and does not infer executable hooks from rules, commands, or subagents."
+        },
+        "scheduling": {
+          "support": "native",
+          "generation": "not-generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.cline/cron/"
+          ],
+          "notes": "Cline cron specs and schedule state are automation surfaces with independent execution semantics. agent-surface does not convert command workflows into unattended schedules."
+        },
+        "connectors": {
+          "support": "native",
+          "generation": "not-generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.cline/data/connectors/settings.json"
+          ],
+          "notes": "Connector settings can contain credentials and external delivery configuration, so they remain user-owned."
+        },
+        "provider-settings": {
+          "support": "native",
+          "generation": "not-generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.cline/data/settings/providers.json"
+          ],
+          "notes": "Provider and model selection can contain credentials and host-specific choices; agent-surface does not own this configuration."
+        },
+        "runtime-subagents": {
+          "support": "native",
+          "generation": "not-applicable",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [],
+          "notes": "Cline's built-in spawn_agent tool creates focused subagents at runtime. It consumes no agent definition file and is separate from Configured Agents generated by the subagents render token."
+        },
+        "agent-teams": {
+          "support": "native",
+          "generation": "not-generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.cline/data/teams/"
+          ],
+          "notes": "Persistent team state is created and managed by the Cline runtime; agent-surface does not generate or modify it."
         }
       }
     },
