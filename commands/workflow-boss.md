@@ -65,7 +65,7 @@ Helper command output is evidence for `boss.context_capsule`, task AC, risk note
 - Choose the route once for the whole batch:
   - `feature` → next command `dev-feature`
   - `fix` / `security-fix` → next command `dev-fix` when the finding is already verified
-  - `chore` → next command `dev-chore`
+  - `chore` → next command `dev-chore` for bounded maintenance or an explicit in-development quality intervention covering direction, reuse, duplicate ownership, disproportionate complexity/risk controls, or UX completion without inventing new product behavior
   - `refactor` → next command `dev-refactor`
   - `audit` → next command `qa-trace` or `qa-review`
   - `docs`, `migration`, `ship`, `research` → classify the intent, then either convert to a workflow-aware worker route or stop with `workflow.next_command = null`

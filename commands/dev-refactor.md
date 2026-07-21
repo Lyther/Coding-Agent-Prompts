@@ -28,6 +28,7 @@ Refactor only after the current behavior is pinned by existing tests, explicit p
 Use existing commands as helper functions when they improve behavior preservation:
 
 - `boot-context`: stale or missing local context.
+- `dev-chore`: trigger-based direction, reuse, single-ownership, proportional-complexity/risk, and user-outcome checkpoint when restructuring starts adding rather than removing conceptual weight. In workflow mode, `dev-refactor` retains worker-artifact ownership and applies the checkpoint findings itself.
 - `arch-model`, `arch-api`, `arch-roadmap`: understand boundaries before restructuring.
 - `lint-python`, `lint-rust`, `lint-go`, `lint-typescript`, `lint-shell`, `lint-kernel`: language-specific checks for touched files.
 - `verify-test`, `verify-spec`, `verify-coverage`, `verify-performance`: pre/post behavior and performance proof.
