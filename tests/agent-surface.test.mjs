@@ -2,7 +2,6 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +10,9 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = path.join(root, "scripts", "agent-surface.mjs");
 const stripAiAttributionHook = path.join(root, "hooks", "strip-ai-attribution.sh");
+const opsServerCommandPath = path.join(root, "commands", "ops-server.md");
+const hasLocalOpsServerCommand = existsSync(opsServerCommandPath);
+const expectedCommandCount = hasLocalOpsServerCommand ? 67 : 66;
 
 function run(args, options = {}) {
   return execFileSync(process.execPath, [cli, ...args], {
@@ -49,13 +51,10 @@ function files(dir) {
   return out;
 }
 
-function sha256(value) {
-  return createHash("sha256").update(value).digest("hex");
-}
-
 const guardedRepoFiles = [
   path.join(root, "registry", "targets.json"),
   path.join(root, "registry", "optional-services.json"),
+  path.join(root, "registry", "legacy-owned.json"),
   path.join(root, "subagents", "boss.md"),
 ];
 const guardedSnapshots = new Map();
@@ -267,13 +266,13 @@ assert.equal(run(["check"]).trim(), "check: ok");
 
 const inventory = run(["inventory"]);
 assert.match(inventory, /^rules: 12$/m);
-assert.match(inventory, /^commands: 66$/m);
+assert.match(inventory, new RegExp(`^commands: ${expectedCommandCount}$`, "m"));
 assert.match(inventory, /^subagents: 6$/m);
 assert.match(inventory, /^external: 6$/m);
 assert.match(inventory, /^schemas: 15$/m);
 
 const registry = JSON.parse(run(["commands", "--json"]));
-assert.equal(registry.count, 66);
+assert.equal(registry.count, expectedCommandCount);
 const readinessCommand = registry.commands.find((command) => command.name === "verify-readiness");
 assert.ok(readinessCommand);
 assert.equal(readinessCommand.phase, "verify");
@@ -297,6 +296,7 @@ assert.equal(Object.hasOwn(opsFlowCommand.targets, "gemini-cli"), false);
 assert.equal(opsFlowCommand.targets.cursor, path.join(".cursor", "commands", "ops-flow.md"));
 assert.equal(opsFlowCommand.targets.droid, path.join(".factory", "commands", "ops-flow.md"));
 assert.equal(opsFlowCommand.targets.opencode, path.join(".config", "opencode", "commands", "ops-flow.md"));
+assert.equal(opsFlowCommand.targets.openhands, path.join(".agents", "skills", "ops-flow", "SKILL.md"));
 assert.equal(opsFlowCommand.targets.goose, path.join("recipes", "ops-flow.yaml"));
 assert.equal(opsFlowCommand.targets["grok-build"], path.join(".grok", "skills", "ops-flow", "SKILL.md"));
 assert.equal(opsFlowCommand.targets.pi, path.join(".pi", "agent", "skills", "ops-flow", "SKILL.md"));
@@ -319,12 +319,30 @@ assert.equal(Object.hasOwn(bootConceptCommand.targets, "gemini-cli"), false);
 assert.equal(bootConceptCommand.targets.cursor, path.join(".cursor", "commands", "boot-concept.md"));
 assert.equal(bootConceptCommand.targets.droid, path.join(".factory", "commands", "boot-concept.md"));
 assert.equal(bootConceptCommand.targets.opencode, path.join(".config", "opencode", "commands", "boot-concept.md"));
+assert.equal(bootConceptCommand.targets.openhands, path.join(".agents", "skills", "boot-concept", "SKILL.md"));
 assert.equal(bootConceptCommand.targets.goose, path.join("recipes", "boot-concept.yaml"));
 assert.equal(bootConceptCommand.targets["grok-build"], path.join(".grok", "skills", "boot-concept", "SKILL.md"));
 assert.equal(bootConceptCommand.targets.pi, path.join(".pi", "agent", "skills", "boot-concept", "SKILL.md"));
 assert.equal(bootConceptCommand.targets.pool, path.join(".config", "poolside", "skills", "boot-concept", "SKILL.md"));
 assert.equal(bootConceptCommand.targets.windsurf, path.join(".codeium", "windsurf", "global_workflows", "boot-concept.md"));
 assert.equal(bootConceptCommand.targets.zed, path.join(".agents", "skills", "boot-concept", "SKILL.md"));
+
+const opsServerCommand = registry.commands.find((command) => command.name === "ops-server");
+if (hasLocalOpsServerCommand) {
+  assert.ok(opsServerCommand);
+  assert.equal(opsServerCommand.phase, "improve");
+  assert.deepEqual(opsServerCommand.lazy_body, {
+    type: "file",
+    path: "commands/ops-server.md",
+    frontmatter_stripped: true,
+  });
+  assert.equal(opsServerCommand.targets["claude-code"], path.join(".claude", "commands", "ops", "server.md"));
+  assert.equal(opsServerCommand.targets.codex, path.join(".agents", "skills", "ops-server", "SKILL.md"));
+  assert.equal(opsServerCommand.targets.cursor, path.join(".cursor", "commands", "ops-server.md"));
+  assert.equal(opsServerCommand.targets.openhands, path.join(".agents", "skills", "ops-server", "SKILL.md"));
+} else {
+  assert.equal(opsServerCommand, undefined);
+}
 
 const shipCommands = JSON.parse(run(["commands", "--phase", "ship", "--json"]));
 assert.equal(shipCommands.commands.every((command) => command.phase === "ship"), true);
@@ -443,6 +461,11 @@ assert.equal(generated.some((file) => file.endsWith(path.join("dist", "vscodium"
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "opencode", ".config", "opencode", "AGENTS.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "opencode", ".config", "opencode", "commands", "ops-flow.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "opencode", ".config", "opencode", "agents", "boss.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "openhands", ".agents", "skills", "ops-flow", "SKILL.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "openhands", ".openhands", "skills", "agent-surface-rules.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "openhands", ".openhands", "skills", "conducting-cloud-penetration-testing", "SKILL.md"))), false);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "openhands", ".agents", "skills", "conducting-cloud-penetration-testing", "SKILL.md"))), false);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "openhands", ".openhands", "mcp.json"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "trae", ".trae", "user_rules.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "windsurf", ".codeium", "windsurf", "global_workflows", "ops-flow.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "windsurf", ".codeium", "windsurf", "memories", "global_rules.md"))), true);
@@ -457,9 +480,40 @@ const cursorIgnore = readFileSync(path.join(root, "dist", "cursor", ".cursorigno
 assert.match(cursorIgnore, /agent-surface canonical AI-tool ignore baseline/);
 const codexInstructions = readFileSync(path.join(root, "dist", "codex", ".codex", "AGENTS.md"), "utf8");
 assert.match(codexInstructions, /## 00-precedence-and-safety\.mdc/);
+assert.match(codexInstructions, /A test substitute is any non-real replacement/);
+assert.match(codexInstructions, /SUBSTITUTE_JUSTIFICATION/);
+assert.match(codexInstructions, /A suite called `e2e_test`/);
+assert.match(codexInstructions, /Missing real prerequisites make the integration, E2E, or acceptance layer `BLOCKED`/);
 // 04-cybersecurity is scoped now: it lives in references/rules/, not the always-on AGENTS.md (like 10-python).
 assert.doesNotMatch(codexInstructions, /## 04-cybersecurity\.mdc/);
 assert.doesNotMatch(codexInstructions, /## 10-python\.mdc/);
+const codexVerifyTest = readFileSync(path.join(root, "dist", "codex", ".agents", "skills", "verify-test", "SKILL.md"), "utf8");
+assert.match(codexVerifyTest, /No substitute-backed proof on any path/);
+assert.match(codexVerifyTest, /Substitute-backed results excluded from evidence/);
+const claudeDevFeature = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "dev", "feature.md"), "utf8");
+assert.doesNotMatch(claudeDevFeature, /Test doubles are allowed in tests when appropriate/);
+assert.match(claudeDevFeature, /SUBSTITUTE_JUSTIFICATION/);
+assert.match(claudeDevFeature, /`dev-chore`: trigger-based direction, reuse, single-ownership/);
+const claudeDevFix = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "dev", "fix.md"), "utf8");
+assert.match(claudeDevFix, /`dev-chore`: trigger-based direction, reuse, single-ownership/);
+const claudeDevRefactor = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "dev", "refactor.md"), "utf8");
+assert.match(claudeDevRefactor, /`dev-chore`: trigger-based direction, reuse, single-ownership/);
+const claudeDevChore = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "dev", "chore.md"), "utf8");
+assert.match(claudeDevChore, /Do not make a wrong design cleaner/);
+assert.match(claudeDevChore, /Existing solution before new construction/);
+assert.match(claudeDevChore, /Security and feature trade-off/);
+assert.match(claudeDevChore, /Embedded checkpoint mode/);
+const codexDevChore = readFileSync(path.join(root, "dist", "codex", ".agents", "skills", "dev-chore", "SKILL.md"), "utf8");
+assert.match(codexDevChore, /Do not make a wrong design cleaner/);
+assert.match(codexDevChore, /User and operator outcome/);
+const claudeVerifyTest = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "verify", "test.md"), "utf8");
+assert.match(claudeVerifyTest, /No substitute-backed proof on any path/);
+assert.match(claudeVerifyTest, /Substitute-backed results excluded from evidence/);
+const claudeVerifyReadiness = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "verify", "readiness.md"), "utf8");
+assert.match(claudeVerifyReadiness, /A suite called `e2e_test`/);
+const claudeSelfCritique = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "qa", "self-critique.md"), "utf8");
+assert.match(claudeSelfCritique, /SUBSTITUTE_JUSTIFICATION' \{\{target\}\}/);
+assert.doesNotMatch(claudeSelfCritique, /SUBSTITUTE_JUSTIFICATION' tests\//);
 const codexPythonReference = readFileSync(path.join(root, "dist", "codex", ".codex", "references", "rules", "10-python.md"), "utf8");
 assert.match(codexPythonReference, /Scoped agent-surface reference/);
 assert.match(codexPythonReference, /^# Python$/m);
@@ -540,6 +594,8 @@ const kiloMcp = JSON.parse(readFileSync(path.join(root, "dist", "kilo", ".config
 assert.deepEqual(kiloMcp.mcp.synapse.command, ["~/.local/bin/synapse-bridge"]);
 const opencodeMcp = JSON.parse(readFileSync(path.join(root, "dist", "opencode", ".config", "opencode", "opencode.json"), "utf8"));
 assert.deepEqual(opencodeMcp.mcp.synapse.command, ["~/.local/bin/synapse-bridge"]);
+const openhandsMcp = JSON.parse(readFileSync(path.join(root, "dist", "openhands", ".openhands", "mcp.json"), "utf8"));
+assert.equal(openhandsMcp.mcpServers.synapse.command, "~/.local/bin/synapse-bridge");
 const vscodeMcp = JSON.parse(readFileSync(path.join(root, "dist", "vscode", "mcp.json"), "utf8"));
 assert.equal(vscodeMcp.servers.synapse.command, "~/.local/bin/synapse-bridge");
 const zedMcp = JSON.parse(readFileSync(path.join(root, "dist", "zed", ".config", "zed", "settings.json"), "utf8"));
@@ -555,6 +611,7 @@ assert.equal(deepagentsMcp.mcpServers.grimoire.command, "~/.local/bin/grimoire-s
 assert.equal(cursorMcp.mcpServers.grimoire.command, "~/.local/bin/grimoire-server");
 assert.deepEqual(kiloMcp.mcp.grimoire.command, ["~/.local/bin/grimoire-server"]);
 assert.deepEqual(opencodeMcp.mcp.grimoire.command, ["~/.local/bin/grimoire-server"]);
+assert.equal(openhandsMcp.mcpServers.grimoire.command, "~/.local/bin/grimoire-server");
 assert.equal(vscodeMcp.servers.grimoire.command, "~/.local/bin/grimoire-server");
 assert.equal(zedMcp.context_servers.grimoire.command, "~/.local/bin/grimoire-server");
 // Newly-generated JSON MCP hosts (VSCodium / Grok Build / Antigravity CLI).
@@ -751,7 +808,7 @@ writeFileSync(
   path.join(syncDest, ".agent-surface", "droid-manifest.json"),
   `${JSON.stringify({
     target: "droid",
-    managed: [{ target: "droid", output: ghostRel, sha256: sha256(ghostContent), managed_by: "agent-surface", version: "test" }],
+    managed: [{ target: "droid", output: ghostRel, version: "test" }],
   }, null, 2)}\n`,
 );
 const syncPlan = run(["install", "--target", "droid", "--dest", syncDest, "--dry-run"]);
@@ -854,6 +911,14 @@ assert.match(opencodePlan, /\.opencode\/commands\/workflow-boss\.md <- commands\
 assert.match(opencodePlan, /\.opencode\/agents\/boss\.md <- subagents\/boss\.md/);
 assert.match(opencodePlan, /AGENTS\.md <- rules\/\*\.mdc/);
 
+const openhandsPlan = run(["install", "--target", "openhands", "--dest", "/tmp/agent-surface-openhands", "--dry-run"]);
+assert.match(openhandsPlan, /^target: openhands$/m);
+assert.match(openhandsPlan, /\.agents\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/);
+assert.match(openhandsPlan, /^  AGENTS\.md <- rules\/\*\.mdc$/m);
+assert.match(openhandsPlan, /\.openhands\/references\/rules\/10-python\.md <- rules\/10-python\.mdc/);
+assert.match(openhandsPlan, /\.agents\/skills\/karpathy-guidelines\/SKILL\.md <- external\/andrej-karpathy-skills\/skills\/karpathy-guidelines\/SKILL\.md/);
+assert.doesNotMatch(openhandsPlan, /\.openhands\/mcp\.json MCP/, "OpenHands MCP is user-scope only");
+
 const staleDest = "/tmp/agent-surface-stale";
 rmSync(staleDest, { recursive: true, force: true });
 mkdirSync(path.join(staleDest, ".agent-surface"), { recursive: true });
@@ -866,7 +931,6 @@ writeFileSync(
       {
         target: "cline",
         output: ".clinerules/workflows/removed.md",
-        managed_by: "agent-surface",
       },
     ],
   }),
@@ -879,14 +943,15 @@ const liveDest = "/tmp/agent-surface-live";
 rmSync(liveDest, { recursive: true, force: true });
 const liveInstall = run(["install", "--target", "cline", "--dest", liveDest]);
 assert.match(liveInstall, /^installed:$/m);
-assert.match(liveInstall, /wrote: 74/);
+assert.match(liveInstall, new RegExp(`wrote: ${hasLocalOpsServerCommand ? 75 : 74}`));
 assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "workflow-boss.md"), "utf8"), /^## OBJECTIVE/);
 assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "verify-readiness.md"), "utf8"), /^## OBJECTIVE/);
 assert.match(readFileSync(path.join(liveDest, ".clineignore"), "utf8"), /agent-surface canonical AI-tool ignore baseline/);
 const liveManifest = JSON.parse(readFileSync(path.join(liveDest, ".agent-surface", "cline-manifest.json"), "utf8"));
 assert.equal(liveManifest.target, "cline");
-assert.equal(liveManifest.managed.length, 74);
-assert.equal(liveManifest.managed[0].managed_by, "agent-surface");
+assert.equal(liveManifest.managed.length, hasLocalOpsServerCommand ? 75 : 74);
+assert.equal(Object.hasOwn(liveManifest.managed[0], "managed_by"), false);
+assert.equal(Object.hasOwn(liveManifest.managed[0], "sha256"), false);
 rmSync(liveDest, { recursive: true, force: true });
 
 // Install now overwrites existing files by default.
@@ -903,8 +968,7 @@ const liveStaleDest = "/tmp/agent-surface-live-stale";
 rmSync(liveStaleDest, { recursive: true, force: true });
 run(["install", "--target", "cline", "--dest", liveStaleDest]);
 const liveStaleFile = path.join(liveStaleDest, ".clinerules", "workflows", "removed.md");
-const liveStaleContent = "old managed workflow\n";
-writeFileSync(liveStaleFile, liveStaleContent);
+writeFileSync(liveStaleFile, "user edited stale workflow\n");
 const liveStaleManifestPath = path.join(liveStaleDest, ".agent-surface", "cline-manifest.json");
 const liveStaleManifest = JSON.parse(readFileSync(liveStaleManifestPath, "utf8"));
 liveStaleManifest.managed.push({
@@ -912,15 +976,13 @@ liveStaleManifest.managed.push({
   scope: "project",
   source: "commands/removed.md",
   output: ".clinerules/workflows/removed.md",
-  sha256: sha256(liveStaleContent),
-  managed_by: "agent-surface",
   version: "0.1.0",
 });
 writeFileSync(liveStaleManifestPath, `${JSON.stringify(liveStaleManifest, null, 2)}\n`);
 const liveStaleInstall = run(["install", "--target", "cline", "--dest", liveStaleDest]);
 assert.match(liveStaleInstall, /removed stale: 1/);
 assert.equal(existsSync(liveStaleFile), false);
-assert.equal(files(path.join(liveStaleDest, ".agent-surface", "backups")).some((file) => file.endsWith("removed.md")), true);
+assert.equal(existsSync(path.join(liveStaleDest, ".agent-surface", "backups")), false);
 rmSync(liveStaleDest, { recursive: true, force: true });
 
 const missingStaleDest = "/tmp/agent-surface-missing-stale";
@@ -933,8 +995,6 @@ missingStaleManifest.managed.push({
   scope: "project",
   source: "commands/removed.md",
   output: ".clinerules/workflows/already-gone.md",
-  sha256: sha256("old managed workflow\n"),
-  managed_by: "agent-surface",
   version: "0.1.0",
 });
 writeFileSync(missingStaleManifestPath, `${JSON.stringify(missingStaleManifest, null, 2)}\n`);
@@ -1183,6 +1243,13 @@ const claudeUserScope = status(["install", "--target", "claude-code", "--scope",
 assert.equal(claudeUserScope.status, 0, `${claudeUserScope.stdout}${claudeUserScope.stderr}`);
 assert.doesNotMatch(claudeUserScope.stdout, /\.mcp\.json/);
 assert.match(claudeUserScope.stdout, /\.claude\/agents\/boss\.md <- subagents\/boss\.md/);
+
+const openhandsUserScope = status(["install", "--target", "openhands", "--scope", "user", "--dry-run"], { env: userScopeEnv });
+assert.equal(openhandsUserScope.status, 0, `${openhandsUserScope.stdout}${openhandsUserScope.stderr}`);
+assert.match(openhandsUserScope.stdout, /\.agents\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/);
+assert.match(openhandsUserScope.stdout, /\.openhands\/skills\/agent-surface-rules\.md <- rules\/\*\.mdc/);
+assert.match(openhandsUserScope.stdout, /\.openhands\/references\/rules\/10-python\.md <- rules\/10-python\.mdc/);
+assert.match(openhandsUserScope.stdout, /\.openhands\/mcp\.json MCP \+= grimoire, synapse/);
 rmSync(userScopeHome, { recursive: true, force: true });
 
 const kiloIgnoreDest = "/tmp/agent-surface-kilo-ignore-proj";
@@ -1292,6 +1359,148 @@ assert.equal(mergedCursorMcp.mcpServers.synapse.command, path.join(os.homedir(),
 assert.equal(Object.hasOwn(mergedCursorMcp.mcpServers, "agentmemory"), false);
 rmSync(existingCursorMcpDest, { recursive: true, force: true });
 
+const ownedCursorMcpDest = "/tmp/agent-surface-cursor-owned-mcp";
+rmSync(ownedCursorMcpDest, { recursive: true, force: true });
+mkdirSync(path.join(ownedCursorMcpDest, ".cursor"), { recursive: true });
+mkdirSync(path.join(ownedCursorMcpDest, ".agent-surface"), { recursive: true });
+writeFileSync(
+  path.join(ownedCursorMcpDest, ".cursor", "mcp.json"),
+  `${JSON.stringify({
+    mcpServers: {
+      existing: { command: "local-existing", args: ["--ok"] },
+      synapse: { command: "user-edited-owned-entry", args: ["--wrong"] },
+      "old-owned": { command: "old-generated-entry", args: [] },
+    },
+  }, null, 2)}\n`,
+);
+writeFileSync(
+  path.join(ownedCursorMcpDest, ".agent-surface", "cursor-manifest.json"),
+  `${JSON.stringify({
+    target: "cursor",
+    scope: "project",
+    managed: [],
+    config_entries: [{ path: ".cursor/mcp.json", format: "mcpServers", ids: ["old-owned", "synapse"] }],
+  }, null, 2)}\n`,
+);
+const ownedCursorPlan = run(["install", "--target", "cursor", "--dest", ownedCursorMcpDest, "--category", "mcps", "--dry-run"]);
+assert.match(ownedCursorPlan, /\.cursor\/mcp\.json MCP \+= grimoire, synapse/);
+assert.match(ownedCursorPlan, /\.cursor\/mcp\.json MCP -= old-owned/);
+run(["install", "--target", "cursor", "--dest", ownedCursorMcpDest, "--category", "mcps"]);
+const ownedCursorMcp = JSON.parse(readFileSync(path.join(ownedCursorMcpDest, ".cursor", "mcp.json"), "utf8"));
+assert.equal(ownedCursorMcp.mcpServers.existing.command, "local-existing");
+assert.equal(ownedCursorMcp.mcpServers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
+assert.equal(ownedCursorMcp.mcpServers.grimoire.command, path.join(os.homedir(), ".local", "bin", "grimoire-server"));
+assert.equal(Object.hasOwn(ownedCursorMcp.mcpServers, "old-owned"), false);
+const ownedCursorManifest = JSON.parse(readFileSync(path.join(ownedCursorMcpDest, ".agent-surface", "cursor-manifest.json"), "utf8"));
+assert.deepEqual(ownedCursorManifest.config_entries, [
+  { path: ".cursor/mcp.json", format: "mcpServers", ids: ["grimoire", "synapse"] },
+]);
+rmSync(ownedCursorMcpDest, { recursive: true, force: true });
+
+const obsoleteCursorMcpDest = "/tmp/agent-surface-cursor-obsolete-mcp-routes";
+rmSync(obsoleteCursorMcpDest, { recursive: true, force: true });
+mkdirSync(path.join(obsoleteCursorMcpDest, ".cursor"), { recursive: true });
+mkdirSync(path.join(obsoleteCursorMcpDest, ".agent-surface"), { recursive: true });
+writeFileSync(
+  path.join(obsoleteCursorMcpDest, ".cursor", "mcp.json"),
+  `${JSON.stringify({
+    servers: {
+      existing: { command: "local-existing-format", args: ["--keep"] },
+      "old-format-owned": { command: "old-generated-entry", args: [] },
+    },
+  }, null, 2)}\n`,
+);
+writeFileSync(
+  path.join(obsoleteCursorMcpDest, ".cursor", "retired-mcp.json"),
+  `${JSON.stringify({
+    mcpServers: {
+      existing: { command: "local-existing-route", args: ["--keep"] },
+      "old-route-owned": { command: "old-generated-entry", args: [] },
+    },
+  }, null, 2)}\n`,
+);
+writeFileSync(
+  path.join(obsoleteCursorMcpDest, ".agent-surface", "cursor-manifest.json"),
+  `${JSON.stringify({
+    target: "cursor",
+    scope: "project",
+    managed: [],
+    config_entries: [
+      { path: ".cursor/mcp.json", format: "vscode-servers", ids: ["old-format-owned"] },
+      { path: ".cursor/missing-mcp.json", format: "mcpServers", ids: ["missing-owned"] },
+      { path: ".cursor/retired-mcp.json", format: "mcpServers", ids: ["old-route-owned"] },
+    ],
+  }, null, 2)}\n`,
+);
+const obsoleteCursorPlan = run(["install", "--target", "cursor", "--dest", obsoleteCursorMcpDest, "--dry-run"]);
+assert.match(obsoleteCursorPlan, /\.cursor\/mcp\.json MCP -= old-format-owned/);
+assert.match(obsoleteCursorPlan, /\.cursor\/missing-mcp\.json MCP -= missing-owned/);
+assert.match(obsoleteCursorPlan, /\.cursor\/retired-mcp\.json MCP -= old-route-owned/);
+run(["install", "--target", "cursor", "--dest", obsoleteCursorMcpDest]);
+const obsoleteCurrentCursorMcp = JSON.parse(readFileSync(path.join(obsoleteCursorMcpDest, ".cursor", "mcp.json"), "utf8"));
+assert.equal(obsoleteCurrentCursorMcp.servers.existing.command, "local-existing-format");
+assert.equal(Object.hasOwn(obsoleteCurrentCursorMcp.servers, "old-format-owned"), false);
+assert.equal(obsoleteCurrentCursorMcp.mcpServers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
+assert.equal(obsoleteCurrentCursorMcp.mcpServers.grimoire.command, path.join(os.homedir(), ".local", "bin", "grimoire-server"));
+const obsoleteRetiredCursorMcp = JSON.parse(readFileSync(path.join(obsoleteCursorMcpDest, ".cursor", "retired-mcp.json"), "utf8"));
+assert.equal(obsoleteRetiredCursorMcp.mcpServers.existing.command, "local-existing-route");
+assert.equal(Object.hasOwn(obsoleteRetiredCursorMcp.mcpServers, "old-route-owned"), false);
+const obsoleteCursorManifest = JSON.parse(readFileSync(path.join(obsoleteCursorMcpDest, ".agent-surface", "cursor-manifest.json"), "utf8"));
+assert.deepEqual(obsoleteCursorManifest.config_entries, [
+  { path: ".cursor/mcp.json", format: "mcpServers", ids: ["grimoire", "synapse"] },
+]);
+rmSync(obsoleteCursorMcpDest, { recursive: true, force: true });
+
+const legacyOwnedConfigPath = path.join(root, "registry", "legacy-owned.json");
+const legacyOwnedConfigOriginal = readFileSync(legacyOwnedConfigPath, "utf8");
+const legacyOwnedCursorMcpDest = "/tmp/agent-surface-cursor-legacy-owned-mcp-route";
+try {
+  const legacyOwnedConfig = JSON.parse(legacyOwnedConfigOriginal);
+  legacyOwnedConfig.config_entries.push({
+    target: "cursor",
+    path: ".cursor/legacy-owned-mcp.json",
+    format: "mcpServers",
+    ids: ["legacy-owned"],
+  });
+  writeFileSync(legacyOwnedConfigPath, `${JSON.stringify(legacyOwnedConfig, null, 2)}\n`);
+  rmSync(legacyOwnedCursorMcpDest, { recursive: true, force: true });
+  mkdirSync(path.join(legacyOwnedCursorMcpDest, ".cursor"), { recursive: true });
+  writeFileSync(
+    path.join(legacyOwnedCursorMcpDest, ".cursor", "legacy-owned-mcp.json"),
+    `${JSON.stringify({
+      mcpServers: {
+        existing: { command: "local-existing", args: ["--keep"] },
+        "legacy-owned": { command: "old-generated-entry", args: [] },
+      },
+    }, null, 2)}\n`,
+  );
+  const legacyOwnedCursorPlan = run(["install", "--target", "cursor", "--dest", legacyOwnedCursorMcpDest, "--dry-run"]);
+  assert.match(legacyOwnedCursorPlan, /\.cursor\/legacy-owned-mcp\.json MCP -= legacy-owned/);
+  run(["install", "--target", "cursor", "--dest", legacyOwnedCursorMcpDest]);
+  const legacyOwnedCursorMcp = JSON.parse(readFileSync(path.join(legacyOwnedCursorMcpDest, ".cursor", "legacy-owned-mcp.json"), "utf8"));
+  assert.equal(legacyOwnedCursorMcp.mcpServers.existing.command, "local-existing");
+  assert.equal(Object.hasOwn(legacyOwnedCursorMcp.mcpServers, "legacy-owned"), false);
+  const legacyOwnedCursorManifest = JSON.parse(readFileSync(path.join(legacyOwnedCursorMcpDest, ".agent-surface", "cursor-manifest.json"), "utf8"));
+  assert.equal(legacyOwnedCursorManifest.config_entries.some((entry) => entry.path === ".cursor/legacy-owned-mcp.json"), false);
+} finally {
+  writeFileSync(legacyOwnedConfigPath, legacyOwnedConfigOriginal);
+  rmSync(legacyOwnedCursorMcpDest, { recursive: true, force: true });
+}
+
+const existingOpenHandsMcpDest = "/tmp/agent-surface-openhands-existing-mcp";
+rmSync(existingOpenHandsMcpDest, { recursive: true, force: true });
+mkdirSync(path.join(existingOpenHandsMcpDest, ".openhands"), { recursive: true });
+writeFileSync(
+  path.join(existingOpenHandsMcpDest, ".openhands", "mcp.json"),
+  `${JSON.stringify({ mcpServers: { existing: { command: "local-existing", args: ["--ok"] } } }, null, 2)}\n`,
+);
+run(["install", "--target", "openhands", "--scope", "user", "--dest", existingOpenHandsMcpDest, "--category", "mcps", "--service", "synapse"]);
+const mergedOpenHandsMcp = JSON.parse(readFileSync(path.join(existingOpenHandsMcpDest, ".openhands", "mcp.json"), "utf8"));
+assert.equal(mergedOpenHandsMcp.mcpServers.existing.command, "local-existing");
+assert.equal(mergedOpenHandsMcp.mcpServers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
+assert.equal(Object.hasOwn(mergedOpenHandsMcp.mcpServers, "agentmemory"), false);
+rmSync(existingOpenHandsMcpDest, { recursive: true, force: true });
+
 const existingCodexMcpDest = "/tmp/agent-surface-codex-existing-mcp";
 rmSync(existingCodexMcpDest, { recursive: true, force: true });
 mkdirSync(path.join(existingCodexMcpDest, ".codex"), { recursive: true });
@@ -1398,6 +1607,7 @@ for (const target of [
   "deepagents",
   "goose",
   "grok-build",
+  "openhands",
   "pi",
   "pool",
   "windsurf",
@@ -1424,7 +1634,10 @@ for (const target of [
   rmSync(targetDest, { recursive: true, force: true });
 }
 
-assert.equal(existsSync(path.join(root, "commands", "ops-server.md")), false);
+assert.match(readFileSync(path.join(root, ".gitignore"), "utf8"), /^commands\/ops-server\.md$/m);
+if (hasLocalOpsServerCommand) {
+  execFileSync("git", ["check-ignore", "commands/ops-server.md"], { cwd: root, encoding: "utf8" });
+}
 
 rmSync(path.join(root, "dist"), { recursive: true, force: true });
 

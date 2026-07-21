@@ -12,6 +12,7 @@ alwaysApply: true
 - Avoid introductions, apologies, generic summaries, lectures, and filler.
 - Use headings or bullets only when they improve scanability or the user asks for structure.
 - No AI attribution in commits, PRs, docs, comments, generated files, or output, except required Linux kernel patch disclosure such as an `Assisted-by:` trailer when AI materially contributed.
+- After creating or updating commit messages, PR/MR text, release notes, patch emails, docs, or generated output, read back the actual saved/submitted text when tooling permits and verify no AI/vendor attribution or advertising was inserted by the editor, host, hook, template, or assistant.
 
 ## Chat Code Output
 

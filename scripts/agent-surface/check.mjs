@@ -212,10 +212,6 @@ export async function check() {
 
   checkSourceKinds(sourceKindsConfig, artifactsConfig, errors);
 
-  if (await exists(path.join(root, "commands", "ops-server.md"))) {
-    errors.push("commands/ops-server.md is local/private and must not be imported");
-  }
-
   await checkWorkflowSchemas(errors);
   await checkRegistrySchemas(errors);
   await checkTargetCapabilities(targetsConfig, errors);

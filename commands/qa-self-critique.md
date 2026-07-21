@@ -64,8 +64,9 @@ for root, _, files in os.walk('{{target}}'):
         except: pass
 "
 
-# 1d. Mock poisoning in tests
-grep -rnE 'Mock|MagicMock|AsyncMock|@patch|@mock' tests/ 2>/dev/null
+# 1d. Non-real substitute sweep. Names do not change the policy.
+rg -n -i 'mock|fake|fixture|stub|spy|emulat|simulat|adapter|harness|in[-_ ]?memory|monkeypatch|recorded|synthetic|sandbox|test[-_ ]?(mode|implementation)' {{target}} 2>/dev/null
+rg -n 'SUBSTITUTE_JUSTIFICATION' {{target}} 2>/dev/null
 
 # 1e. Phantom imports (Python) — top-level module only; submodule imports may not resolve
 #     out-of-context, so treat results as a hint, not a verdict.
@@ -164,8 +165,12 @@ Skip this domain when the target is not C kernel code. When it is:
 
 #### 2f. Test Quality
 
-- `Mock`/`MagicMock`/`AsyncMock` used where a hand-written Fake would be clearer?
-  → Replace with `Fake<Class>` implementation
+- Any mock, fake, fixture, stub, spy, emulator, in-memory implementation, monkeypatch, recorded/synthetic response, sandbox, test mode, or renamed non-real replacement?
+  → Require a complete `SUBSTITUTE_JUSTIFICATION` for each use. If the real component or a disposable real instance can safely and deterministically serve the assertion, remove the substitute.
+- Does the necessity say only "faster", "easier", "hermetic", "offline", "CI", "flaky service", or "missing credentials"?
+  → Reject it. Missing real prerequisites block that test layer; they do not authorize fake evidence.
+- Is a substitute-backed run counted as integration, E2E, acceptance, security, readiness, or completion evidence?
+  → Remove it from the evidence set and mark the required real layer `BLOCKED` until it runs.
 - `# type: ignore` in tests hiding production type bugs?
   → Fix the production types, not the test
 - Tests asserting implementation details (mock call counts) instead of behavior?

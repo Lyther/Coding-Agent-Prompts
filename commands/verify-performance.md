@@ -1,80 +1,100 @@
 ---
 name: verify-performance
 phase: verify
-description: "Identify bottlenecks, leaks, and concurrency risks before production."
+description: "Prove latency, capacity, and concurrency against an explicit baseline — not a vanity P99."
 ---
 ## OBJECTIVE
 
-**SPEED IS A FEATURE.**
-A slow app is a broken app.
-**Your Goal**: Identify **Bottlenecks**, **Memory Leaks**, and **Concurrency Issues** before production.
-**The Standard**: P99 < 100ms for API. 60 FPS for UI.
+Detect bottlenecks, leaks, and concurrency failures that would break the readiness claim — relative to a stated baseline or SLO, not a generic magic number.
 
-## CONTEXT STRATEGY (TOKEN ECONOMICS)
+## CORE RULE
 
-1. **Profile Hotspots**:
-    - Don't optimize everything.
-    - **Prompt**: "Identify the top 3 slowest functions in this trace."
-2. **Isolate Variables**:
-    - Test *one* thing at a time (e.g., DB query vs JSON parsing).
+Numbers without a baseline are anecdotes.
+
+PASS requires:
+
+- An explicit performance claim or SLO for this scope (from docs, prior run, or user).
+- Measurement on a representative workload (prod-like shape, not toy empty DB unless that is the product).
+- Comparison to baseline or stated threshold — pass/fail criteria written before the run.
+- Concurrency/correctness failures treated as FAIL even if latency looks fine.
+
+If no SLO/baseline exists, produce measurements as `INFORMATIONAL` and verdict `BLOCKED` for any “performance is production-ready” claim — or get the user to set a threshold first.
 
 ## PROTOCOL
 
-### Phase 1: Micro-Benchmarking (Code Level)
+### Phase 1: Define The Contract
 
-1. **Tooling**:
-    - **TS/JS**: `tinybench` or `vitest bench`.
-    - **Python**: `timeit` or `pytest-benchmark`.
-    - **Rust**: `criterion`.
-2. **Target**:
-    - Algorithmic logic (parsing, sorting, math).
-    - Hot loops.
+Write one sentence:
 
-### Phase 2: Load Testing (System Level)
+- Bad: `API should be fast.`
+- Good: `POST /orders P95 ≤ 200ms at 50 RPS for 5m on staging dataset D; error rate < 0.1%; zero lost writes under 5 concurrent clients.`
 
-1. **Tooling**: `k6` (scriptable, localized).
-2. **Scenarios**:
-    - **Smoke**: 1 user, verify functionality.
-    - **Load**: 100 concurrent users, sustain for 5m.
-    - **Stress**: Ramp up until crash. Find the breaking point.
-3. **Metrics**:
-    - Latency (P50, P95, P99).
-    - Error Rate (HTTP 5xx).
-    - Throughput (RPS).
+Record: environment, dataset size, warm vs cold, concurrency, duration, success criteria.
 
-### Phase 3: Profiling (The Why)
+### Phase 2: Micro-Benchmarks (Optional)
 
-1. **Capture**:
-    - **Node**: `0x` flamegraphs or `--prof`.
-    - **Python**: `cProfile` -> `snakeviz`.
-    - **Rust**: `flamegraph`.
-2. **Analyze**:
-    - Look for **Wide Towers** (Long execution time).
-    - Look for **Deep Towers** (Excessive recursion/stack).
+Use when algorithmic hotspots are in scope (`vitest bench`, `pytest-benchmark`, `criterion`, `tinybench`).
+
+Micro-benches do not prove system SLOs. Label them clearly.
+
+### Phase 3: System Load
+
+Prefer scriptable load (`k6`, `vegeta`, or repo harnesses).
+
+Scenarios as needed by the claim:
+
+| Scenario | Purpose |
+|----------|---------|
+| Smoke | 1 user / low RPS — sanity |
+| Load | Target concurrency sustained for agreed duration |
+| Stress | Ramp to find breaking point (only if claim includes capacity headroom) |
+
+Metrics: P50/P95/P99 latency, error rate, throughput, saturation signals (CPU/RSS/queue depth when available).
+
+### Phase 4: Correctness Under Load
+
+While load runs (or immediately after):
+
+- No lost/duplicate writes where invariants require otherwise.
+- No auth bypass or cross-tenant bleed introduced by races.
+- Short concurrency smoke on the critical path if not already in `verify-prove`.
+
+Latency PASS with correctness FAIL is FAIL.
+
+### Phase 5: Profile Only On Fail Or Regression
+
+If the contract fails or regresses vs baseline, capture a profile (flamegraph, `cProfile`, etc.) and name the top hotspot. Do not optimize without a failing contract.
 
 ## OUTPUT FORMAT
 
 ```markdown
-# 🏎️ PERFORMANCE REPORT
+# PERFORMANCE REPORT
 
-## Benchmark: `processOrder`
-- **Ops/Sec**: 5,000
-- **P99**: 12ms
+## Contract
+- claim: <SLO sentence>
+- baseline: <prior number or none>
+- environment: <...>
 
-## Load Test (k6)
-- **Users**: 100 concurrent
-- **Duration**: 5m
-- **RPS**: 450
-- **P95 Latency**: 85ms (✅ < 100ms)
-- **Error Rate**: 0.01% (⚠️ 2 failures)
+## Results
+- scenario: ...
+- P95 / P99: ...
+- error rate: ...
+- correctness under load: pass|fail
 
-## Bottleneck Analysis
-- **DB**: Query `SELECT * FROM orders` is unindexed on `status`.
-- **Fix**: Add index `idx_orders_status`.
+## Comparison
+- vs baseline/SLO: pass|fail|informational
+
+## Hotspot (if failed)
+- <function or query>: evidence
+
+## Verdict
+PASS|FAIL|BLOCKED
 ```
 
-## EXECUTION RULES
+## HARD RULES
 
-1. **PROD-LIKE DATA**: Test with realistic data volume (use `seed` command).
-2. **COLD VS WARM**: Measure both cold start and warm state.
-3. **NO PREMATURE OPTIMIZATION**: Only optimize if you have numbers proving it's slow.
+1. No universal `P99 < 100ms` default — thresholds come from the claim or baseline.
+2. Cold and warm called out when relevant.
+3. Prod-like data volume when the claim is production capacity.
+4. Do not claim production performance from laptop-only anecdotes without labeling environment limits.
+5. Hand journey proof to `verify-prove`; hand readiness certification to `verify-readiness`.

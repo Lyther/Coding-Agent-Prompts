@@ -1,129 +1,254 @@
 ---
 name: dev-chore
 phase: build
-description: "Perform bounded maintenance such as config, formatting, generated metadata, and cleanup."
+description: "Maintain development quality by correcting local design, reuse, complexity, risk, and UX drift before it compounds."
 ---
 ## OBJECTIVE
 
-Perform bounded maintenance work: dependency updates, configuration tweaks, formatting, generated metadata refreshes, and dead-code cleanup.
+Keep project-level development quality improving while work is still small enough to correct cheaply.
 
-No production behavior changes. If the work requires behavior changes, route to `dev-feature` or `dev-fix`.
+`dev-chore` is a continuous quality intervention, not merely a formatting and metadata command. It finds and corrects bounded problems such as duplicate ownership, hand-rolled replacements for existing capabilities, patching around a disproven design, speculative abstraction, disproportionate security machinery, incomplete user journeys, configuration drift, dependency hygiene, and dead code.
 
-## WHEN TO USE
+The governing rule is:
 
-- BOSS route is `chore`.
-- The task is maintenance-only and has explicit FILESCOPE.
-- Dependency work has changelog/advisory/license/maintenance review, lockfile impact understood, and a rollback path.
-- Repo-wide formatting or autofix has explicit approval.
+```text
+Do not make a wrong design cleaner. Re-check the outcome, reuse what already works,
+make the smallest justified correction, prove it, and then continue development.
+```
 
-## WHEN NOT TO USE
+This command does not replace independent review or acceptance proof. A `dev-chore` PASS means the inspected development increment meets this command's quality gates; it does not mean QA, E2E, readiness, or release approval passed.
 
-- Runtime behavior changes.
-- Security remediations that alter authorization, validation, crypto, payment, or data mutation behavior.
-- Broad dependency upgrades without changelog/advisory review.
-- Unscoped `prettier --write .`, `eslint --fix .`, `cargo fix`, or lockfile churn.
+## OPERATING MODES
+
+### Routed worker mode
+
+Use this mode when BOSS selected route `chore` for an explicit, bounded quality-maintenance task. `dev-chore` owns the worker artifact and may make changes inside the assigned AC and FILESCOPE.
+
+### Embedded checkpoint mode
+
+Use this mode when `dev-feature`, `dev-fix`, or `dev-refactor` calls `dev-chore` while implementing its own task. Inspect the current delta and return findings and decisions to the calling worker. The caller retains code, patch, evidence, and worker-artifact ownership; do not advance the workflow ledger as `dev-chore`.
+
+### Direct mode
+
+Use this mode when the user invokes `dev-chore` without an active workflow. Inspect the named task or current development delta, make only bounded corrections that preserve the accepted product contract, and report changed files and checks. Do not auto-commit.
+
+## TRIGGERS
+
+Run the quality loop at the start of a meaningful increment and whenever any of these signals appears:
+
+- A new helper, type, abstraction, adapter, layer, dependency, service, configuration flag, state store, or framework is about to be added.
+- The same rule, validation, mapping, retry, state, query, UI pattern, or integration is being implemented a second time.
+- A design premise has been disproven, a workaround is growing, or two focused correction attempts have failed.
+- The implementation diff is expanding faster than the user outcome, or support infrastructure is becoming larger than the requested behavior.
+- A security control adds a new service, policy layer, approval path, or major usability cost.
+- A user-visible path exists in code but has not been exercised through its real entry point, including failure and recovery.
+- A local maintenance task exposes stale generated output, dependency risk, dead code, inconsistent configuration, or a broken developer workflow.
+
+## ROUTE BOUNDARIES
+
+`dev-chore` may:
+
+- Replace a duplicate with an existing implementation whose semantics match.
+- Remove speculative indirection, unused configuration, dead paths, and unnecessary local machinery.
+- Pivot implementation strategy inside an already accepted behavior contract.
+- Correct local UX behavior already implied by the AC, such as missing feedback, recovery, empty/error state, actionable CLI output, or broken focus flow.
+- Perform bounded dependency, configuration, formatting, generated-metadata, and repository-health maintenance.
+
+Route instead when:
+
+- New product behavior or a contract change is required: `dev-feature` or `workflow-boss`.
+- A proven runtime or security defect needs regression proof: `dev-fix`.
+- A broad behavior-preserving structural transformation is the task: `dev-refactor`.
+- The root cause, dataflow, race, or trust boundary is still unproven: `qa-trace`.
+- An independent whole-diff or repository review is requested: `qa-review`.
+- Product intent, architecture ownership, or a security-versus-feature decision cannot be inferred from authoritative evidence: `workflow-boss` or a human decision.
+
+Do not expand a local quality correction into an opportunistic repository rewrite. Record important out-of-scope findings and route them separately.
+
+## DEVELOPMENT QUALITY LOOP
+
+### Gate 1: Outcome and direction
+
+1. State the user or developer outcome in one sentence.
+2. Identify the current implementation premise that is supposed to produce that outcome.
+3. Check the premise against the task AC, repository contracts, current code, and the latest real execution evidence.
+4. If the premise is false, stop extending it. Choose one result:
+   - `CORRECTED`: a bounded repair preserves the current design and AC.
+   - `PIVOTED`: replace the local implementation strategy while preserving the AC.
+   - `ROUTE_REQUIRED`: product, contract, filescope, or architecture must change.
+   - `BLOCKED`: required evidence, dependency, environment, credential, or approval is unavailable.
+
+Passing tests do not rescue a design that cannot deliver the stated outcome. Repeated patches around the same false premise are evidence to pivot, not a reason to add another layer.
+
+### Gate 2: Existing solution before new construction
+
+Before adding any new construct:
+
+1. Search the repository for the concept, behavior, symbols, routes, schemas, errors, configuration keys, and tests, not only for the proposed name.
+2. Inspect the standard library, framework primitives, and already-installed dependencies.
+3. Compare semantics, failure behavior, lifecycle, ownership, and operational cost. Do not force reuse when behavior does not actually match.
+4. Add something new only after recording the concrete gap in existing options.
+5. For a new dependency, run the normal maintenance, license, advisory, install-script/native-code, transitive-footprint, compatibility, lockfile, and rollback review.
+
+No wording games: renaming copied logic, wrapping it, placing it in another layer, or generating it does not make it a different implementation.
+
+### Gate 3: Single ownership and duplication
+
+Trace each changed invariant to one authoritative owner.
+
+Reject or correct:
+
+- Parallel implementations of the same business rule, validation, authorization decision, state transition, data shape, retry policy, or formatting rule.
+- Multiple sources of truth joined by synchronization code.
+- A new generic helper that overlaps an existing domain helper without replacing or delegating to it.
+- Copy-pasted UI, API, query, or error-handling paths that will drift independently.
+- Compatibility wrappers with no current consumer or removal condition.
+
+Prefer deleting or consolidating the new duplicate. Do not launch a broad deduplication refactor unless it is necessary for the current task and inside FILESCOPE.
+
+### Gate 4: Proportional design and complexity
+
+For each new layer, abstraction, dependency, configuration option, background job, cache, queue, state store, or policy mechanism, require one present-tense justification:
+
+- A current AC requires it.
+- An observed failure cannot be solved safely at the existing boundary.
+- Measured scale, reliability, or performance evidence requires it.
+- It centralizes an invariant that is already duplicated.
+
+Future flexibility, possible reuse, architectural fashion, or the ability to configure a value that has one valid setting are not sufficient.
+
+Compare at least these options when they are plausible: use the existing capability, make a small local change, or introduce a new abstraction. Choose the option that satisfies the outcome and non-negotiable constraints with the fewest new concepts and operational obligations.
+
+### Gate 5: Security and feature trade-off
+
+Security is part of the behavior, but not every imagined threat justifies a new subsystem.
+
+1. Preserve non-negotiable trust boundaries: authentication, authorization, secret handling, cryptography, payments, destructive data mutation, customer data, and explicit project policy may not be weakened to ship a feature.
+2. For other security work, name the concrete asset, actor, boundary, failure mode, impact, likelihood/exposure evidence, and smallest effective mitigation.
+3. Prefer enforcement at the existing trust boundary over broad policy engines, approval ceremonies, duplicated validation, or new services.
+4. Exercise the feature with the control enabled. A control that silently makes the required outcome unusable is not a successful implementation; either correct the UX or surface the real product/security decision.
+5. Do not claim a security benefit from a control that has no enforced path or relevant proof.
+
+When a required safeguard and the requested feature genuinely conflict, do not quietly remove either one. Route the explicit trade-off with evidence and a recommended decision.
+
+### Gate 6: User and operator outcome
+
+Treat UX and operability as functional quality, not post-implementation polish. Exercise the relevant real entry point and inspect the complete path:
+
+- UI: goal completion, loading, empty, error, retry/cancel, success feedback, keyboard/focus behavior, accessibility, responsiveness, and no dead ends.
+- CLI/API: discoverable inputs, stable contracts, actionable errors, correct exit/status behavior, machine-readable output where promised, cancellation/timeouts, and no false success.
+- Service/operations: startup, configuration failure, logs/metrics needed to diagnose the changed path, bounded retries, shutdown/recovery, and rollback where relevant.
+
+The implementation is not user-complete merely because a function returns, a component renders, or a mocked transcript looks correct. Real acceptance claims still belong to the verify commands and require real dependencies.
+
+### Gate 7: Correct in small increments
+
+1. Make one bounded correction at a time.
+2. Run the cheapest meaningful check after each correction.
+3. Re-run the affected real entry-point scenario when practical.
+4. Stop if the correction requires a wider contract, filescope, architecture, or approval than the task owns.
+5. Leave the codebase easier to understand and modify than before the increment, without unrelated polish.
 
 ## COMMAND REUSE
 
-Use existing commands as helper functions when they improve maintenance quality:
+Use existing commands as focused helpers:
 
-- `ops-deps`: dependency risk, changelog, advisory, license, and lockfile review.
-- `ops-doctor`: repository/tooling health checks.
-- `lint-python`, `lint-rust`, `lint-go`, `lint-typescript`, `lint-shell`: language-specific checks for touched files.
-- `verify-test`, `verify-spec`, `verify-coverage`: focused proof for chore AC.
-- `qa-review`: broad regression/scope review for config, CI, generated metadata, or lockfile changes.
-- `ops-swarm`: parallel non-blocking check packets only when FILESCOPE isolation is clear.
+- `boot-context`: stale or missing repository context.
+- `ops-deps`: dependency capability, risk, maintenance, license, advisory, and lockfile review.
+- `ops-doctor`: repository and tooling health.
+- `qa-trace`: verify a suspected wrong premise, root cause, ownership path, race, or trust boundary before changing it.
+- `lint-python`, `lint-rust`, `lint-go`, `lint-typescript`, `lint-shell`, `lint-kernel`: touched-file language checks.
+- `verify-test`, `verify-spec`, `verify-coverage`, `verify-edge`, `verify-performance`, `verify-prove`: focused proof for the accepted behavior and real user path.
+- `qa-review`: independent broad review after implementation, not a substitute for this in-development loop.
+- `ops-swarm`: parallel read-only discovery when scopes are independent and synthesis remains with the current owner.
 
-In workflow mode, helper command output is evidence, not the final format. Keep writing `worker.json`, evidence refs, patch refs, and the normal `workflow.next_command = "workflow-reviewer"`.
+Helper output is evidence, not a different ownership or completion model.
 
 ## WORKFLOW MODE
 
-Workflow mode is ON when `.agent-surface/workflows/<run_id>/run.json` is active, lock is valid, `.agent-surface/workflows/<run_id>/boss.json` uses `schema_version: workflow.v3`, and `boss.workflow.route = "chore"`.
+Workflow worker mode is ON only when `.agent-surface/workflows/<run_id>/run.json` is active, the lock is valid, BOSS uses `schema_version: workflow.v3`, `boss.workflow.route = "chore"`, and `run.json.workflow_next_command = "dev-chore"`.
 
 Protocol:
 
-1. Load `run.json`, `boss.json`, and latest reviewer/judger/rescue handoff when `workflow.next_command = "dev-chore"`.
-2. Start from `boss.context_capsule` and inspect only deltas unless evidence is missing, stale, contradictory, or changed since BOSS captured it.
-3. Process only active task IDs, respecting dependencies and FILESCOPE.
-4. Scope autofix commands to the task FILESCOPE. Repo-wide autofix requires explicit BOSS approval.
-5. Dependency updates require manifest/lockfile intent, changelog or advisory note, and rollback note.
+1. Validate `run.json`, `boss.json`, branch, baseline, lock, round, parent hashes, active task IDs, AC, FILESCOPE, and latest reviewer/judger/rescue handoff.
+2. Start from `boss.context_capsule`; inspect deltas unless evidence is missing, stale, contradictory, or changed.
+3. For each active task, run Gates 1-6 before editing. Record the outcome, reuse search, rejected alternatives, ownership decision, security trade-off, and UX/operability result in `summary`, `decisions`, `assumptions`, `known_limitations`, and `self_audit`.
+4. Scope autofix and generated-output refreshes to FILESCOPE. Repo-wide mutation requires explicit approval and BOSS scope.
+5. Wrap every task with `agent-surface workflow patch begin/end/verify` so the patch, hash, trees, changed files, and clean-apply proof are mechanical.
 6. Run task verify commands through:
 
 ```text
 agent-surface run --task <task_id> --class <class> --timeout <ms> --out .agent-surface/workflows/<run_id>/rounds/round-<round_id>/evidence/<task_id> -- <command...>
 ```
 
-7. Wrap each task with `agent-surface workflow patch begin/end/verify` so patches, tree hashes, changed files, and clean-apply proof are generated mechanically.
-8. Before marking a task blocked, apply the Blocker Discipline section below.
-9. Write canonical worker artifact to `.agent-surface/workflows/<run_id>/rounds/round-<round_id>/worker.json` and latest copy to `.agent-surface/workflows/<run_id>/worker.json`.
-10. Set `workflow.owner = "dev-chore"` and `workflow.next_command = "workflow-reviewer"`.
-11. Advance the ledger with `agent-surface workflow apply --role dev-chore --run <run_id> --artifact .agent-surface/workflows/<run_id>/worker.json`; this appends the transition event and sets `run.json.workflow_next_command`. Do not hand-edit `run.json`.
+7. A corrected or pivoted task is `PASS` only when its AC and verify gates pass. A checkpoint that finds no required edit may also be `PASS`, with the inspected delta and decisions recorded.
+8. Before marking a task blocked, apply Blocker Discipline. Do not skip ahead after a blocker.
+9. Write the canonical worker artifact to `.agent-surface/workflows/<run_id>/rounds/round-<round_id>/worker.json` and the latest copy to `.agent-surface/workflows/<run_id>/worker.json`.
+10. Set `workflow.owner = "dev-chore"` and `workflow.next_command = "workflow-reviewer"`, then advance with `agent-surface workflow apply --role dev-chore --run <run_id> --artifact .agent-surface/workflows/<run_id>/worker.json`. Do not hand-edit `run.json`.
 
-Worker artifact shape:
+Use the normal `workflow.worker.schema.json` shape. A completed task should make its quality decisions inspectable, for example:
 
 ```json
 {
-  "schema_version": "workflow.v3",
-  "run_id": "<run_id>",
-  "round_id": 1,
-  "worker": "dev-chore",
-  "tasks_processed": [
-    {
-      "task_id": "T1",
-      "status": "PASS",
-      "files_changed": [],
-      "name_status_ref": ".agent-surface/workflows/<run_id>/rounds/round-001/patches/T1.name-status.txt",
-      "patch_ref": ".agent-surface/workflows/<run_id>/rounds/round-001/patches/T1.patch",
-      "patch_hash": "sha256:...",
-      "pre_tree_hash": "1111111111111111111111111111111111111111",
-      "post_tree_hash": "2222222222222222222222222222222222222222",
-      "applies_cleanly": true,
-      "evidence_refs": [],
-      "verify_results": []
-    }
+  "task_id": "T1",
+  "status": "PASS",
+  "summary": "PIVOTED: reused the existing session boundary and removed a parallel token cache",
+  "files_changed": ["src/session.ts"],
+  "name_status_ref": ".agent-surface/workflows/<run_id>/rounds/round-001/patches/T1.name-status.txt",
+  "patch_ref": ".agent-surface/workflows/<run_id>/rounds/round-001/patches/T1.patch",
+  "patch_hash": "sha256:...",
+  "pre_tree_hash": "1111111111111111111111111111111111111111",
+  "post_tree_hash": "2222222222222222222222222222222222222222",
+  "applies_cleanly": true,
+  "evidence_refs": [],
+  "verify_results": [],
+  "self_audit": [
+    {"check": "direction still reaches accepted outcome", "result": "pass"},
+    {"check": "existing solution searched before new construction", "result": "pass"},
+    {"check": "changed invariants have one owner", "result": "pass"},
+    {"check": "complexity and security controls are proportionate", "result": "pass"},
+    {"check": "real user or operator path exercised", "result": "pass"}
   ],
-  "skipped": [],
-  "remaining": [],
-  "stop_reason": "queue_empty",
-  "workflow": {
-    "dir": ".agent-surface/workflows/<run_id>",
-    "file": "worker.json",
-    "owner": "dev-chore",
-    "run_id": "<run_id>",
-    "round_id": 1,
-    "parent_artifact_hashes": ["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
-    "next_command": "workflow-reviewer"
-  }
+  "decisions": ["Reused src/session.ts; rejected a second cache because it duplicated expiry ownership"],
+  "assumptions": [],
+  "known_limitations": [],
+  "user_visible_behavior_changed": false,
+  "contracts_touched": [],
+  "blocker": null
 }
 ```
 
-## DIRECT MODE
-
-If no active workflow exists, perform the smallest maintenance change that satisfies the user request. Do not auto-commit. Report changed files and checks.
-
 ## BLOCKER DISCIPLINE
 
-Do not emit a blocker until you have attempted the safe discovery or repair available to the worker.
+Do not emit a blocker until safe discovery or repair available to the worker has been attempted.
 
-- Not blockers: repo discovery, selecting verify commands from manifests/Makefiles/CI, scoped format/lint/test failures in owned files, and documentation alignment for public behavior in FILESCOPE. Resolve these before stopping.
-- Conditional worker-owned recovery: generated artifact refresh is allowed only when BOSS assigned generated outputs or the repo's generator/check explicitly requires it; record the generator command and keep the normal generated-file gate green.
-- Human-required blockers: secrets or credential access, dependency risk that cannot be researched or accepted from available evidence, destructive commands, database mutation, deployment, production data, approval-gated network calls, product decisions not inferable from BOSS/user evidence, or files outside FILESCOPE.
-- Repeated failure: after two focused correction attempts on the same task, stop with `blocker.type="repeated_failure"`, `resolution_class="human_required"` unless the next safe action is purely mechanical, and include the failed attempts.
-- Every blocker should include `type`, `detail`, `needs`, `resolution_class` (`auto_resolvable` or `human_required`), `attempts`, and `recommended_decision`. Legacy v3 artifacts may omit the last three fields, but new worker output should include them.
+- Not blockers: repository search, identifying existing capabilities, selecting checks from manifests/CI, scoped lint/test failures in owned files, simplifying a local design, or exercising a local real entry point. Resolve these first.
+- Conditional worker-owned recovery: generated refresh is allowed only when assigned or required by the repository generator/check; record the command and keep the generated-file gate green.
+- Direction recovery: when a premise is disproven, pivot inside the accepted contract if evidence identifies a bounded alternative. Do not spend two more attempts repairing the premise.
+- Human-required blockers: missing product or architecture decisions, secrets/credentials, unresolved dependency risk, destructive operations, database mutation, deployment, production data, approval-gated service calls, or required files outside FILESCOPE.
+- Repeated failure: after two distinct focused attempts on the same valid approach, stop with `blocker.type = "repeated_failure"` unless the next safe action is mechanical. Include both attempts and the recommended pivot or decision.
+- Every new blocker includes `type`, `detail`, `needs`, `resolution_class`, `attempts`, and `recommended_decision`.
 
-## SAFETY RULES
+## SAFETY AND TRUTH
 
-- Do not change production logic.
-- Do not weaken tests, linters, compiler settings, auth checks, or security checks to pass.
-- Do not run repo-wide formatting, destructive cleanup, or approval-gated network commands without explicit approval. Dependency updates require documented risk research before mutation.
-- Do not edit workflow artifacts outside `worker.json`, per-task patches, evidence files, and this role's event.
-- If a chore exposes a required behavior change, stop and route to `workflow-boss` for route correction.
+- Never weaken tests, linters, compiler settings, authorization, validation, or security controls to make a task pass.
+- Never present a mock, fake, fixture, stub, emulator, synthetic/recorded response, local substitute, or renamed equivalent as real integration, E2E, UX, deployment, security, or readiness evidence.
+- Do not invent product behavior, APIs, dependencies, threat models, performance needs, scale, or future requirements.
+- Do not run repo-wide formatting, destructive cleanup, dependency mutation, or approval-gated commands without the required scope, research, and approval.
+- In routed workflow mode, edit only the worker artifact, assigned files, per-task patch/evidence files, and this role's event.
+- In embedded checkpoint mode, do not create or apply a `dev-chore` worker artifact; the calling worker remains responsible for implementation and evidence.
 
-## CHAT OUTPUT
+## OUTPUT
 
 ```text
-Worker file: .agent-surface/workflows/<run_id>/worker.json
-Round done: M/N chores completed; stop_reason=<reason>; next: workflow-reviewer
-Changed: <short file list>
-Checks: <command -> passed/failed/not run>
+Development quality: PASS|CORRECTED|PIVOTED|ROUTE_REQUIRED|BLOCKED
+Outcome: <user/developer outcome inspected>
+Direction: <premise retained, corrected, or rejected and why>
+Reuse/ownership: <existing capability used or concrete gap; invariant owner>
+Complexity/risk: <trade-off and rejected unnecessary machinery>
+UX/operations: <real path exercised and result, or not run with reason>
+Changed: <files or none>
+Checks: <command/scenario -> passed/failed/not run>
+Remaining: <real issue or none>
+Workflow: <worker path and next command when routed worker mode is active>
 ```

@@ -1,19 +1,19 @@
 // Output materialization: `build` renders the full target set into dist/, and
-// `install` plans + applies a target's outputs (with strict-sync stale removal,
-// backups, and MCP/Kilo config merges) into a host root. Both drive the shared
-// producer engine in targets.mjs; neither owns rendering or validation.
-import { copyFile, mkdir, rename, rm, writeFile } from "node:fs/promises";
+// `install` plans + applies a target's outputs (with strict-sync stale removal
+// and MCP/Kilo config merges) into a host root. Both drive the shared producer
+// engine in targets.mjs; neither owns rendering or validation.
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
 import { exportableCommands, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
 import { readFileIfExists, readJsonIfExists, removeTree } from "./io.mjs";
-import { mergeJsoncRootObjectProperty, mergeKiloInstructionJsonc, parseJsoncResult } from "./jsonc.mjs";
+import { mergeKiloInstructionJsonc, parseJsoncResult } from "./jsonc.mjs";
 import { YAML_MCP_FORMATS, mergeCodexMcpToml, mergeJsonMcpConfig, mergeYamlMcpConfig, optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { packageVersion, readSourceKinds, relative, root } from "./registry.mjs";
 import { readRules } from "./rules.mjs";
 import { kiloRuleInstructionPaths, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
-import { argValue, argValues, exists, fail, isSafeRelativePath, isSafeTargetName, safeTimestamp, sha256, splitArgValues, uniqueStrings } from "./util.mjs";
+import { argValue, argValues, fail, isSafeRelativePath, isSafeTargetName, splitArgValues, uniqueStrings } from "./util.mjs";
 
 export async function build(args) {
   const target = argValue(args, "--target") ?? "all";
@@ -194,6 +194,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const generatedAt = new Date().toISOString();
   const manifestPath = path.join(installRoot, ".agent-surface", `${target}-manifest.json`);
   const previousManifest = await readJsonIfExists(manifestPath);
+  const legacyOwnership = await readLegacyOwnership(target);
   const outputs = (await targetOutputs(adapter, commandFiles, {
     target,
     scope,
@@ -219,32 +220,19 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     }
     const output = path.join(installRoot, item.relativeOutput);
     const relativeOutput = path.relative(installRoot, output);
-    const hash = sha256(item.content);
     if (!isSafeRelativePath(relativeOutput)) {
       blocked.push(`unsafe output path: ${relativeOutput}`);
       continue;
     }
 
-    writes.push({ source: item.source, output, relativeOutput, content: item.content, sha256: hash });
+    writes.push({ source: item.source, output, relativeOutput, content: item.content });
     managed.push({
       target,
       source: item.source,
       output: relativeOutput,
-      sha256: hash,
-      managed_by: "agent-surface",
       version,
     });
   }
-
-  const previousManaged = new Map(
-    Array.isArray(previousManifest?.managed)
-      ? previousManifest.managed
-        .filter((item) => item?.managed_by === "agent-surface")
-        .filter((item) => item?.target === target)
-        .filter((item) => typeof item.output === "string")
-        .map((item) => [item.output, item])
-      : [],
-  );
 
   for (const item of writes) {
     const current = await readFileIfExists(item.output);
@@ -253,35 +241,38 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       continue;
     }
 
-    const currentHash = sha256(current);
-    if (currentHash === item.sha256) {
+    if (current.toString("utf8") === item.content) {
       item.action = "skip";
       continue;
     }
 
-    item.action = "overwrite";
+    item.action = "write";
   }
 
   const partialInstall = categoryFilter !== null || optionalServices !== null;
   const liveOutputs = new Set(managed.map((item) => item.output));
-  const staleManaged = !partialInstall && Array.isArray(previousManifest?.managed)
-    ? previousManifest.managed
-      .filter((item) => item?.managed_by === "agent-surface")
-      .filter((item) => item?.target === target)
-      .filter((item) => typeof item.output === "string")
+  const previousFileEntries = manifestFileEntries(previousManifest, target);
+  const staleManaged = !partialInstall
+    ? [...previousFileEntries, ...legacyOwnership.files]
       .filter((item) => !liveOutputs.has(item.output))
       .sort((left, right) => left.output.localeCompare(right.output))
     : [];
-  const staleRemovals = staleManaged.map((item) => item.output);
   const staleRemovalActions = [];
   const configMerges = [];
+  const previousConfigEntries = manifestConfigEntries(previousManifest);
+  const ownedConfigEntries = [...previousConfigEntries, ...legacyOwnership.config_entries];
+  const pruneConfigEntries = (!categoryFilter || categoryFilter.has("mcps")) && optionalServices === null;
+  const liveConfigRoutes = new Set();
   if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps"))) {
-    configMerges.push(await prepareKiloConfigMerge(await kiloConfigMerge(installRoot, scope, {
+    const merge = await kiloConfigMerge(installRoot, scope, {
       includeInstructions: !categoryFilter || categoryFilter.has("rules"),
       includeMcp: !categoryFilter || categoryFilter.has("mcps"),
       categoryFilter,
       optionalServices,
-    })));
+    });
+    liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
+    const prepared = await prepareKiloConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
+    if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
   } else if (adapter.mcpConfig && (!categoryFilter || categoryFilter.has("mcps")) && mcpConfigScopeAllows(adapter.mcpConfig, scope)) {
     const merge = await mcpConfigMerge(adapter, installRoot, scope, {
       target,
@@ -291,7 +282,14 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       categoryFilter,
       optionalServices,
     });
-    if (merge) configMerges.push(await prepareMcpConfigMerge(merge));
+    liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
+    const prepared = await prepareMcpConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
+    if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
+  }
+
+  const pruneObsoleteConfigRoutes = !partialInstall;
+  if (pruneObsoleteConfigRoutes) {
+    await addObsoleteConfigRouteMerges(configMerges, ownedConfigEntries, liveConfigRoutes, installRoot);
   }
 
   for (const item of configMerges) {
@@ -311,11 +309,6 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       continue;
     }
 
-    if (typeof item.sha256 === "string" && sha256(current) !== item.sha256) {
-      staleRemovalActions.push({ output, relativeOutput: item.output, action: "keep" });
-      continue;
-    }
-
     staleRemovalActions.push({ output, relativeOutput: item.output, action: "remove" });
   }
 
@@ -326,19 +319,23 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     notApplicableCategories = `no installable outputs for categories: ${[...categoryFilter].sort().join(", ")}`;
   }
 
-  const retainedManaged = partialInstall && Array.isArray(previousManifest?.managed)
-    ? previousManifest.managed
-      .filter((item) => item?.managed_by === "agent-surface")
-      .filter((item) => item?.target === target)
-      .filter((item) => typeof item.output === "string")
+  const retainedManaged = partialInstall
+    ? previousFileEntries
       .filter((item) => !liveOutputs.has(item.output))
     : [];
   const manifestManaged = [...retainedManaged, ...managed].sort((left, right) => left.output.localeCompare(right.output));
+  const nextConfigEntries = mergedManifestConfigEntries(
+    previousConfigEntries,
+    configMerges,
+    pruneConfigEntries,
+    pruneObsoleteConfigRoutes ? liveConfigRoutes : null,
+  );
   const manifest = {
     target,
     scope,
     generated_at: generatedAt,
     managed: manifestManaged,
+    config_entries: nextConfigEntries,
   };
 
   return {
@@ -351,7 +348,6 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     categories: categoryFilter ? [...categoryFilter].sort() : null,
     services: optionalServices ? [...optionalServices].sort() : null,
     writes,
-    staleRemovals,
     staleRemovalActions,
     configMerges,
     blocked,
@@ -359,6 +355,177 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     nonApplicable: nonApplicable.sort((left, right) => left.localeCompare(right)),
     manifest,
   };
+}
+
+async function readLegacyOwnership(target) {
+  const legacy = await readJsonIfExists(path.join(root, "registry", "legacy-owned.json")) ?? {};
+  return {
+    files: Array.isArray(legacy.files)
+      ? legacy.files
+        .filter((item) => typeof item?.output === "string")
+        .filter((item) => item.target === undefined || item.target === target)
+        .map((item) => ({
+          target,
+          source: typeof item.source === "string" ? item.source : "",
+          output: item.output,
+          version: typeof item.version === "string" ? item.version : undefined,
+        }))
+      : [],
+    config_entries: Array.isArray(legacy.config_entries)
+      ? legacy.config_entries
+        .filter((item) => item.target === undefined || item.target === target)
+        .filter((item) => typeof item?.path === "string" && typeof item?.format === "string" && Array.isArray(item?.ids))
+        .map((item) => ({
+          path: item.path,
+          format: item.format,
+          ids: uniqueStrings(item.ids.filter((id) => typeof id === "string")),
+        }))
+        .filter((item) => item.ids.length > 0)
+      : [],
+  };
+}
+
+function manifestFileEntries(manifest, target) {
+  if (!Array.isArray(manifest?.managed)) return [];
+  return manifest.managed
+    .filter((item) => typeof item?.output === "string")
+    .filter((item) => item.target === undefined || item.target === target)
+    .map((item) => ({
+      target,
+      source: typeof item.source === "string" ? item.source : "",
+      output: item.output,
+      version: typeof item.version === "string" ? item.version : undefined,
+    }));
+}
+
+function manifestConfigEntries(manifest) {
+  if (!Array.isArray(manifest?.config_entries)) return [];
+  return manifest.config_entries
+    .filter((item) => typeof item?.path === "string" && typeof item?.format === "string" && Array.isArray(item?.ids))
+    .map((item) => ({
+      path: item.path,
+      format: item.format,
+      ids: uniqueStrings(item.ids.filter((id) => typeof id === "string")),
+    }))
+    .filter((item) => item.ids.length > 0);
+}
+
+function previousConfigIds(entries, relativeOutput, format) {
+  return uniqueStrings(
+    entries
+      .filter((entry) => entry.path === relativeOutput && entry.format === format)
+      .flatMap((entry) => entry.ids),
+  );
+}
+
+function groupedConfigEntries(entries) {
+  const grouped = new Map();
+  for (const entry of entries) {
+    const key = configEntryKey(entry.path, entry.format);
+    const current = grouped.get(key);
+    if (current) {
+      current.ids = uniqueStrings([...current.ids, ...entry.ids]);
+    } else {
+      grouped.set(key, { ...entry, ids: [...entry.ids] });
+    }
+  }
+  return [...grouped.values()].sort((left, right) => configEntryKey(left.path, left.format).localeCompare(configEntryKey(right.path, right.format)));
+}
+
+async function addObsoleteConfigRouteMerges(configMerges, ownedConfigEntries, liveConfigRoutes, installRoot) {
+  const mergeIndexesByPath = new Map(configMerges.map((merge, index) => [merge.relativeOutput, index]));
+  const obsoleteRoutes = groupedConfigEntries(ownedConfigEntries)
+    .filter((entry) => !liveConfigRoutes.has(configEntryKey(entry.path, entry.format)));
+
+  for (const entry of obsoleteRoutes) {
+    const existingIndex = mergeIndexesByPath.get(entry.path);
+    if (existingIndex !== undefined) {
+      configMerges[existingIndex] = mergeObsoleteConfigRoute(configMerges[existingIndex], entry);
+      continue;
+    }
+
+    const prepared = await prepareMcpConfigMerge({
+      kind: "mcp",
+      output: path.join(installRoot, entry.path),
+      relativeOutput: entry.path,
+      format: entry.format,
+      entries: [],
+    }, [entry], true);
+    if (isEmptyConfigNoop(prepared)) continue;
+    mergeIndexesByPath.set(entry.path, configMerges.length);
+    configMerges.push(prepared);
+  }
+}
+
+function mergeObsoleteConfigRoute(merge, entry) {
+  if (merge.action === "blocked") return merge;
+  let content;
+  try {
+    content = mergeMcpConfigContent(merge.content, entry.format, [], entry.ids);
+  } catch (error) {
+    return { ...merge, action: "blocked", error: `${entry.path}: ${error.message}` };
+  }
+
+  const changed = content !== merge.content;
+  return {
+    ...merge,
+    action: changed && merge.action === "skip" ? "merge" : merge.action,
+    removeMcpServers: changed
+      ? uniqueStrings([...(merge.removeMcpServers ?? []), ...entry.ids])
+      : (merge.removeMcpServers ?? []),
+    removeIds: uniqueStrings([...(merge.removeIds ?? []), ...entry.ids]),
+    content,
+  };
+}
+
+function mergedManifestConfigEntries(previousEntries, configMerges, pruneConfigEntries, liveConfigRoutes = null) {
+  const next = new Map(previousEntries.map((entry) => [configEntryKey(entry.path, entry.format), { ...entry }]));
+  if (liveConfigRoutes) {
+    for (const key of next.keys()) {
+      if (!liveConfigRoutes.has(key)) next.delete(key);
+    }
+  }
+  for (const merge of configMerges) {
+    const entry = manifestConfigEntryFromMerge(merge);
+    if (!entry) continue;
+    const key = configEntryKey(entry.path, entry.format);
+    const previousIds = next.get(key)?.ids ?? [];
+    const ids = pruneConfigEntries ? entry.ids : uniqueStrings([...previousIds, ...entry.ids]);
+    if (ids.length === 0) {
+      next.delete(key);
+    } else {
+      next.set(key, { path: entry.path, format: entry.format, ids });
+    }
+  }
+  return [...next.values()].sort((left, right) => configEntryKey(left.path, left.format).localeCompare(configEntryKey(right.path, right.format)));
+}
+
+function manifestConfigEntryFromMerge(merge) {
+  if (!["mcp", "kilo"].includes(merge.kind) || typeof merge.format !== "string") return null;
+  const entries = merge.kind === "kilo" ? merge.mcpEntries : merge.entries;
+  return {
+    path: merge.relativeOutput,
+    format: merge.format,
+    ids: uniqueStrings((entries ?? []).map(([id]) => id)),
+  };
+}
+
+function configEntryKey(relativeOutput, format) {
+  return `${relativeOutput}\0${format}`;
+}
+
+function isEmptyConfigNoop(merge) {
+  if (!merge || merge.action === "blocked") return false;
+  if (merge.kind === "mcp") {
+    return merge.entries.length === 0 && (merge.removeIds ?? []).length === 0;
+  }
+  if (merge.kind === "kilo") {
+    return merge.instructions.length === 0
+      && merge.legacyInstructions.length === 0
+      && merge.mcpEntries.length === 0
+      && (merge.removeIds ?? []).length === 0;
+  }
+  return false;
 }
 
 // Every generated output must declare a source kind and that kind must be
@@ -377,16 +544,11 @@ function printInstallPlan(plan) {
     console.log(`  ${path.relative(plan.installRoot, item.output)} <- ${item.source}`);
   }
   const removes = plan.staleRemovalActions.filter((item) => item.action === "remove" || item.action === "missing").map((item) => item.relativeOutput);
-  const keeps = plan.staleRemovalActions.filter((item) => item.action === "keep").map((item) => item.relativeOutput);
   console.log("planned stale managed removals:");
   if (removes.length === 0) {
     console.log("  none");
   } else {
     for (const item of removes) console.log(`  ${item}`);
-  }
-  if (keeps.length > 0) {
-    console.log("kept user-modified (not removed):");
-    for (const item of keeps) console.log(`  ${item}`);
   }
   console.log("planned manifest:");
   console.log(`  ${path.relative(plan.installRoot, plan.manifestPath)}`);
@@ -397,7 +559,10 @@ function printInstallPlan(plan) {
     for (const item of plan.configMerges) {
       if (item.kind === "mcp") {
         const addServers = item.addMcpServers ?? [];
-        console.log(`  ${item.relativeOutput} MCP += ${addServers.length > 0 ? addServers.join(", ") : "unchanged"}`);
+        const removeServers = item.removeMcpServers ?? [];
+        if (addServers.length > 0) console.log(`  ${item.relativeOutput} MCP += ${addServers.join(", ")}`);
+        if (removeServers.length > 0) console.log(`  ${item.relativeOutput} MCP -= ${removeServers.join(", ")}`);
+        if (addServers.length === 0 && removeServers.length === 0) console.log(`  ${item.relativeOutput} MCP unchanged`);
         continue;
       }
       const addInstructions = item.addInstructions ?? item.instructions;
@@ -433,12 +598,9 @@ function printInstallPlan(plan) {
 }
 
 async function applyInstallPlan(plan) {
-  const backupRoot = path.join(plan.installRoot, ".agent-surface", "backups", safeTimestamp(plan.generatedAt));
   let written = 0;
   let skipped = 0;
   let removed = 0;
-  let kept = 0;
-  let backups = 0;
   let configMerges = 0;
 
   await mkdir(plan.installRoot, { recursive: true });
@@ -449,37 +611,19 @@ async function applyInstallPlan(plan) {
       continue;
     }
 
-    if (item.action === "overwrite") {
-      await backupExisting(plan.installRoot, backupRoot, item.output);
-      backups += 1;
-    }
-
     await mkdir(path.dirname(item.output), { recursive: true });
     await writeFile(item.output, item.content);
     written += 1;
   }
 
   for (const item of plan.staleRemovalActions) {
-    if (item.action === "keep") {
-      kept += 1;
-      continue;
-    }
     if (item.action !== "remove") continue;
-    if (!(await exists(item.output))) continue;
-    await backupExisting(plan.installRoot, backupRoot, item.output);
-    backups += 1;
     await rm(item.output, { force: true });
     removed += 1;
   }
 
-  if (await exists(plan.manifestPath)) {
-    await backupExisting(plan.installRoot, backupRoot, plan.manifestPath);
-    backups += 1;
-  }
-
   for (const item of plan.configMerges) {
-    const result = await applyConfigMerge(plan.installRoot, backupRoot, item);
-    backups += result.backup ? 1 : 0;
+    const result = await applyConfigMerge(item);
     configMerges += result.changed ? 1 : 0;
   }
 
@@ -492,14 +636,11 @@ async function applyInstallPlan(plan) {
   console.log(`  wrote: ${written}`);
   console.log(`  skipped unchanged: ${skipped}`);
   console.log(`  removed stale: ${removed}`);
-  if (kept > 0) console.log(`  kept user-modified: ${kept}`);
   console.log(`  config merges: ${configMerges}`);
-  console.log(`  backups: ${backups === 0 ? "none" : path.relative(plan.installRoot, backupRoot)}`);
 }
 
 async function mcpConfigMerge(adapter, installRoot, scope, context) {
   const entries = await selectedMcpServiceEntries(adapter.mcpConfig.defaultEnabled, context);
-  if (entries.length === 0) return null;
   const relativeOutput = outputRootFor(adapter.mcpConfig.relativeOutput, { ...context, scope });
   return {
     kind: "mcp",
@@ -510,18 +651,27 @@ async function mcpConfigMerge(adapter, installRoot, scope, context) {
   };
 }
 
-async function prepareMcpConfigMerge(merge) {
+async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneConfigEntries) {
   if (!isSafeRelativePath(merge.relativeOutput)) {
     return { ...merge, action: "blocked", error: `unsafe MCP config path: ${merge.relativeOutput}` };
   }
 
+  const currentIds = merge.entries.map(([id]) => id).sort();
+  const previousIds = previousConfigIds(previousConfigEntries, merge.relativeOutput, merge.format);
+  const removeIds = pruneConfigEntries ? previousIds.filter((id) => !currentIds.includes(id)) : [];
   const existing = await readFileIfExists(merge.output);
-  const addMcpServers = merge.entries.map(([id]) => id);
+  const addMcpServers = currentIds;
+  const removeMcpServers = removeIds;
   if (existing === null) {
+    if (merge.entries.length === 0) {
+      return { ...merge, action: "skip", addMcpServers: [], removeMcpServers, removeIds, content: "" };
+    }
     return {
       ...merge,
       action: "write",
       addMcpServers,
+      removeMcpServers,
+      removeIds,
       content: renderMcpConfig(merge.format, merge.entries),
     };
   }
@@ -529,18 +679,18 @@ async function prepareMcpConfigMerge(merge) {
   const text = existing.toString("utf8");
   let content;
   try {
-    if (merge.format === "codex-toml") {
-      content = mergeCodexMcpToml(text, merge.entries);
-    } else if (YAML_MCP_FORMATS.has(merge.format)) {
-      content = mergeYamlMcpConfig(text, merge.format, merge.entries);
-    } else {
-      content = mergeJsonMcpConfig(text, merge.format, merge.entries);
-    }
+    content = mergeMcpConfigContent(text, merge.format, merge.entries, removeIds);
   } catch (error) {
     return { ...merge, action: "blocked", error: `${merge.relativeOutput}: ${error.message}` };
   }
-  if (content === text) return { ...merge, action: "skip", addMcpServers: [], content };
-  return { ...merge, action: "merge", addMcpServers, content };
+  if (content === text) return { ...merge, action: "skip", addMcpServers: [], removeMcpServers: [], removeIds, content };
+  return { ...merge, action: "merge", addMcpServers, removeMcpServers, removeIds, content };
+}
+
+function mergeMcpConfigContent(text, format, entries, removeIds) {
+  if (format === "codex-toml") return mergeCodexMcpToml(text, entries, removeIds);
+  if (YAML_MCP_FORMATS.has(format)) return mergeYamlMcpConfig(text, format, entries, removeIds);
+  return mergeJsonMcpConfig(text, format, entries, removeIds);
 }
 
 async function kiloConfigMerge(installRoot, scope, options = {}) {
@@ -569,6 +719,7 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
     kind: "kilo",
     output: path.join(installRoot, relativeOutput),
     relativeOutput,
+    format: "local-command-map",
     instructions,
     legacyInstructions: includeInstructions ? legacyInstructions : [],
     mcpEntries: includeMcp
@@ -581,21 +732,22 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
   };
 }
 
-async function applyConfigMerge(installRoot, backupRoot, merge) {
-  if (merge.action === "skip") return { changed: false, backup: false };
+async function applyConfigMerge(merge) {
+  if (merge.action === "skip") return { changed: false };
   if (merge.action === "blocked") fail(merge.error);
-  const existing = await readFileIfExists(merge.output);
-  if (existing !== null) await backupExisting(installRoot, backupRoot, merge.output);
   await mkdir(path.dirname(merge.output), { recursive: true });
   await writeFile(merge.output, merge.content);
-  return { changed: true, backup: existing !== null };
+  return { changed: true };
 }
 
-async function prepareKiloConfigMerge(merge) {
+async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneConfigEntries) {
   if (!isSafeRelativePath(merge.relativeOutput)) {
     return { ...merge, action: "blocked", error: `unsafe Kilo config path: ${merge.relativeOutput}` };
   }
 
+  const currentMcpIds = merge.mcpEntries.map(([id]) => id).sort();
+  const previousMcpIds = previousConfigIds(previousConfigEntries, merge.relativeOutput, merge.format);
+  const removeMcpIds = pruneConfigEntries ? previousMcpIds.filter((id) => !currentMcpIds.includes(id)) : [];
   const existing = await readFileIfExists(merge.output);
   if (existing === null) {
     const content = {
@@ -608,7 +760,9 @@ async function prepareKiloConfigMerge(merge) {
       action: "write",
       addInstructions: merge.instructions,
       removeInstructions: [],
-      addMcpServers: merge.mcpEntries.map(([id]) => id),
+      addMcpServers: currentMcpIds,
+      removeMcpServers: removeMcpIds,
+      removeIds: removeMcpIds,
       content: `${JSON.stringify(content, null, 2)}\n`,
     };
   }
@@ -643,25 +797,17 @@ async function prepareKiloConfigMerge(merge) {
   const addMcpServers = merge.mcpEntries
     .map(([id]) => id)
     .filter((id) => parsed.value.mcp?.[id] === undefined);
-  if (merge.mcpEntries.length > 0) {
+  if (merge.mcpEntries.length > 0 || removeMcpIds.length > 0) {
     try {
-      content = mergeJsoncRootObjectProperty(content, "mcp", optionalServiceMcpServers(merge.mcpEntries, "local-command-map"));
+      content = mergeJsonMcpConfig(content, merge.format, merge.mcpEntries, removeMcpIds);
     } catch (error) {
       return { ...merge, action: "blocked", error: `${merge.relativeOutput}: ${error.message}` };
     }
   }
 
   if (content === text) {
-    return { ...merge, action: "skip", addInstructions: [], removeInstructions: [], addMcpServers: [] };
+    return { ...merge, action: "skip", addInstructions: [], removeInstructions: [], addMcpServers: [], removeMcpServers: [], removeIds: removeMcpIds };
   }
 
-  return { ...merge, action: "merge", addInstructions: missing, removeInstructions: remove, addMcpServers, content };
-}
-
-async function backupExisting(installRoot, backupRoot, file) {
-  const relativeOutput = path.relative(installRoot, file);
-  if (!isSafeRelativePath(relativeOutput)) fail(`refusing to back up unsafe path: ${relativeOutput}`);
-  const backupPath = path.join(backupRoot, relativeOutput);
-  await mkdir(path.dirname(backupPath), { recursive: true });
-  await copyFile(file, backupPath);
+  return { ...merge, action: "merge", addInstructions: missing, removeInstructions: remove, addMcpServers, removeMcpServers: removeMcpIds, removeIds: removeMcpIds, content };
 }

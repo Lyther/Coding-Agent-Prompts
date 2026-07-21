@@ -43,6 +43,10 @@ export function installRootOpencode(scope) {
   return scope === "user" ? os.homedir() : process.cwd();
 }
 
+export function installRootOpenHands(scope) {
+  return scope === "user" ? os.homedir() : process.cwd();
+}
+
 export function installRootCline(scope) {
   return scope === "user" ? os.homedir() : process.cwd();
 }
@@ -234,6 +238,22 @@ export function opencodeConfigRoot(context) {
 
 export function opencodeMcpPath(context) {
   return path.join(opencodeConfigRoot(context), "opencode.json");
+}
+
+export function openhandsSkillRoot(context) {
+  return path.join(".agents", "skills");
+}
+
+export function openhandsInstructionPath(context) {
+  return context.scope === "user" ? path.join(".openhands", "skills", "agent-surface-rules.md") : "AGENTS.md";
+}
+
+export function openhandsConfigRoot(context) {
+  return context.scope === "user" ? ".openhands" : ".openhands";
+}
+
+export function openhandsMcpPath() {
+  return path.join(".openhands", "mcp.json");
 }
 
 export function windsurfWorkflowRoot(context) {

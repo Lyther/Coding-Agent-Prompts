@@ -9,7 +9,7 @@ import { optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { normalizeExternalSkillFile } from "./postprocess.mjs";
 import { readOptionalServices, relative, root } from "./registry.mjs";
 import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityCliSkill, renderAntigravityWorkflow, renderClaudeCommand, renderClaudeSubagent, renderClineWorkflow, renderCodexSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSkill, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGeminiSubagent, renderGooseRecipe, renderGrokBuildSkill, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderOpenCodeCommand, renderOpenCodeSubagent, renderPiSkill, renderPoolSkill, renderScopedRuleReferenceDocument, renderSharedAgentSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
-import { antigravityCliSkillOutputName, claudeMcpPath, clineMcpPath, clineRuleRoot, clineWorkflowRoot, codexSkillOutputName, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, flatMarkdownCommandOutputName, gooseRecipeOutputName, grokBuildSkillRoot, groupedMarkdownCommandOutputName, installRootAntigravity, installRootAntigravityCli, installRootClaude, installRootCline, installRootCodex, installRootDeepagents, installRootDroid, installRootGoose, installRootGrokBuild, installRootHomeOnly, installRootKilo, installRootOpencode, installRootPi, installRootPool, installRootVsCode, installRootVscodium, installRootWindsurf, installRootZed, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloWorkflowRoot, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
+import { antigravityCliSkillOutputName, claudeMcpPath, clineMcpPath, clineRuleRoot, clineWorkflowRoot, codexSkillOutputName, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, flatMarkdownCommandOutputName, gooseRecipeOutputName, grokBuildSkillRoot, groupedMarkdownCommandOutputName, installRootAntigravity, installRootAntigravityCli, installRootClaude, installRootCline, installRootCodex, installRootDeepagents, installRootDroid, installRootGoose, installRootGrokBuild, installRootHomeOnly, installRootKilo, installRootOpencode, installRootOpenHands, installRootPi, installRootPool, installRootVsCode, installRootVscodium, installRootWindsurf, installRootZed, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloWorkflowRoot, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
 import { ignoreOutputs, subagentOutputs } from "./source-primitives.mjs";
 import { exists, fail, isSafeRelativePath } from "./util.mjs";
@@ -286,6 +286,23 @@ export const targets = {
       defaultEnabled: true,
     },
   },
+  openhands: {
+    label: "OpenHands AgentSkills, instructions, and MCP",
+    commandRenders: ["skills"],
+    staticRenders: ["rules"],
+    commandOutputRoot: openhandsSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    externalSkillOutputRoot: openhandsSkillRoot,
+    renderCommand: renderSharedAgentSkill,
+    installRoot: installRootOpenHands,
+    staticOutputs: openhandsStaticOutputs,
+    mcpConfig: {
+      relativeOutput: openhandsMcpPath,
+      format: "mcpServers",
+      defaultEnabled: true,
+      scopes: ["user"],
+    },
+  },
   trae: {
     label: "Trae global user rules",
     staticRenders: ["rules"],
@@ -349,6 +366,7 @@ export const generatedOutputMinimums = new Map([
   ["vscode", 1],
   ["vscodium", 1],
   ["opencode", 55],
+  ["openhands", 250],
   ["trae", 1],
   ["windsurf", 250],
   ["zed", 250],
@@ -827,6 +845,18 @@ export async function opencodeStaticOutputs(_commands, context) {
       content: await renderInstructionDocument("AGENTS.md - agent-surface global OpenCode rules", "OpenCode global instructions"),
     },
     ...await scopedRuleReferenceOutputs(context, path.join(opencodeConfigRoot(context), "references", "rules")),
+  ];
+}
+
+export async function openhandsStaticOutputs(_commands, context) {
+  return [
+    {
+      source: "rules/*.mdc",
+      renderKind: "rules",
+      relativeOutput: openhandsInstructionPath(context),
+      content: await renderInstructionDocument("AGENTS.md - agent-surface OpenHands rules", "OpenHands instructions"),
+    },
+    ...await scopedRuleReferenceOutputs(context, path.join(openhandsConfigRoot(context), "references", "rules")),
   ];
 }
 

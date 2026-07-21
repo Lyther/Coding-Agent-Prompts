@@ -1,79 +1,105 @@
 ---
 name: verify-edge
 phase: verify
-description: "Stress I/O surfaces and edge cases with targeted harnesses."
+description: "Budgeted hostile I/O and edge harnesses that must catch real faults."
 ---
 ## OBJECTIVE
 
-**TOTAL WARFARE.**
-Standard tests assume the world is nice. You assume the world is trying to kill you.
-**Your Goal**: Expose the I/O surface, generate harnesses, and bombard the system with Logic Bombs, Radiation (Bit Flips), and Entropy.
+Expose trust-boundary I/O and prove the system fails closed under hostile or extreme inputs.
 
-## CONTEXT STRATEGY (TOKEN ECONOMICS)
+Standard suites assume cooperation. This command assumes parsers, APIs, configs, and uploads are under attack or entropy.
 
-*Infinite entropy, finite time.*
+## CORE RULE
 
-1. **Surface Scan**:
-    - Don't fuzz everything. Fuzz the **Parsers** and **Public APIs**.
-    - **Prompt**: "Identify the 3 most dangerous inputs in `api.ts`."
-2. **Property Reduction**:
-    - When a crash is found, minimize the input (shrink) before reporting.
-    - Do not dump 1MB of fuzz garbage. Show the 4 bytes that kill the server.
+A fuzz/edge pass that finds nothing and never fails a planted fault is inadequate detection — not proof of safety.
+
+PASS requires:
+
+- Targets limited to the highest-blast-radius surfaces (default ≤3).
+- At least one harness with seed, budget, and shrink-on-fail.
+- At least one discrimination check: a known-bad input or injected fault is rejected/handled without corruption.
+- Findings classified by severity; Critical/High must be fixed or force claim narrowing.
 
 ## PROTOCOL
 
-### Phase 1: The Fuzzing Harness (Native I/O Exposure)
+### Phase 1: Surface Selection (Budget)
 
-*Don't just run a tool. Build the Interface for the tool.*
+Identify and rank surfaces by blast radius:
 
-1. **Identify Targets**:
-    - Parsers (JSON, XML, Custom).
-    - Auth Logic (Tokens).
-    - Complex State Machines.
-2. **Generate Harness**:
-    - **Rust**: `cargo fuzz`.
-    - **Go**: `go test -fuzz`.
-    - **TS**: `fast-check`.
-    - **Python**: `hypothesis`.
+1. Parsers and deserializers at trust boundaries.
+2. Auth/token/path/config merge inputs.
+3. Public write APIs and file/path operations.
+4. Multi-tenant or multi-agent shared state.
 
-### Phase 2: The Security Torture Chamber (OWASP & Beyond)
+Pick the top ≤3 unless the user expands scope. Do not “fuzz everything.”
 
-1. **Input Vector**:
-    - **SQLi**: Blind injection time-delays.
-    - **XSS**: Polyglots.
-    - **Big Ints**: `MAX_INT + 1`, `NaN`.
-    - **Unicode**: Zalgo text, RTL overrides.
+### Phase 2: Harness
 
-### Phase 3: The System Matrix (Environment Chaos)
+Prefer repo-native property/fuzz tools (`fast-check`, `hypothesis`, `cargo fuzz`, `go test -fuzz`).
 
-1. **Network Hell**:
-    - Inject Latency (5s).
-    - Drop Packets (5%).
-2. **Resource Exhaustion**:
-    - Full Disk.
-    - OOM.
+Each harness must record:
+
+- Entry point and invariant (“never panic / never corrupt store / always DomainError”).
+- Seed and time/iteration budget (default ≤5 minutes unless user sets otherwise).
+- Shrink/minimize on failure — report the smallest failing input, not megabytes of noise.
+
+### Phase 3: Fault Classes (Relevant Only)
+
+Run only classes that apply to the surface:
+
+| Class | Examples |
+|-------|----------|
+| Structural | empty, huge, truncated, wrong types |
+| Boundary | MAX_INT±1, NaN, unicode/RTL, long strings |
+| Injection | path escape, SQLi/command where inputs reach sinks |
+| Merge/clobber | sibling-key preservation, hostile JSONC/YAML shapes |
+| Resource | bounded large payload within local sandbox |
+
+Do not paste an OWASP laundry list as evidence. Each executed class needs a command and result.
+
+### Phase 4: Environment Chaos (Optional, Scoped)
+
+When network/disk/memory claims exist, inject bounded faults in local/staging only:
+
+- Latency / timeout of dependencies.
+- Permission denied / missing file.
+- Full disk only in disposable environments.
+
+Never chaos-test production without explicit approval.
+
+### Phase 5: Discrimination
+
+Before PASS:
+
+1. Plant or reuse one known-bad input that must be rejected.
+2. Confirm the harness or suite fails open success (detects the bad case).
+3. If the bad case is accepted or corrupts state → FAIL.
 
 ## OUTPUT FORMAT
 
-```typescript
-// Example Harness
-test('Fuzz: Login Logic', () => {
-  fc.assert(
-    fc.property(fc.email(), fc.string(), (email, pass) => {
-      // Should NEVER throw System Error
-      try {
-        login(email, pass);
-        return true;
-      } catch (e) {
-        return e instanceof DomainError; // Pass if handled
-      }
-    })
-  );
-});
+```markdown
+# EDGE / HOSTILE I/O REPORT
+
+## Targets
+- <surface>: why high blast radius
+
+## Harnesses
+- <name>: tool, seed, budget, invariant
+
+## Results
+- <case>: pass|fail — minimized input — severity
+
+## Discrimination
+- known-bad input: <desc> → rejected|ACCEPTED (ACCEPT = FAIL)
+
+## Verdict
+PASS|FAIL|BLOCKED
 ```
 
-## EXECUTION RULES
+## HARD RULES
 
-1. **CAPTURE THE SEED**: Provide the Seed to reproduce.
-2. **TIMEOUT CAP**: Set a budget (e.g., 5 mins).
-3. **CONTAIN THE BLAST**: Run in Docker.
+1. Budget first — max 3 surfaces by default.
+2. Capture seeds; shrink failures.
+3. Contain blast radius (local/staging/containers).
+4. No pass from “ran fuzz for N minutes” without invariants and discrimination.
+5. Hand suite-wide oracle quality to `verify-coverage`; hand shipped journeys to `verify-prove`.
