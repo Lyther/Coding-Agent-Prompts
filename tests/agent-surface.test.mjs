@@ -54,6 +54,7 @@ function files(dir) {
 const guardedRepoFiles = [
   path.join(root, "registry", "targets.json"),
   path.join(root, "registry", "optional-services.json"),
+  path.join(root, "registry", "legacy-owned.json"),
   path.join(root, "subagents", "boss.md"),
 ];
 const guardedSnapshots = new Map();
@@ -1395,6 +1396,96 @@ assert.deepEqual(ownedCursorManifest.config_entries, [
   { path: ".cursor/mcp.json", format: "mcpServers", ids: ["grimoire", "synapse"] },
 ]);
 rmSync(ownedCursorMcpDest, { recursive: true, force: true });
+
+const obsoleteCursorMcpDest = "/tmp/agent-surface-cursor-obsolete-mcp-routes";
+rmSync(obsoleteCursorMcpDest, { recursive: true, force: true });
+mkdirSync(path.join(obsoleteCursorMcpDest, ".cursor"), { recursive: true });
+mkdirSync(path.join(obsoleteCursorMcpDest, ".agent-surface"), { recursive: true });
+writeFileSync(
+  path.join(obsoleteCursorMcpDest, ".cursor", "mcp.json"),
+  `${JSON.stringify({
+    servers: {
+      existing: { command: "local-existing-format", args: ["--keep"] },
+      "old-format-owned": { command: "old-generated-entry", args: [] },
+    },
+  }, null, 2)}\n`,
+);
+writeFileSync(
+  path.join(obsoleteCursorMcpDest, ".cursor", "retired-mcp.json"),
+  `${JSON.stringify({
+    mcpServers: {
+      existing: { command: "local-existing-route", args: ["--keep"] },
+      "old-route-owned": { command: "old-generated-entry", args: [] },
+    },
+  }, null, 2)}\n`,
+);
+writeFileSync(
+  path.join(obsoleteCursorMcpDest, ".agent-surface", "cursor-manifest.json"),
+  `${JSON.stringify({
+    target: "cursor",
+    scope: "project",
+    managed: [],
+    config_entries: [
+      { path: ".cursor/mcp.json", format: "vscode-servers", ids: ["old-format-owned"] },
+      { path: ".cursor/missing-mcp.json", format: "mcpServers", ids: ["missing-owned"] },
+      { path: ".cursor/retired-mcp.json", format: "mcpServers", ids: ["old-route-owned"] },
+    ],
+  }, null, 2)}\n`,
+);
+const obsoleteCursorPlan = run(["install", "--target", "cursor", "--dest", obsoleteCursorMcpDest, "--dry-run"]);
+assert.match(obsoleteCursorPlan, /\.cursor\/mcp\.json MCP -= old-format-owned/);
+assert.match(obsoleteCursorPlan, /\.cursor\/missing-mcp\.json MCP -= missing-owned/);
+assert.match(obsoleteCursorPlan, /\.cursor\/retired-mcp\.json MCP -= old-route-owned/);
+run(["install", "--target", "cursor", "--dest", obsoleteCursorMcpDest]);
+const obsoleteCurrentCursorMcp = JSON.parse(readFileSync(path.join(obsoleteCursorMcpDest, ".cursor", "mcp.json"), "utf8"));
+assert.equal(obsoleteCurrentCursorMcp.servers.existing.command, "local-existing-format");
+assert.equal(Object.hasOwn(obsoleteCurrentCursorMcp.servers, "old-format-owned"), false);
+assert.equal(obsoleteCurrentCursorMcp.mcpServers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
+assert.equal(obsoleteCurrentCursorMcp.mcpServers.grimoire.command, path.join(os.homedir(), ".local", "bin", "grimoire-server"));
+const obsoleteRetiredCursorMcp = JSON.parse(readFileSync(path.join(obsoleteCursorMcpDest, ".cursor", "retired-mcp.json"), "utf8"));
+assert.equal(obsoleteRetiredCursorMcp.mcpServers.existing.command, "local-existing-route");
+assert.equal(Object.hasOwn(obsoleteRetiredCursorMcp.mcpServers, "old-route-owned"), false);
+const obsoleteCursorManifest = JSON.parse(readFileSync(path.join(obsoleteCursorMcpDest, ".agent-surface", "cursor-manifest.json"), "utf8"));
+assert.deepEqual(obsoleteCursorManifest.config_entries, [
+  { path: ".cursor/mcp.json", format: "mcpServers", ids: ["grimoire", "synapse"] },
+]);
+rmSync(obsoleteCursorMcpDest, { recursive: true, force: true });
+
+const legacyOwnedConfigPath = path.join(root, "registry", "legacy-owned.json");
+const legacyOwnedConfigOriginal = readFileSync(legacyOwnedConfigPath, "utf8");
+const legacyOwnedCursorMcpDest = "/tmp/agent-surface-cursor-legacy-owned-mcp-route";
+try {
+  const legacyOwnedConfig = JSON.parse(legacyOwnedConfigOriginal);
+  legacyOwnedConfig.config_entries.push({
+    target: "cursor",
+    path: ".cursor/legacy-owned-mcp.json",
+    format: "mcpServers",
+    ids: ["legacy-owned"],
+  });
+  writeFileSync(legacyOwnedConfigPath, `${JSON.stringify(legacyOwnedConfig, null, 2)}\n`);
+  rmSync(legacyOwnedCursorMcpDest, { recursive: true, force: true });
+  mkdirSync(path.join(legacyOwnedCursorMcpDest, ".cursor"), { recursive: true });
+  writeFileSync(
+    path.join(legacyOwnedCursorMcpDest, ".cursor", "legacy-owned-mcp.json"),
+    `${JSON.stringify({
+      mcpServers: {
+        existing: { command: "local-existing", args: ["--keep"] },
+        "legacy-owned": { command: "old-generated-entry", args: [] },
+      },
+    }, null, 2)}\n`,
+  );
+  const legacyOwnedCursorPlan = run(["install", "--target", "cursor", "--dest", legacyOwnedCursorMcpDest, "--dry-run"]);
+  assert.match(legacyOwnedCursorPlan, /\.cursor\/legacy-owned-mcp\.json MCP -= legacy-owned/);
+  run(["install", "--target", "cursor", "--dest", legacyOwnedCursorMcpDest]);
+  const legacyOwnedCursorMcp = JSON.parse(readFileSync(path.join(legacyOwnedCursorMcpDest, ".cursor", "legacy-owned-mcp.json"), "utf8"));
+  assert.equal(legacyOwnedCursorMcp.mcpServers.existing.command, "local-existing");
+  assert.equal(Object.hasOwn(legacyOwnedCursorMcp.mcpServers, "legacy-owned"), false);
+  const legacyOwnedCursorManifest = JSON.parse(readFileSync(path.join(legacyOwnedCursorMcpDest, ".agent-surface", "cursor-manifest.json"), "utf8"));
+  assert.equal(legacyOwnedCursorManifest.config_entries.some((entry) => entry.path === ".cursor/legacy-owned-mcp.json"), false);
+} finally {
+  writeFileSync(legacyOwnedConfigPath, legacyOwnedConfigOriginal);
+  rmSync(legacyOwnedCursorMcpDest, { recursive: true, force: true });
+}
 
 const existingOpenHandsMcpDest = "/tmp/agent-surface-openhands-existing-mcp";
 rmSync(existingOpenHandsMcpDest, { recursive: true, force: true });

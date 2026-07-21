@@ -262,13 +262,16 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const previousConfigEntries = manifestConfigEntries(previousManifest);
   const ownedConfigEntries = [...previousConfigEntries, ...legacyOwnership.config_entries];
   const pruneConfigEntries = (!categoryFilter || categoryFilter.has("mcps")) && optionalServices === null;
+  const liveConfigRoutes = new Set();
   if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps"))) {
-    const prepared = await prepareKiloConfigMerge(await kiloConfigMerge(installRoot, scope, {
+    const merge = await kiloConfigMerge(installRoot, scope, {
       includeInstructions: !categoryFilter || categoryFilter.has("rules"),
       includeMcp: !categoryFilter || categoryFilter.has("mcps"),
       categoryFilter,
       optionalServices,
-    }), ownedConfigEntries, pruneConfigEntries);
+    });
+    liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
+    const prepared = await prepareKiloConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
     if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
   } else if (adapter.mcpConfig && (!categoryFilter || categoryFilter.has("mcps")) && mcpConfigScopeAllows(adapter.mcpConfig, scope)) {
     const merge = await mcpConfigMerge(adapter, installRoot, scope, {
@@ -279,8 +282,14 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       categoryFilter,
       optionalServices,
     });
+    liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
     const prepared = await prepareMcpConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
     if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
+  }
+
+  const pruneObsoleteConfigRoutes = !partialInstall;
+  if (pruneObsoleteConfigRoutes) {
+    await addObsoleteConfigRouteMerges(configMerges, ownedConfigEntries, liveConfigRoutes, installRoot);
   }
 
   for (const item of configMerges) {
@@ -315,7 +324,12 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       .filter((item) => !liveOutputs.has(item.output))
     : [];
   const manifestManaged = [...retainedManaged, ...managed].sort((left, right) => left.output.localeCompare(right.output));
-  const nextConfigEntries = mergedManifestConfigEntries(previousConfigEntries, configMerges, pruneConfigEntries);
+  const nextConfigEntries = mergedManifestConfigEntries(
+    previousConfigEntries,
+    configMerges,
+    pruneConfigEntries,
+    pruneObsoleteConfigRoutes ? liveConfigRoutes : null,
+  );
   const manifest = {
     target,
     scope,
@@ -404,8 +418,73 @@ function previousConfigIds(entries, relativeOutput, format) {
   );
 }
 
-function mergedManifestConfigEntries(previousEntries, configMerges, pruneConfigEntries) {
+function groupedConfigEntries(entries) {
+  const grouped = new Map();
+  for (const entry of entries) {
+    const key = configEntryKey(entry.path, entry.format);
+    const current = grouped.get(key);
+    if (current) {
+      current.ids = uniqueStrings([...current.ids, ...entry.ids]);
+    } else {
+      grouped.set(key, { ...entry, ids: [...entry.ids] });
+    }
+  }
+  return [...grouped.values()].sort((left, right) => configEntryKey(left.path, left.format).localeCompare(configEntryKey(right.path, right.format)));
+}
+
+async function addObsoleteConfigRouteMerges(configMerges, ownedConfigEntries, liveConfigRoutes, installRoot) {
+  const mergeIndexesByPath = new Map(configMerges.map((merge, index) => [merge.relativeOutput, index]));
+  const obsoleteRoutes = groupedConfigEntries(ownedConfigEntries)
+    .filter((entry) => !liveConfigRoutes.has(configEntryKey(entry.path, entry.format)));
+
+  for (const entry of obsoleteRoutes) {
+    const existingIndex = mergeIndexesByPath.get(entry.path);
+    if (existingIndex !== undefined) {
+      configMerges[existingIndex] = mergeObsoleteConfigRoute(configMerges[existingIndex], entry);
+      continue;
+    }
+
+    const prepared = await prepareMcpConfigMerge({
+      kind: "mcp",
+      output: path.join(installRoot, entry.path),
+      relativeOutput: entry.path,
+      format: entry.format,
+      entries: [],
+    }, [entry], true);
+    if (isEmptyConfigNoop(prepared)) continue;
+    mergeIndexesByPath.set(entry.path, configMerges.length);
+    configMerges.push(prepared);
+  }
+}
+
+function mergeObsoleteConfigRoute(merge, entry) {
+  if (merge.action === "blocked") return merge;
+  let content;
+  try {
+    content = mergeMcpConfigContent(merge.content, entry.format, [], entry.ids);
+  } catch (error) {
+    return { ...merge, action: "blocked", error: `${entry.path}: ${error.message}` };
+  }
+
+  const changed = content !== merge.content;
+  return {
+    ...merge,
+    action: changed && merge.action === "skip" ? "merge" : merge.action,
+    removeMcpServers: changed
+      ? uniqueStrings([...(merge.removeMcpServers ?? []), ...entry.ids])
+      : (merge.removeMcpServers ?? []),
+    removeIds: uniqueStrings([...(merge.removeIds ?? []), ...entry.ids]),
+    content,
+  };
+}
+
+function mergedManifestConfigEntries(previousEntries, configMerges, pruneConfigEntries, liveConfigRoutes = null) {
   const next = new Map(previousEntries.map((entry) => [configEntryKey(entry.path, entry.format), { ...entry }]));
+  if (liveConfigRoutes) {
+    for (const key of next.keys()) {
+      if (!liveConfigRoutes.has(key)) next.delete(key);
+    }
+  }
   for (const merge of configMerges) {
     const entry = manifestConfigEntryFromMerge(merge);
     if (!entry) continue;
@@ -600,18 +679,18 @@ async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneConfigEn
   const text = existing.toString("utf8");
   let content;
   try {
-    if (merge.format === "codex-toml") {
-      content = mergeCodexMcpToml(text, merge.entries, removeIds);
-    } else if (YAML_MCP_FORMATS.has(merge.format)) {
-      content = mergeYamlMcpConfig(text, merge.format, merge.entries, removeIds);
-    } else {
-      content = mergeJsonMcpConfig(text, merge.format, merge.entries, removeIds);
-    }
+    content = mergeMcpConfigContent(text, merge.format, merge.entries, removeIds);
   } catch (error) {
     return { ...merge, action: "blocked", error: `${merge.relativeOutput}: ${error.message}` };
   }
   if (content === text) return { ...merge, action: "skip", addMcpServers: [], removeMcpServers: [], removeIds, content };
   return { ...merge, action: "merge", addMcpServers, removeMcpServers, removeIds, content };
+}
+
+function mergeMcpConfigContent(text, format, entries, removeIds) {
+  if (format === "codex-toml") return mergeCodexMcpToml(text, entries, removeIds);
+  if (YAML_MCP_FORMATS.has(format)) return mergeYamlMcpConfig(text, format, entries, removeIds);
+  return mergeJsonMcpConfig(text, format, entries, removeIds);
 }
 
 async function kiloConfigMerge(installRoot, scope, options = {}) {
