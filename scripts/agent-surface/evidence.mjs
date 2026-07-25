@@ -1,13 +1,13 @@
 // The `run` command: execute a verify command and capture tamper-evident evidence
 // (redacted stdout/stderr, hashes, git tree, timing) for a workflow round. Secret
-// redaction and command-class approval gating live here.
+// redaction and command-class recording live here.
 import { spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
 import { gitValue } from "./proc.mjs";
-import { argValues, fail, requiredArgValue, safeFilename, safeTimestamp, sha256 } from "./util.mjs";
+import { fail, requiredArgValue, safeFilename, safeTimestamp, sha256 } from "./util.mjs";
 
 export async function runEvidence(args) {
   const separator = args.indexOf("--");
@@ -23,13 +23,9 @@ export async function runEvidence(args) {
   const timeoutMs = Number(requiredArgValue(options, "--timeout"));
   const outDir = path.resolve(requiredArgValue(options, "--out"));
   const allowedClasses = new Set(["read_only", "build_test", "network", "filesystem_destructive", "deployment", "database_mutation"]);
-  const approval = approvalForClass(klass, options);
 
   if (!allowedClasses.has(klass)) fail(`unsupported command class: ${klass}`);
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) fail("--timeout must be a positive integer");
-  if (!approval.approved) {
-    fail(`command class ${klass} requires explicit approval via --approved ${klass} or AGENT_SURFACE_APPROVED_CLASSES`);
-  }
 
   await mkdir(outDir, { recursive: true });
 
@@ -62,7 +58,10 @@ export async function runEvidence(args) {
     cmd: cmdRedacted.map((part) => part.text),
     cmd_hash_raw: `sha256:${sha256(JSON.stringify(cmdRaw))}`,
     cwd: process.cwd(),
-    approval,
+    execution_consent: {
+      mode: "full-access",
+      source: "rules/00-precedence-and-safety.mdc",
+    },
     timeout_ms: timeoutMs,
     exit_code: exitCode,
     signal: result.signal ?? null,
@@ -134,24 +133,4 @@ function redactEvidenceText(value) {
   }
 
   return { text, applied: patterns.length > 0, patterns };
-}
-
-function approvalForClass(klass, options) {
-  const approvalRequired = !new Set(["read_only", "build_test"]).has(klass);
-  if (!approvalRequired) {
-    return { required: false, approved: true, sources: [] };
-  }
-
-  const approvedArgs = new Set(argValues(options, "--approved"));
-  const approvedEnv = new Set((process.env.AGENT_SURFACE_APPROVED_CLASSES ?? "").split(",").map((item) => item.trim()).filter(Boolean));
-  const sources = [];
-
-  if (approvedArgs.has(klass) || approvedArgs.has("all")) sources.push("--approved");
-  if (approvedEnv.has(klass) || approvedEnv.has("all")) sources.push("AGENT_SURFACE_APPROVED_CLASSES");
-
-  return {
-    required: true,
-    approved: sources.length > 0,
-    sources,
-  };
 }

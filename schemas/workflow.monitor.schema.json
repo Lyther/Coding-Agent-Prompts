@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-surface.local/schemas/workflow.monitor.schema.json",
+  "title": "agent-surface workflow runtime monitor",
+  "type": "object",
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,120}$"
+    },
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "policy",
+    "agents"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "workflow.monitor.v2"
+    },
+    "run_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "policy": {
+      "type": "object",
+      "required": [
+        "time_to_first_output_ms",
+        "no_progress_timeout_ms",
+        "role_timeout_ms",
+        "max_stall_retries",
+        "max_review_cycles"
+      ],
+      "properties": {
+        "time_to_first_output_ms": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "no_progress_timeout_ms": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "role_timeout_ms": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "max_stall_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_review_cycles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        }
+      },
+      "additionalProperties": false
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "agent_id",
+          "command",
+          "role_class",
+          "runtime",
+          "provider",
+          "model",
+          "task_ids",
+          "filescope",
+          "session_ref",
+          "status",
+          "retry_count",
+          "started_at",
+          "last_progress_at",
+          "materialized_outputs"
+        ],
+        "properties": {
+          "agent_id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role_class": {
+            "enum": [
+              "boss",
+              "worker",
+              "reviewer",
+              "qa",
+              "judger",
+              "rescue",
+              "closer"
+            ]
+          },
+          "runtime": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "task_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/safeId"
+            }
+          },
+          "filescope": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/safePath"
+            }
+          },
+          "workspace_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "starting",
+              "running",
+              "idle",
+              "done",
+              "failed",
+              "stalled",
+              "stale",
+              "closed"
+            ]
+          },
+          "retry_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "budgets": {
+            "type": "object",
+            "required": [
+              "time_to_first_output_ms",
+              "no_progress_timeout_ms",
+              "role_timeout_ms"
+            ],
+            "properties": {
+              "time_to_first_output_ms": {
+                "type": "integer",
+                "minimum": 1000
+              },
+              "no_progress_timeout_ms": {
+                "type": "integer",
+                "minimum": 1000
+              },
+              "role_timeout_ms": {
+                "type": "integer",
+                "minimum": 1000
+              }
+            },
+            "additionalProperties": false
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_progress_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "materialized_outputs": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/safePath"
+            }
+          },
+          "heartbeat": {
+            "type": "object",
+            "properties": {
+              "current_task": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "files_touched": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/safePath"
+                }
+              },
+              "command_running": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "last_check": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "blocker": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "orchestration_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "implementation_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verification_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "review_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rework_cycles": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

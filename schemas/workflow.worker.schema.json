@@ -135,6 +135,7 @@
         "required": [
           "task_id",
           "status",
+          "patch_required",
           "files_changed",
           "evidence_refs"
         ],
@@ -144,10 +145,14 @@
               "properties": {
                 "status": {
                   "const": "PASS"
+                },
+                "patch_required": {
+                  "const": true
                 }
               },
               "required": [
-                "status"
+                "status",
+                "patch_required"
               ]
             },
             "then": {
@@ -201,6 +206,9 @@
               "BLOCKED",
               "DEFERRED"
             ]
+          },
+          "patch_required": {
+            "type": "boolean"
           },
           "files_changed": {
             "type": "array",
