@@ -19,7 +19,14 @@ import { ensureSidecar } from "./bootstrap.js";
 import { CONTRACT_VERSION, SERVER_INSTRUCTIONS } from "./contract.js";
 import { projectKey } from "./namespace.js";
 
-export interface BridgeOptions { url: string; token: string; agentId?: string; projectKeyValue?: string; downstream?: Transport }
+export interface BridgeOptions {
+  url: string;
+  token: string;
+  agentId?: string;
+  projectKeyValue?: string;
+  downstream?: Transport;
+  negotiationTimeoutMs?: number;
+}
 
 /**
  * Resolve the project key for isolation. Precedence (highest wins), all funnelled
@@ -29,33 +36,33 @@ export interface BridgeOptions { url: string; token: string; agentId?: string; p
  *   3. the host's first MCP root (file:// URI), so a host that launches the bridge
  *      outside the workspace still isolates to the right project (P4.3)
  *   4. cwd git-root (the default physical-isolation path)
- * Roots are fetched from the connected host client; if unavailable/empty we fall back.
+ * An initialized host that advertises no roots, or returns an explicit empty list,
+ * falls back to cwd. Failed or timed-out roots negotiation fails bridge startup.
  */
-async function resolveProjectKey(server: Server, fallbackCwd: string, override?: string): Promise<string> {
+async function resolveProjectKey(server: Server, fallbackCwd: string, timeoutMs: number, override?: string): Promise<string> {
   const explicit = override ?? process.env["SYNAPSE_PROJECT"];
   // An explicit bridge override wins outright and is resolved/hashed by projectKey (which
   // also honours SYNAPSE_NAMESPACE when no explicit override is supplied). Single-sourcing
   // here keeps the override contract consistent across bridge and namespace callers.
   if (explicit && explicit.trim()) return projectKey(explicit, explicit);
-  // Ask the host for its first root (file:// URI) so a host that launches the bridge
-  // outside the workspace still isolates to the right project (P4.3). The request queues
-  // until the host finishes initialize; a host that lacks the roots capability throws a
-  // catchable -32601. Either way we fall back to the cwd git-root. Bounded so a host
-  // that never responds can't wedge bridge startup.
-  try {
-    const res = await withTimeout(server.listRoots(), 2000);
-    const first = res.roots?.[0]?.uri;
-    if (first) {
-      const local = first.startsWith("file:") ? fileURLToPath(first) : first;
-      return projectKey(local);
-    }
-  } catch { /* host lacks roots, timed out, or returned none — fall back to cwd */ }
+  // Ask the host for its first root only when initialize advertised roots support. Some
+  // clients treat an unsupported roots/list request as a protocol warning even when the
+  // bridge catches the response, so capability-gating is part of correct MCP behavior.
+  // The request remains bounded so a roots-capable host cannot wedge bridge startup.
+  // A failed request cannot safely fall back: cwd may belong to a different project.
+  if (!server.getClientCapabilities()?.roots) return projectKey(fallbackCwd);
+  const res = await withTimeout(server.listRoots(), timeoutMs, "roots/list");
+  const first = res.roots?.[0]?.uri;
+  if (first) {
+    const local = first.startsWith("file:") ? fileURLToPath(first) : first;
+    return projectKey(local);
+  }
   return projectKey(fallbackCwd);
 }
 
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+function withTimeout<T>(p: Promise<T>, ms: number, operation: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("roots/list timed out")), ms);
+    const t = setTimeout(() => reject(new Error(`${operation} timed out after ${ms}ms`)), ms);
     p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
   });
 }
@@ -67,10 +74,17 @@ export async function startBridge(opts: BridgeOptions): Promise<{ server: Server
   // Because the host may send requests immediately after initialize, the request handlers
   // gate on `upstreamReady` so they never fire before the sidecar client is connected.
   const downstream = opts.downstream ?? new StdioServerTransport();
+  const negotiationTimeoutMs = opts.negotiationTimeoutMs ?? 10_000;
+  if (!Number.isInteger(negotiationTimeoutMs) || negotiationTimeoutMs <= 0) {
+    throw new Error("negotiationTimeoutMs must be a positive integer");
+  }
   const server = new Server(
     { name: "synapse", version: CONTRACT_VERSION },
     { capabilities: { tools: {}, resources: { subscribe: true, listChanged: true } }, instructions: SERVER_INSTRUCTIONS },
   );
+  let settleDownstreamInitialized!: () => void;
+  const downstreamInitialized = new Promise<void>((resolve) => { settleDownstreamInitialized = resolve; });
+  server.oninitialized = settleDownstreamInitialized;
   let client!: Client;
   let settleUpstream!: (err?: unknown) => void;
   // `upstreamReady` resolves once the sidecar client connects, or rejects if it fails so
@@ -91,7 +105,18 @@ export async function startBridge(opts: BridgeOptions): Promise<{ server: Server
   server.setRequestHandler(SubscribeRequestSchema, (req) => whenUpstream(() => client.subscribeResource(req.params)));
   server.setRequestHandler(UnsubscribeRequestSchema, (req) => whenUpstream(() => client.unsubscribeResource(req.params)));
   await server.connect(downstream);
-  const projectKeyValue = await resolveProjectKey(server, process.cwd(), opts.projectKeyValue);
+  let projectKeyValue: string;
+  try {
+    // Server.connect starts the passive transport and can return before the host's
+    // initialize exchange arrives. Project isolation cannot be selected until the
+    // negotiated roots capability is known.
+    await withTimeout(downstreamInitialized, negotiationTimeoutMs, "downstream initialize");
+    projectKeyValue = await resolveProjectKey(server, process.cwd(), negotiationTimeoutMs, opts.projectKeyValue);
+  } catch (err) {
+    settleUpstream(err);
+    await server.close().catch(() => { });
+    throw err;
+  }
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${opts.token}`,
@@ -109,6 +134,7 @@ export async function startBridge(opts: BridgeOptions): Promise<{ server: Server
     settleUpstream();
   } catch (err) {
     settleUpstream(err);
+    await server.close().catch(() => { });
     throw err;
   }
 
