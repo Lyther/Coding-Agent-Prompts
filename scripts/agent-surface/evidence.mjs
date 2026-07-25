@@ -45,7 +45,7 @@ export async function runEvidence(args) {
   const stdoutRedacted = redactEvidenceText(stdoutRaw);
   const stderrRedacted = redactEvidenceText(stderrRaw);
   const cmdRaw = [command, ...commandArgs];
-  const cmdRedacted = cmdRaw.map((part) => redactEvidenceText(part));
+  const cmdRedacted = redactEvidenceCmd(cmdRaw);
   const stdout = stdoutRedacted.text;
   const stderr = stderrRedacted.text;
   const stdoutPath = path.join(outDir, `${basename}.stdout.log`);
@@ -55,7 +55,7 @@ export async function runEvidence(args) {
   const evidence = {
     task_id: taskId,
     class: klass,
-    cmd: cmdRedacted.map((part) => part.text),
+    cmd: cmdRedacted.cmd,
     cmd_hash_raw: `sha256:${sha256(JSON.stringify(cmdRaw))}`,
     cwd: process.cwd(),
     execution_consent: {
@@ -78,8 +78,8 @@ export async function runEvidence(args) {
     stderr_raw_hash: `sha256:${sha256(stderrRaw)}`,
     stderr_raw_stored: false,
     redaction: {
-      applied: stdoutRedacted.applied || stderrRedacted.applied || cmdRedacted.some((part) => part.applied),
-      patterns: [...new Set([...stdoutRedacted.patterns, ...stderrRedacted.patterns, ...cmdRedacted.flatMap((part) => part.patterns)])],
+      applied: stdoutRedacted.applied || stderrRedacted.applied || cmdRedacted.applied,
+      patterns: [...new Set([...stdoutRedacted.patterns, ...stderrRedacted.patterns, ...cmdRedacted.patterns])],
     },
   };
 
@@ -91,6 +91,36 @@ export async function runEvidence(args) {
   console.log(`metadata: ${path.relative(process.cwd(), evidencePath)}`);
   console.log(`exit_code: ${exitCode}`);
   process.exitCode = exitCode;
+}
+
+const SECRET_NAME_SEGMENTS = new Set(["secret", "token", "password", "passwd", "pwd", "apikey"]);
+// Single-dash options are only the bare secret names. Opaque values like
+// `-sentinel-secret-value` must not be classified as options.
+const SHORT_SECRET_OPTION_NAME = /^(?:api[_-]?key|secret|token|password|passwd|pwd)$/i;
+
+/** True for --token, --access-token, --client-secret, --aws-secret-access-key, etc. */
+function isSecretOptionName(name) {
+  const parts = String(name).toLowerCase().split(/[-_]+/).filter(Boolean);
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    if (SECRET_NAME_SEGMENTS.has(part)) return true;
+    if (part === "api" && parts[i + 1] === "key") return true;
+  }
+  return false;
+}
+
+function parseSecretOption(part) {
+  const eq = /^(--?)([^=]+)=(.*)$/.exec(part);
+  if (eq) {
+    const allowed = eq[1] === "--" ? isSecretOptionName(eq[2]) : SHORT_SECRET_OPTION_NAME.test(eq[2]);
+    if (allowed) return { kind: "eq", prefix: eq[1], name: eq[2] };
+  }
+  const flag = /^(--?)(.+)$/.exec(part);
+  if (flag && !part.includes("=")) {
+    const allowed = flag[1] === "--" ? isSecretOptionName(flag[2]) : SHORT_SECRET_OPTION_NAME.test(flag[2]);
+    if (allowed) return { kind: "flag", prefix: flag[1], name: flag[2] };
+  }
+  return null;
 }
 
 function redactEvidenceText(value) {
@@ -133,4 +163,38 @@ function redactEvidenceText(value) {
   }
 
   return { text, applied: patterns.length > 0, patterns };
+}
+
+/** Redact secret option values in argv (`--token x`, `--token=-x`, `--access-token x`). */
+function redactEvidenceCmd(cmdRaw) {
+  const patterns = [];
+  const cmd = [];
+  for (let i = 0; i < cmdRaw.length; i += 1) {
+    const part = cmdRaw[i];
+    const opt = parseSecretOption(part);
+
+    if (opt?.kind === "eq") {
+      cmd.push(`${opt.prefix}${opt.name}=[REDACTED]`);
+      patterns.push("secret-flag");
+      continue;
+    }
+
+    if (opt?.kind === "flag") {
+      cmd.push(part);
+      const next = i + 1 < cmdRaw.length ? cmdRaw[i + 1] : null;
+      // Values are opaque and may look like options. Only another recognized secret
+      // option is structural enough to process separately.
+      if (next !== null && parseSecretOption(next) === null) {
+        cmd.push("[REDACTED]");
+        patterns.push("secret-flag");
+        i += 1;
+      }
+      continue;
+    }
+
+    const textPart = redactEvidenceText(part);
+    patterns.push(...textPart.patterns);
+    cmd.push(textPart.text);
+  }
+  return { cmd, applied: patterns.length > 0, patterns };
 }
