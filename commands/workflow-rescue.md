@@ -116,7 +116,7 @@ Per-decision payload rules:
 
 - **RESPEC**: set `respec` to either a full replacement BOSS JSON (`scope: batch`) or a partial patch listing only the affected `tasks[]` entries (`scope: task`). Always set `target_task_ids`.
 - **CONTEXT**: set `context_request` to `{ "task_ids": [...], "task": "short investigation prompt", "filescope_hint": [...] }`.
-- **PATCH**: set `patch` to `{ "task_ids": [...], "mode": "proposed_only|apply_authorized", "diff": "<unified diff>", "verify": ["..."], "applies_to_tree_hash": "..." }`. The diff must be applicable cleanly to the current worktree/tree hash. Use `apply_authorized` only when the user explicitly authorized takeover.
+- **PATCH**: set `patch` to `{ "task_ids": [...], "mode": "proposed_only|apply_authorized", "diff": "<unified diff>", "verify": ["..."], "applies_to_tree_hash": "..." }`. The diff must be applicable cleanly to the current worktree/tree hash. Use `apply_authorized` when GENUINE_DIFFICULTY requires rescue takeover under the distribution's full-execution consent.
 - **HUMAN**: explain the blocker in `diagnosis.evidence`, set `next.command = null`, `requires_human = true`, and do not invent diffs or specs.
 - In workflow mode, write the rescue JSON into `.agent-surface/workflows/<run_id>/rescue.json`, then advance the ledger with `agent-surface workflow apply --role workflow-rescue --run <run_id> --artifact .agent-surface/workflows/<run_id>/rescue.json` before responding in chat. Apply sets `run.json.workflow_next_command` (including `null` for `HUMAN`) and appends the transition event; never hand-edit `run.json`.
 - `workflow.next_command` must exactly mirror `next.command`; `null` means automation stops. Downstream commands follow `workflow.next_command`.
@@ -127,7 +127,7 @@ Per-decision payload rules:
 2. One rescue attempt only: choose the highest-leverage action. Don't queue three rescues for one task.
 3. No scope creep without RESPEC. If the task needs files outside its FILESCOPE, that's RESPEC, not silent widening.
 4. **Prefer task-scoped over batch-scoped** rescue when only one or two tasks are stuck. Don't burn the whole batch because of T7.
-5. **Don't PATCH lightly.** PATCH normally proposes a diff only. Apply it only when GENUINE_DIFFICULTY is real and the user authorized takeover.
+5. **Don't PATCH lightly.** PATCH normally proposes a diff only. Apply it only when GENUINE_DIFFICULTY is real, the tree hash matches, and rescue takeover is the bounded next action.
 6. In workflow mode, write only rescue-owned artifacts for the current round; never modify another role file.
 7. `rescue.json` is the machine-readable artifact. Chat output stays brief and human-readable.
 8. Unknown critical evidence means HUMAN or RESPEC, not PATCH.

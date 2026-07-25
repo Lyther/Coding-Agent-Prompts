@@ -17,6 +17,15 @@ import { hashKey, projectKey } from "../src/namespace.js";
 import { createSidecar, type SidecarHandle } from "../src/sidecar.js";
 
 const TOKEN = "roots-token-p43";
+/*
+SUBSTITUTE_JUSTIFICATION
+- substitute: InMemoryTransport in roots-routing tests
+- replaces: MCP transport bytes between the test host and bridge
+- necessity: the no-roots and timeout cases must deterministically observe request dispatch and hold initialize or roots/list open past a short deadline
+- real-option: stdio cannot expose request dispatch without instrumenting the host process
+- proof-limit: deterministic transport timing is synthetic and does not prove installed-host startup, stdio framing, or Codex compatibility
+- real-proof: npm run install:synapse followed by a real codex exec MCP startup probe
+*/
 interface RememberOut { id: number; agentId: string; redactions: number }
 interface RecallOut { results: { id: number; snippet: string }[]; truncated: boolean; cursor: number }
 function parse<T>(r: unknown): T {
@@ -88,6 +97,12 @@ test("P4.3: host without roots capability falls back to cwd git-root", async () 
     // host advertises NO roots capability → bridge must fall back to cwd without erroring
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const host = new Client({ name: "host-noroots", version: "0.0.1" }, { capabilities: {} });
+    let rootsRequests = 0;
+    const sendToHost = serverTransport.send.bind(serverTransport);
+    serverTransport.send = async (message, options) => {
+      if ("method" in message && message.method === "roots/list") rootsRequests += 1;
+      await sendToHost(message, options);
+    };
     const ready = host.connect(clientTransport).then(() => undefined);
     const expectedDb = join(dir, `${hashKey(projectKey(process.cwd()))}.sqlite`);
     const { close } = await startBridge({ url: sc.url, token: TOKEN, downstream: serverTransport });
@@ -95,8 +110,46 @@ test("P4.3: host without roots capability falls back to cwd git-root", async () 
     try {
       parse<RememberOut>(await host.callTool({ name: "memory_remember", arguments: { content: "cwd fallback" } }));
       assert.ok(fileExists(expectedDb), "cwd-derived DB used when host lacks roots");
+      assert.equal(rootsRequests, 0, "bridge does not send roots/list when the host did not advertise roots");
     } finally { await close(); await host.close(); }
   } finally { await sc.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("P4.3: bridge fails closed when the downstream host never initializes", async () => {
+  const [, serverTransport] = InMemoryTransport.createLinkedPair();
+  await assert.rejects(
+    startBridge({
+      url: "http://127.0.0.1:1/mcp",
+      token: TOKEN,
+      downstream: serverTransport,
+      negotiationTimeoutMs: 20,
+    }),
+    /downstream initialize timed out/,
+  );
+});
+
+test("P4.3: roots-capable host timeout fails closed instead of binding cwd", async () => {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const host = new Client(
+    { name: "host-roots-timeout", version: "0.0.1" },
+    { capabilities: { roots: { listChanged: true } } },
+  );
+  host.setRequestHandler(ListRootsRequestSchema, () => new Promise(() => { }));
+  const ready = host.connect(clientTransport);
+  try {
+    await assert.rejects(
+      startBridge({
+        url: "http://127.0.0.1:1/mcp",
+        token: TOKEN,
+        downstream: serverTransport,
+        negotiationTimeoutMs: 20,
+      }),
+      /roots\/list timed out/,
+    );
+    await ready;
+  } finally {
+    await host.close();
+  }
 });
 
 function fileExists(p: string): boolean {

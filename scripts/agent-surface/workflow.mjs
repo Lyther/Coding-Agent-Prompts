@@ -3,7 +3,7 @@
 // Owns run.json ledger advancement, the tamper-evident events.ndjson chain, and
 // git-tree-based patch capture/verify. Schema validation lives in check.mjs.
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -13,6 +13,15 @@ import { readFileIfExists } from "./io.mjs";
 import { gitLines, gitOutput, gitValue } from "./proc.mjs";
 import { root } from "./registry.mjs";
 import { argValues, canonicalJson, exists, fail, isPathInside, isSafeRelativePath, requiredArgValue, safeFilename, sha256, uniqueStrings } from "./util.mjs";
+
+const workflowTaskStateKeys = [
+  "active_task_ids",
+  "accepted_task_ids",
+  "rework_task_ids",
+  "deferred_task_ids",
+  "closed_task_ids",
+];
+const workflowClockSkewMs = 60_000;
 
 export async function workflow(args) {
   const [subcommand, ...rest] = args;
@@ -43,11 +52,12 @@ async function workflowDoctor(args) {
   }
 
   const runData = await readWorkflowJson(path.join(runDir, "run.json"), schemas.get("workflow.run.schema.json"), errors);
-  const bossArtifact = path.join(runDir, "boss.json");
-  if (await exists(bossArtifact)) {
-    const boss = await readWorkflowJson(bossArtifact, schemas.get("workflow.boss.schema.json"), errors);
-    checkBossArtifactCoherence(boss, path.relative(process.cwd(), bossArtifact), errors);
+  if (runData && runData.run_id !== runId) {
+    errors.push(`run.json: run_id ${runData.run_id} does not match --run ${runId}`);
   }
+  const eventsPath = path.join(runDir, "events.ndjson");
+  const { events, lastTransition } = await readWorkflowEvents(eventsPath, schemas, errors, runId);
+  const bossHistory = await readWorkflowBossHistory(runDir, schemas, events, errors, { expectedRunId: runId });
   for (const [file, schemaName] of [
     ["worker.json", "workflow.worker.schema.json"],
     ["reviewer.json", "workflow.reviewer.schema.json"],
@@ -57,35 +67,14 @@ async function workflowDoctor(args) {
     const artifact = path.join(runDir, file);
     if (await exists(artifact)) await validateWorkflowJson(artifact, schemas.get(schemaName), errors);
   }
-  await validateWorkflowPatchManifests(runDir, schemas.get("workflow.patch.schema.json"), errors);
+  if (runData) errors.push(...workflowTaskStateErrors(runData, bossHistory, "run.json"));
 
-  const eventsPath = path.join(runDir, "events.ndjson");
-  let lastTransition = null;
-  if (await exists(eventsPath)) {
-    const text = await readFile(eventsPath, "utf8");
-    let previousHash = null;
-    for (const [index, line] of text.split(/\r?\n/).filter(Boolean).entries()) {
-      let event;
-      try {
-        event = JSON.parse(line);
-      } catch (error) {
-        errors.push(`events.ndjson:${index + 1}: invalid JSON: ${error.message}`);
-        continue;
-      }
-      const validate = schemas.get("workflow.event.schema.json");
-      if (validate && !validate(event)) errors.push(`events.ndjson:${index + 1}: ${formatAjvErrors(validate.errors)}`);
-      if (event.prev_event_hash !== previousHash) {
-        errors.push(`events.ndjson:${index + 1}: prev_event_hash does not match previous event`);
-      }
-      const { event_hash: eventHash, ...eventWithoutHash } = event;
-      const computedHash = `sha256:${sha256(canonicalJson(eventWithoutHash))}`;
-      if (eventHash !== computedHash) {
-        errors.push(`events.ndjson:${index + 1}: event_hash does not match event content`);
-      }
-      previousHash = event.event_hash;
-      if ("to" in event) lastTransition = event;
-    }
+  const monitorPath = path.join(runDir, "agents.json");
+  if (await exists(monitorPath)) {
+    const monitor = await readWorkflowJson(monitorPath, schemas.get("workflow.monitor.schema.json"), errors);
+    if (monitor) errors.push(...await workflowMonitorErrors(monitor, runData, runDir));
   }
+  await validateWorkflowPatchManifests(runDir, schemas.get("workflow.patch.schema.json"), errors);
 
   // The run ledger is the source of truth for routing. If the most recent
   // recorded transition advanced the route, run.json.workflow_next_command must
@@ -135,36 +124,55 @@ async function workflowApply(args) {
 
   const runData = await readWorkflowJson(runPath, schemas.get("workflow.run.schema.json"), errors);
   const artifact = await readWorkflowJson(artifactPath, schemas.get(schemaName), errors);
+  if (runData && runData.run_id !== runId) {
+    errors.push(`run.json: run_id ${runData.run_id} does not match --run ${runId}`);
+  }
+  if (artifact && (artifact.run_id !== runId || artifact.workflow?.run_id !== runId)) {
+    errors.push(`artifact run_id does not match --run ${runId}`);
+  }
+  const artifactHash = artifact ? `sha256:${sha256(await readFile(artifactPath))}` : null;
+  const { events } = await readWorkflowEvents(path.join(runDir, "events.ndjson"), schemas, errors, runId);
+  const bossHistory = await readWorkflowBossHistory(runDir, schemas, events, errors, {
+    expectedRunId: runId,
+    pendingUnlinkedBossHashes: role === "workflow-boss" && artifactHash ? new Set([artifactHash]) : new Set(),
+  });
+  const artifactBossHistory = role === "workflow-boss"
+    ? extendBossHistory(bossHistory, artifact)
+    : bossHistory;
+  if (role === "workflow-boss") {
+    checkBossArtifactCoherence(artifact, path.relative(process.cwd(), artifactPath), errors);
+  }
+  if (runData) errors.push(...workflowTaskStateErrors(runData, bossHistory, "run.json"));
   if (errors.length > 0) {
     for (const error of errors) console.error(`ERROR: ${error}`);
     process.exitCode = 1;
     return;
   }
 
-  if (artifact.run_id !== runId || artifact.workflow?.run_id !== runId) fail("artifact run_id does not match --run");
   if (artifact.workflow?.owner !== role) fail("artifact owner does not match --role");
 
-  const artifactHash = `sha256:${sha256(await readFile(artifactPath))}`;
   const fromCommand = runData.workflow_next_command ?? null;
   const nextCommand = artifact.workflow.next_command ?? null;
   const update = artifact.run_state_update ?? {};
-  const moved = new Set([
-    ...(update.accepted_task_ids ?? []),
-    ...(update.rework_task_ids ?? []),
-    ...(update.deferred_task_ids ?? []),
-    ...(update.closed_task_ids ?? []),
-  ]);
+  const updateErrors = workflowTaskStateErrors(update, artifactBossHistory, "artifact run_state_update", false);
+  if (updateErrors.length > 0) fail(updateErrors.join("; "));
+  const moved = new Set(workflowTaskStateKeys.flatMap((key) => Array.isArray(update[key]) ? update[key] : []));
 
   runData.current_round = Math.max(runData.current_round, artifact.round_id);
   runData.workflow_next_command = nextCommand;
-  runData.active_task_ids = uniqueStrings((runData.active_task_ids ?? []).filter((taskId) => !moved.has(taskId)));
-  if (role === "workflow-boss" && artifact.run_state && Array.isArray(artifact.run_state.active_task_ids)) {
-    runData.active_task_ids = uniqueStrings(artifact.run_state.active_task_ids);
+  for (const key of workflowTaskStateKeys) {
+    runData[key] = uniqueStrings([
+      ...(runData[key] ?? []).filter((taskId) => !moved.has(taskId)),
+      ...(update[key] ?? []),
+    ]);
   }
-  runData.accepted_task_ids = uniqueStrings([...(runData.accepted_task_ids ?? []), ...(update.accepted_task_ids ?? [])]);
-  runData.rework_task_ids = uniqueStrings([...(runData.rework_task_ids ?? []), ...(update.rework_task_ids ?? [])]);
-  runData.deferred_task_ids = uniqueStrings([...(runData.deferred_task_ids ?? []), ...(update.deferred_task_ids ?? [])]);
-  runData.closed_task_ids = uniqueStrings([...(runData.closed_task_ids ?? []), ...(update.closed_task_ids ?? [])]);
+  if (role === "workflow-boss" && artifact.run_state) {
+    for (const key of workflowTaskStateKeys) {
+      if (Object.hasOwn(artifact.run_state, key)) {
+        runData[key] = uniqueStrings(artifact.run_state[key] ?? []);
+      }
+    }
+  }
   runData.last_artifact_hashes = {
     ...(runData.last_artifact_hashes ?? {}),
     [role]: artifactHash,
@@ -173,12 +181,15 @@ async function workflowApply(args) {
     runData.workflow_next_command = "workflow-close";
   }
 
+  const nextStateErrors = workflowTaskStateErrors(runData, artifactBossHistory, "run.json");
+  if (nextStateErrors.length > 0) fail(`updated run state is incoherent: ${nextStateErrors.join("; ")}`);
+
   const runValidate = schemas.get("workflow.run.schema.json");
   if (runValidate && !runValidate(runData)) {
     fail(`updated run.json failed schema validation: ${formatAjvErrors(runValidate.errors)}`);
   }
 
-  await writeFile(runPath, `${JSON.stringify(runData, null, 2)}\n`);
+  await writeWorkflowFile(runPath, `${JSON.stringify(runData, null, 2)}\n`);
   const eventHash = await appendWorkflowEvent(runDir, {
     event_id: `${safeFilename(role)}-${Date.now()}`,
     run_id: runId,
@@ -191,7 +202,7 @@ async function workflowApply(args) {
     timestamp: new Date().toISOString(),
     summary: `Applied ${role} state update.`,
   });
-  await writeFile(path.join(path.dirname(runDir), "current.json"), `${JSON.stringify({
+  await writeWorkflowFile(path.join(path.dirname(runDir), "current.json"), `${JSON.stringify({
     schema_version: "workflow.current.v1",
     run_id: runData.status === "active" ? runId : null,
     workflow_dir: runData.status === "active" ? path.relative(process.cwd(), runDir) : null,
@@ -201,6 +212,277 @@ async function workflowApply(args) {
   console.log(`workflow apply: ok (${role})`);
   console.log(`run: ${path.relative(process.cwd(), runPath)}`);
   console.log(`event_hash: ${eventHash}`);
+}
+
+function workflowTaskStateErrors(state, bossHistory = null, source = "run.json", requireCurrentTasks = true) {
+  if (!state || typeof state !== "object") return [];
+
+  const errors = [];
+  const memberships = new Map();
+  for (const key of workflowTaskStateKeys) {
+    for (const taskId of Array.isArray(state[key]) ? state[key] : []) {
+      const keys = memberships.get(taskId) ?? [];
+      keys.push(key);
+      memberships.set(taskId, keys);
+    }
+  }
+
+  for (const [taskId, keys] of memberships) {
+    if (keys.length > 1) {
+      errors.push(`${source}: task ${taskId} appears in mutually exclusive state buckets: ${keys.join(", ")}`);
+    }
+  }
+
+  const allowedTaskIds = bossHistory?.allowedTaskIds ?? new Set();
+  for (const taskId of memberships.keys()) {
+    if (!allowedTaskIds.has(taskId)) {
+      errors.push(`${source}: task ${taskId} has no validated current or historical workflow-boss provenance`);
+    }
+  }
+
+  if (requireCurrentTasks) {
+    for (const taskId of bossHistory?.currentTaskIds ?? []) {
+      if (!memberships.has(taskId)) errors.push(`${source}: boss task ${taskId} is missing from every task-state bucket`);
+    }
+  }
+
+  return errors;
+}
+
+async function readWorkflowBossHistory(runDir, schemas, events, errors, options = {}) {
+  const artifacts = [];
+  const pendingArtifacts = [];
+  const expectedRunId = options.expectedRunId ?? null;
+  const pendingUnlinkedBossHashes = options.pendingUnlinkedBossHashes ?? new Set();
+  const eventBackedBosses = new Set(
+    events
+      .filter((event) => event.role === "workflow-boss" && typeof event.artifact_hash === "string")
+      .map((event) => `${event.run_id}\0${event.round_id}\0${event.artifact_hash}`),
+  );
+  const addArtifact = async (artifactPath, expectedRoundId = null) => {
+    const errorCount = errors.length;
+    const boss = await readWorkflowJson(artifactPath, schemas.get("workflow.boss.schema.json"), errors);
+    if (!boss) return;
+    checkBossArtifactCoherence(boss, path.relative(process.cwd(), artifactPath), errors);
+    if (expectedRunId !== null && (boss.run_id !== expectedRunId || boss.workflow?.run_id !== expectedRunId)) {
+      errors.push(`${path.relative(process.cwd(), artifactPath)}: boss run_id does not match workflow run ${expectedRunId}`);
+    }
+    if (errors.length !== errorCount) return;
+    if (expectedRoundId !== null && boss.round_id !== expectedRoundId) {
+      errors.push(`${path.relative(process.cwd(), artifactPath)}: round_id does not match its canonical round directory`);
+      return;
+    }
+    const artifactHash = `sha256:${sha256(await readFile(artifactPath))}`;
+    const provenanceKey = `${boss.run_id}\0${boss.round_id}\0${artifactHash}`;
+    if (eventBackedBosses.has(provenanceKey)) {
+      artifacts.push({ boss, artifactPath, artifactHash });
+    } else if (pendingUnlinkedBossHashes.has(artifactHash)) {
+      pendingArtifacts.push({ boss, artifactPath, artifactHash });
+    } else {
+      errors.push(`${path.relative(process.cwd(), artifactPath)}: boss artifact is not referenced by a validated workflow-boss event`);
+    }
+  };
+
+  const rootBossPath = path.join(runDir, "boss.json");
+  if (await exists(rootBossPath)) await addArtifact(rootBossPath);
+
+  const roundsDir = path.join(runDir, "rounds");
+  try {
+    const entries = await readdir(roundsDir, { withFileTypes: true });
+    for (const entry of entries
+      .filter((item) => item.isDirectory() && /^round-\d+$/.test(item.name))
+      .sort((left, right) => left.name.localeCompare(right.name))) {
+      const bossPath = path.join(roundsDir, entry.name, "boss.json");
+      if (await exists(bossPath)) await addArtifact(bossPath, Number(entry.name.slice("round-".length)));
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") errors.push(`failed to read workflow boss history: ${error.message}`);
+  }
+
+  const visibleArtifacts = [...artifacts, ...pendingArtifacts];
+  const rootArtifact = visibleArtifacts.find((item) => item.artifactPath === rootBossPath) ?? null;
+  const latestCanonical = visibleArtifacts
+    .filter((item) => item.artifactPath !== rootBossPath)
+    .sort((left, right) => (right.boss.round_id ?? -1) - (left.boss.round_id ?? -1))[0] ?? null;
+  if (rootArtifact && latestCanonical && rootArtifact.artifactHash !== latestCanonical.artifactHash) {
+    errors.push(`${path.relative(process.cwd(), rootBossPath)}: latest-role copy does not match the latest canonical workflow-boss artifact`);
+  }
+  const latestEventBackedBoss = artifacts
+    .filter((item) => item.artifactPath !== rootBossPath)
+    .sort((left, right) => (right.boss.round_id ?? -1) - (left.boss.round_id ?? -1))[0]?.boss
+    ?? artifacts.find((item) => item.artifactPath === rootBossPath)?.boss
+    ?? null;
+  return {
+    allowedTaskIds: new Set(artifacts.flatMap((item) => item.boss.tasks?.map((task) => task.task_id) ?? [])),
+    currentTaskIds: new Set(latestEventBackedBoss?.tasks?.map((task) => task.task_id) ?? []),
+  };
+}
+
+async function readWorkflowEvents(eventsPath, schemas, errors, expectedRunId = null) {
+  const events = [];
+  let lastTransition = null;
+  if (!(await exists(eventsPath))) return { events, lastTransition };
+
+  const text = await readFile(eventsPath, "utf8");
+  let previousHash = null;
+  for (const [index, line] of text.split(/\r?\n/).filter(Boolean).entries()) {
+    const errorCount = errors.length;
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch (error) {
+      errors.push(`events.ndjson:${index + 1}: invalid JSON: ${error.message}`);
+      continue;
+    }
+    const validate = schemas.get("workflow.event.schema.json");
+    if (validate && !validate(event)) errors.push(`events.ndjson:${index + 1}: ${formatAjvErrors(validate.errors)}`);
+    if (expectedRunId !== null && event.run_id !== expectedRunId) {
+      errors.push(`events.ndjson:${index + 1}: run_id ${event.run_id} does not match workflow run ${expectedRunId}`);
+    }
+    if (event.prev_event_hash !== previousHash) {
+      errors.push(`events.ndjson:${index + 1}: prev_event_hash does not match previous event`);
+    }
+    const { event_hash: eventHash, ...eventWithoutHash } = event;
+    const computedHash = `sha256:${sha256(canonicalJson(eventWithoutHash))}`;
+    if (eventHash !== computedHash) {
+      errors.push(`events.ndjson:${index + 1}: event_hash does not match event content`);
+    }
+    previousHash = event.event_hash;
+    if (errors.length !== errorCount) continue;
+    events.push(event);
+    if ("to" in event) lastTransition = event;
+  }
+  return { events, lastTransition };
+}
+
+function extendBossHistory(history, boss) {
+  const taskIds = new Set(boss?.tasks?.map((task) => task.task_id) ?? []);
+  return {
+    allowedTaskIds: new Set([...(history?.allowedTaskIds ?? []), ...taskIds]),
+    currentTaskIds: taskIds,
+  };
+}
+
+async function workflowMonitorErrors(monitor, runData, runDir, nowMs = Date.now()) {
+  const errors = [];
+  const realRunDir = await realpath(runDir);
+  if (runData && monitor.run_id !== runData.run_id) {
+    errors.push(`agents.json: run_id ${monitor.run_id} does not match run.json ${runData.run_id}`);
+  }
+
+  const policy = monitor.policy ?? {};
+  const agents = Array.isArray(monitor.agents) ? monitor.agents : [];
+  const knownTaskIds = new Set(
+    workflowTaskStateKeys.flatMap((key) => Array.isArray(runData?.[key]) ? runData[key] : []),
+  );
+  for (const agent of agents) {
+    for (const taskId of Array.isArray(agent.task_ids) ? agent.task_ids : []) {
+      if (runData && !knownTaskIds.has(taskId)) {
+        errors.push(`agents.json: agent ${agent.agent_id} references unknown task ${taskId}`);
+      }
+    }
+  }
+  const activeWriters = agents.filter(
+    (agent) => agent.role_class === "worker" && ["starting", "running"].includes(agent.status),
+  );
+  for (let leftIndex = 0; leftIndex < activeWriters.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < activeWriters.length; rightIndex += 1) {
+      const left = activeWriters[leftIndex];
+      const right = activeWriters[rightIndex];
+      if (!left.workspace_ref || !right.workspace_ref || left.workspace_ref === right.workspace_ref) {
+        errors.push(`agents.json: concurrent writers ${left.agent_id} and ${right.agent_id} require distinct workspace_ref values`);
+      }
+      if (filescopesOverlap(left.filescope, right.filescope)) {
+        errors.push(`agents.json: concurrent writers ${left.agent_id} and ${right.agent_id} have overlapping filescope`);
+      }
+    }
+  }
+
+  for (const agent of agents) {
+    if ((agent.retry_count ?? 0) > (policy.max_stall_retries ?? 0)) {
+      errors.push(`agents.json: agent ${agent.agent_id} exceeded max_stall_retries`);
+    }
+    if (agent.status === "stalled") {
+      errors.push(`agents.json: agent ${agent.agent_id} is stalled and must be retried, marked stale, or closed before routing`);
+    }
+    const budgets = { ...policy, ...(agent.budgets ?? {}) };
+    const startedAt = Date.parse(agent.started_at);
+    const lastProgressAt = Date.parse(agent.last_progress_at);
+    const validOutputs = [];
+    for (const outputRef of Array.isArray(agent.materialized_outputs) ? agent.materialized_outputs : []) {
+      const outputPath = path.resolve(outputRef);
+      if (!isPathInside(runDir, outputPath)) {
+        errors.push(`agents.json: agent ${agent.agent_id} materialized output escapes the workflow run: ${outputRef}`);
+      } else if (!(await exists(outputPath))) {
+        errors.push(`agents.json: agent ${agent.agent_id} materialized output does not exist: ${outputRef}`);
+      } else {
+        const outputStat = await lstat(outputPath);
+        if (!outputStat.isFile() || outputStat.size === 0) {
+          errors.push(`agents.json: agent ${agent.agent_id} materialized output is not a non-empty regular file: ${outputRef}`);
+        } else {
+          try {
+            const realOutputPath = await realpath(outputPath);
+            if (!isPathInside(realRunDir, realOutputPath)) {
+              errors.push(`agents.json: agent ${agent.agent_id} materialized output resolves outside the workflow run: ${outputRef}`);
+            } else {
+              const relativeOutput = path.relative(realRunDir, realOutputPath);
+              const workflowControlFiles = new Set(["agents.json", "boss.json", "events.ndjson", "run.json"]);
+              if (workflowControlFiles.has(relativeOutput)) {
+                errors.push(`agents.json: agent ${agent.agent_id} workflow control file cannot be used as materialized output: ${outputRef}`);
+              } else if (Number.isFinite(startedAt) && outputStat.mtimeMs < startedAt) {
+                errors.push(`agents.json: agent ${agent.agent_id} materialized output predates its current attempt: ${outputRef}`);
+              } else if (outputStat.mtimeMs > nowMs + workflowClockSkewMs) {
+                errors.push(`agents.json: agent ${agent.agent_id} materialized output is in the future: ${outputRef}`);
+              } else {
+                validOutputs.push(outputRef);
+              }
+            }
+          } catch (error) {
+            errors.push(`agents.json: agent ${agent.agent_id} materialized output cannot be resolved: ${outputRef}: ${error.message}`);
+          }
+        }
+      }
+    }
+    if (!["starting", "running"].includes(agent.status)) continue;
+
+    if (Number.isFinite(startedAt) && Number.isFinite(lastProgressAt) && startedAt > lastProgressAt) {
+      errors.push(`agents.json: agent ${agent.agent_id} started_at is after last_progress_at`);
+    }
+    if (Number.isFinite(startedAt) && startedAt > nowMs + workflowClockSkewMs) {
+      errors.push(`agents.json: agent ${agent.agent_id} started_at is in the future`);
+    }
+    if (Number.isFinite(lastProgressAt) && lastProgressAt > nowMs + workflowClockSkewMs) {
+      errors.push(`agents.json: agent ${agent.agent_id} last_progress_at is in the future`);
+    }
+    if (Number.isFinite(startedAt) && nowMs - startedAt > budgets.role_timeout_ms) {
+      errors.push(`agents.json: agent ${agent.agent_id} exceeded role_timeout_ms`);
+    }
+    if (Number.isFinite(lastProgressAt) && nowMs - lastProgressAt > budgets.no_progress_timeout_ms) {
+      errors.push(`agents.json: agent ${agent.agent_id} exceeded no_progress_timeout_ms`);
+    }
+    if (validOutputs.length === 0 && Number.isFinite(startedAt) && nowMs - startedAt > budgets.time_to_first_output_ms) {
+      errors.push(`agents.json: agent ${agent.agent_id} exceeded time_to_first_output_ms without materialized output`);
+    }
+  }
+
+  return errors;
+}
+
+function filescopesOverlap(leftFiles, rightFiles) {
+  const normalize = (value) => {
+    let normalized = value.replaceAll("\\", "/");
+    const wildcardIndex = normalized.search(/[?*[\]]/);
+    if (wildcardIndex >= 0) normalized = normalized.slice(0, wildcardIndex);
+    return normalized.replace(/\/+$/, "") || ".";
+  };
+  for (const leftValue of leftFiles ?? []) {
+    const left = normalize(leftValue);
+    for (const rightValue of rightFiles ?? []) {
+      const right = normalize(rightValue);
+      if (left === "." || right === "." || left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)) return true;
+    }
+  }
+  return false;
 }
 
 async function workflowPatch(args) {
@@ -242,7 +524,7 @@ async function workflowPatchBegin(args) {
     status: "begun",
   };
 
-  await writeFile(context.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeWorkflowFile(context.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(`patch begin: ${path.relative(process.cwd(), context.manifestPath)}`);
   console.log(`pre_tree_hash: ${preTreeHash}`);
 }
@@ -266,9 +548,9 @@ async function workflowPatchEnd(args) {
     status: "ended",
   };
 
-  await writeFile(context.patchPath, patch);
-  await writeFile(context.nameStatusPath, nameStatus);
-  await writeFile(context.manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
+  await writeWorkflowFile(context.patchPath, patch);
+  await writeWorkflowFile(context.nameStatusPath, nameStatus);
+  await writeWorkflowFile(context.manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
   console.log(`patch end: ${path.relative(process.cwd(), context.patchPath)}`);
   console.log(`patch_hash: ${patchHash}`);
   console.log(`changed_files: ${changedFiles.length}`);
@@ -298,7 +580,7 @@ async function workflowPatchVerify(args) {
     status: "verified",
   };
 
-  await writeFile(context.manifestPath, `${JSON.stringify(verified, null, 2)}\n`);
+  await writeWorkflowFile(context.manifestPath, `${JSON.stringify(verified, null, 2)}\n`);
   console.log(`patch verify: ok (${path.relative(process.cwd(), context.patchPath)})`);
 }
 
@@ -426,8 +708,19 @@ async function appendWorkflowEvent(runDir, event) {
     ...withPrevious,
     event_hash: eventHash,
   };
-  await writeFile(eventsPath, `${await readFileIfExists(eventsPath) ?? ""}${JSON.stringify(fullEvent)}\n`);
+  await writeWorkflowFile(eventsPath, `${await readFileIfExists(eventsPath) ?? ""}${JSON.stringify(fullEvent)}\n`);
   return eventHash;
+}
+
+async function writeWorkflowFile(file, contents) {
+  await mkdir(path.dirname(file), { recursive: true });
+  const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    await writeFile(temporary, contents, { mode: 0o600 });
+    await rename(temporary, file);
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 async function lastWorkflowEventHash(eventsPath) {

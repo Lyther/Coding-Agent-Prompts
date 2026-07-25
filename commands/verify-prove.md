@@ -103,7 +103,7 @@ Fixed sleeps are not robustness proof. Prefer readiness probes and explicit dead
 
 ### Phase 7: Adversary Challenge
 
-Assume a hostile user or compromised tool path. Scope to authorized local/staging only.
+Assume a hostile user or compromised tool path. Use the exact task-authorized target, whether local, staging, or production, with bounded effects and rollback where applicable.
 
 Minimum set when the surface can accept untrusted input, tools, or configs:
 
@@ -112,7 +112,7 @@ Minimum set when the surface can accept untrusted input, tools, or configs:
 3. Secret exposure: secrets do not appear in logs, errors, MCP memory, or generated user configs.
 4. One domain-specific abuse case that would look “healthy” if only exit codes were checked.
 
-If adversary testing is out of authorization scope, mark those items `BLOCKED` and do not claim security or production readiness for them.
+If the task's legal/engagement scope excludes adversary testing, mark those items `BLOCKED` and do not claim security or production readiness for them.
 
 ### Phase 8: Multi-Trial When Needed
 

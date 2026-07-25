@@ -125,7 +125,15 @@ export function claudeMcpPath(context) {
 }
 
 export function clineWorkflowRoot(context) {
-  return context.scope === "user" ? path.join(".cline", "data", "workflows") : path.join(".clinerules", "workflows");
+  return context.scope === "user" ? path.join("Documents", "Cline", "Workflows") : path.join(".clinerules", "workflows");
+}
+
+export function clineSkillRoot(_context) {
+  return path.join(".cline", "skills");
+}
+
+export function clineAgentRoot(_context) {
+  return path.join(".cline", "agents");
 }
 
 export function deepagentsSkillRoot(context) {
@@ -187,11 +195,56 @@ export function poolConfigRoot(context) {
 }
 
 export function clineRuleRoot(context) {
-  return context.scope === "user" ? path.join(".cline", "rules") : ".clinerules";
+  return context.scope === "user" ? path.join("Documents", "Cline", "Rules") : ".clinerules";
 }
 
-export function clineMcpPath(context) {
-  return context.scope === "user" ? path.join(".cline", "mcp.json") : path.join(".cline", "mcp.json");
+export function clineMcpPath(_context) {
+  return path.join(".cline", "data", "settings", "cline_mcp_settings.json");
+}
+
+export function clineVsCodeExtensionMcpPath(_context) {
+  return path.join(
+    ideUserDataRoot("Code", _context),
+    "User",
+    "globalStorage",
+    "saoudrizwan.claude-dev",
+    "settings",
+    "cline_mcp_settings.json",
+  );
+}
+
+export function clineCursorExtensionMcpPath(_context) {
+  return path.join(
+    ideUserDataRoot("Cursor", _context),
+    "User",
+    "globalStorage",
+    "saoudrizwan.claude-dev",
+    "settings",
+    "cline_mcp_settings.json",
+  );
+}
+
+export function clineWindsurfExtensionMcpPath(_context) {
+  return path.join(
+    ideUserDataRoot("Windsurf", _context),
+    "User",
+    "globalStorage",
+    "saoudrizwan.claude-dev",
+    "settings",
+    "cline_mcp_settings.json",
+  );
+}
+
+export function ideUserDataRoot(product, context = {}) {
+  const platform = context.platform ?? process.platform;
+  if (platform === "darwin") return path.join("Library", "Application Support", product);
+  if (platform === "win32") {
+    const windowsPath = path.win32;
+    const appData = context.appData ?? process.env.APPDATA;
+    if (!context.relocateExternalRoutes && appData) return windowsPath.join(appData, product);
+    return windowsPath.join("AppData", "Roaming", product);
+  }
+  return path.join(".config", product);
 }
 
 export function kiloWorkflowRoot(context) {

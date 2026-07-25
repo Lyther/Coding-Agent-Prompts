@@ -21,6 +21,7 @@ Validate the active agent-surface workflow state before any role acts on it.
 .agent-surface/workflows/<run_id>/reviewer.json
 .agent-surface/workflows/<run_id>/judger.json
 .agent-surface/workflows/<run_id>/rescue.json
+.agent-surface/workflows/<run_id>/agents.json
 .agent-surface/workflows/<run_id>/rounds/<round_id>/
 ```
 
@@ -43,6 +44,8 @@ Validate the active agent-surface workflow state before any role acts on it.
 13. Confirm `run.json.workflow_next_command` matches the `to` field of the latest transition in `events.ndjson`. A mismatch means a role wrote its artifact but never ran `agent-surface workflow apply`, so the ledger pointer lags the accepted state — fail closed.
 14. Report `.cursor/.workflow/` compatibility files as stale if they disagree with canonical artifacts.
 15. Confirm workflow state is gitignored.
+16. Confirm `active_task_ids`, `accepted_task_ids`, `rework_task_ids`, `deferred_task_ids`, and `closed_task_ids` are mutually exclusive and every current BOSS task appears in one bucket. Prior-round accepted/closed IDs may remain in the run ledger.
+17. When `agents.json` exists, validate `workflow.monitor.v2`, matching `run_id`, retry budget, in-run existence of materialized outputs, time to first output, no-progress timeout, role timeout, and distinct workspaces/filescopes for concurrent writers.
 
 ## OUTPUT
 
@@ -70,3 +73,5 @@ Validate the active agent-surface workflow state before any role acts on it.
 3. Do not choose the newest file by mtime.
 4. Do not trust `.cursor/.workflow/` when canonical `.agent-surface/workflows/` exists.
 5. If canonical and compatibility artifacts disagree, canonical wins and status is at least `WARN`.
+6. A schema-valid but contradictory task disposition is `FAIL`.
+7. A stale running session is `FAIL` for further automatic routing; mark or terminate it before the next transition. It is not automatically a product blocker.

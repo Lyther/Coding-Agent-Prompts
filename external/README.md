@@ -11,9 +11,7 @@ The authoritative optional-service inventory is `registry/optional-services.json
 | sanyuan-skills | `external/sanyuan-skills` | skill pack | Codex/agent and Claude skill symlinks for all six skills |
 | andrej-karpathy-skills | `external/andrej-karpathy-skills` | skill pack | Codex/agent and Claude skill symlinks for `karpathy-guidelines` |
 | ctf-skills | `external/ctf-skills` | skill pack | Codex/agent and Claude CTF skill symlinks |
-| pua | `external/pua` | behavior pack | Narrow Codex/agent and Claude wiring for `pua` and `pua-en` only |
 
 ## Security Notes
 
-- `pua` is optional-caution. It can increase token usage and may reduce model performance on ordinary tasks, so only the narrow `pua` and `pua-en` skills are wired by default.
 - Do not commit private disclosure files, secrets, local MCP credentials, or generated agent config files from home-directory installs.

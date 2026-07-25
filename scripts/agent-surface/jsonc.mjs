@@ -39,12 +39,16 @@ export function mergeJsoncRootObjectProperty(text, key, entries) {
 }
 
 export function setJsoncRootObjectProperty(text, key, value) {
+  return setJsoncRootProperty(text, key, value);
+}
+
+export function setJsoncRootProperty(text, key, value) {
   const parsed = parseJsonc(text, key);
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(`${key}: root config must be an object`);
   }
   const tokens = jsoncTokens(text);
-  const range = findJsoncPropertyObject(tokens, key);
+  const range = findJsoncPropertyValue(tokens, key);
   if (range) return replaceJsoncValue(text, range, value);
   return insertJsoncRootProperty(text, tokens, key, value);
 }
@@ -250,6 +254,27 @@ function findJsoncPropertyObject(tokens, key) {
           tokens: tokens.slice(index + 3, closeIndex),
         };
       }
+    }
+  }
+  return null;
+}
+
+function findJsoncPropertyValue(tokens, key) {
+  for (let index = 0; index < tokens.length - 2; index += 1) {
+    const keyToken = tokens[index];
+    const colon = tokens[index + 1];
+    const open = tokens[index + 2];
+    if (keyToken.type !== "string" || keyToken.value !== key || keyToken.depth !== 1) continue;
+    if (colon.type !== ":") continue;
+    if (open.type !== "{" && open.type !== "[") return { open, close: open };
+
+    const closeType = open.type === "{" ? "}" : "]";
+    let depth = 0;
+    for (let closeIndex = index + 2; closeIndex < tokens.length; closeIndex += 1) {
+      const token = tokens[closeIndex];
+      if (token.type === open.type) depth += 1;
+      if (token.type === closeType) depth -= 1;
+      if (depth === 0) return { open, close: token };
     }
   }
   return null;

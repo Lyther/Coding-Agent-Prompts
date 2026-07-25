@@ -26,7 +26,23 @@ export function renderClaudeSubagent(source) {
     `description: "${yamlString(source.metadata.description)}"`,
     `tools: ${mapped.tools}`,
     `model: ${source.metadata.model}`,
+    `permissionMode: ${mapped.permissionMode}`,
     `maxTurns: ${mapped.maxTurns}`,
+    "---",
+    "",
+    source.body.trim(),
+    "",
+  ].join("\n");
+}
+
+export function renderClineSubagent(source) {
+  const tools = clineSubagentAccess(source.metadata.access);
+  return [
+    "---",
+    `name: ${source.metadata.name}`,
+    `description: "${yamlString(source.metadata.description)}"`,
+    "tools:",
+    ...tools.map((tool) => `  - ${tool}`),
     "---",
     "",
     source.body.trim(),
@@ -44,8 +60,7 @@ export function renderKiloSubagent(source) {
   if (source.metadata.model !== "inherit") lines.push(`model: ${source.metadata.model}`);
   lines.push(
     "permission:",
-    `  edit: ${mapped.edit}`,
-    `  bash: ${mapped.bash}`,
+    ...Object.entries(mapped.permissions).map(([permission, action]) => `  ${JSON.stringify(permission)}: ${action}`),
     `steps: ${mapped.steps}`,
     "---",
     "",
@@ -143,8 +158,7 @@ export function renderOpenCodeSubagent(source) {
   if (source.metadata.model !== "inherit") lines.push(`model: ${source.metadata.model}`);
   lines.push(
     "permission:",
-    `  edit: ${mapped.edit}`,
-    `  bash: ${mapped.bash}`,
+    ...Object.entries(mapped).map(([permission, action]) => `  ${JSON.stringify(permission)}: ${action}`),
     "---",
     "",
     source.body.trim(),
@@ -371,15 +385,24 @@ export function cursorSubagentReadonly(access) {
 }
 
 export function claudeSubagentAccess(access) {
-  if (access === "read-only") return { tools: "Read, Glob, Grep", maxTurns: 20 };
-  if (access === "read-write") return { tools: "Read, Glob, Grep, Edit, Write", maxTurns: 30 };
-  if (access === "read-write-shell") return { tools: "Read, Glob, Grep, Edit, Write, Bash", maxTurns: 40 };
+  if (access === "read-only") return { tools: "Read, Glob, Grep", permissionMode: "plan", maxTurns: 20 };
+  if (access === "read-write") return { tools: "Read, Glob, Grep, Edit, Write", permissionMode: "acceptEdits", maxTurns: 30 };
+  if (access === "read-write-shell") return { tools: "Read, Glob, Grep, Edit, Write, Bash", permissionMode: "bypassPermissions", maxTurns: 40 };
+  fail(`unsupported subagent access: ${access}`);
+}
+
+export function clineSubagentAccess(access) {
+  const readOnly = ["read_file", "search_files", "use_skill"];
+  if (access === "read-only") return readOnly;
+  const readWrite = [...readOnly, "replace_in_file", "write_to_file"];
+  if (access === "read-write") return readWrite;
+  if (access === "read-write-shell") return [...readWrite, "execute_command"];
   fail(`unsupported subagent access: ${access}`);
 }
 
 export function codexSubagentSandboxMode(access) {
   if (access === "read-only") return "read-only";
-  if (access === "read-write-shell") return "workspace-write";
+  if (access === "read-write-shell") return "danger-full-access";
   // Codex sandbox modes do not separate file writes from shell execution.
   // Refuse the intermediate tier instead of silently granting command access.
   if (access === "read-write") fail("codex subagent access read-write is not representable; use read-only or read-write-shell");
@@ -387,9 +410,10 @@ export function codexSubagentSandboxMode(access) {
 }
 
 export function kiloSubagentAccess(access) {
-  if (access === "read-only") return { edit: "deny", bash: "deny", steps: 20 };
-  if (access === "read-write") return { edit: "ask", bash: "deny", steps: 30 };
-  if (access === "read-write-shell") return { edit: "ask", bash: "ask", steps: 40 };
+  const inspect = { "*": "deny", read: "allow", glob: "allow", grep: "allow", skill: "allow" };
+  if (access === "read-only") return { permissions: inspect, steps: 20 };
+  if (access === "read-write") return { permissions: { ...inspect, edit: "allow" }, steps: 30 };
+  if (access === "read-write-shell") return { permissions: { "*": "allow" }, steps: 40 };
   fail(`unsupported subagent access: ${access}`);
 }
 
@@ -412,8 +436,17 @@ export function droidSubagentAccess(access) {
 }
 
 export function opencodeSubagentAccess(access) {
-  if (access === "read-only") return { edit: "deny", bash: "deny" };
-  if (access === "read-write") return { edit: "ask", bash: "deny" };
-  if (access === "read-write-shell") return { edit: "ask", bash: "ask" };
+  const inspect = {
+    "*": "deny",
+    read: "allow",
+    glob: "allow",
+    grep: "allow",
+    list: "allow",
+    lsp: "allow",
+    skill: "allow",
+  };
+  if (access === "read-only") return inspect;
+  if (access === "read-write") return { ...inspect, edit: "allow" };
+  if (access === "read-write-shell") return { "*": "allow" };
   fail(`unsupported subagent access: ${access}`);
 }

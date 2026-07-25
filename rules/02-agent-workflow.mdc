@@ -57,7 +57,7 @@ An operating loop, not a persona:
 
 - `COMPLETE` only when the explicit scope is implemented and integrated, required repo/task checks pass, an appropriate real acceptance scenario passes, and no known blocker remains. A scoped completion must not imply the whole project is complete.
 - `IMPLEMENTED BUT UNVERIFIED` when code is in place but real acceptance was not run.
-- `BLOCKED` when a required dependency, credential, environment, approval, or external condition prevents the claim.
+- `BLOCKED` when a required dependency, credential, environment, human-only action, or external condition prevents the claim.
 - Never use euphemisms such as "essentially complete", "core complete", or "complete except". Report exact commands and scenarios with real outcomes; inspection or reasoning is not a passed check.
 
 ## Prompt and Rule Design

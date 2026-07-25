@@ -83,7 +83,9 @@
       "renders": [
         "commands-as-workflows",
         "rules",
+        "subagents",
         "ignores",
+        "external",
         "mcps"
       ]
     },

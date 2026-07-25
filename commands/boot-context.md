@@ -141,7 +141,7 @@ Session memory is brittle. Durable memory lives in `AGENTS.md`; tactical memory 
 ## Project
 - **Stack**: Node/TypeScript + PostgreSQL
 - **Phase**: MVP (Phase 1)
-- **Style**: ESM, strict TypeScript, Prettier
+- **Style**: ESM, strict TypeScript, repository-defined lint/format gate
 - **Containers**: docker compose detected; .dockerignore present
 
 ## Current Delta

@@ -4,29 +4,43 @@ Every host `agent-surface` renders into, and how much of the source model each r
 
 | Target | Build files | Commands / workflows | Rules / instructions | Agents / subagents | Skills / external packs | Config / MCP / ignores | Compat |
 |---|---:|---|---|---|---|---|---:|
-| Claude Code | 311 | 66 native `.claude/commands/<group>/<name>.md` | None | 6 `.claude/agents/*.md` | External `.claude/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.claude.json` | 4 |
-| Codex | 384 | 66 command skills in `.agents/skills/*` | `.codex/AGENTS.md` + 6 scoped refs | 6 `.codex/agents/*.toml` | External `.agents/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.codex/config.toml` | 5 |
-| Deep Agents Code | 313 | 66 command skills in `.deepagents/agent/skills/*` | `.deepagents/agent/AGENTS.md` + 6 scoped refs | Worker only at `.deepagents/agent/agents/worker/AGENTS.md` | External `.deepagents/agent/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.deepagents/.mcp.json` | 4 |
-| Cursor | 86 | 66 native `.cursor/commands/*.md` | 12 native scoped `.cursor/rules/*.mdc` | 6 `.cursor/agents/*.md` | None | Synapse + Grimoire MCP in `.cursor/mcp.json`; `.cursorignore` | 5 |
-| Droid | 318 | 66 native `.factory/commands/*.md` | `.factory/AGENTS.md` + 6 scoped refs | 6 `.factory/droids/*.md` | External `.factory/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.factory/mcp.json` | 5 |
-| Cline | 75 | 66 workflows in `.cline/data/workflows/*.md` | `.cline/rules/agent-surface.md` + 6 scoped refs | None | None | Synapse + Grimoire MCP in `.cline/mcp.json`; `.clineignore` | 4 |
-| Kilo | 86 | 66 workflows in `.config/kilo/commands/*.md` | 6 always-on `.config/kilo/rules/*.md` + 6 scoped refs | 6 `.config/kilo/agents/*.md` | None | Synapse + Grimoire MCP + instructions in `kilo.jsonc`; `.kilocodeignore` | 5 |
-| Antigravity CLI | 325 | 66 plugin skills in `config/plugins/agent-surface/skills/*.md` | 6 always-on rules + 6 scoped refs | 6 `config/plugins/agent-surface/agents/*.md` | External plugin skills (Anthropic excluded) | `plugin.json`; Synapse + Grimoire MCP in `config/plugins/agent-surface/mcp_config.json` | 5 |
-| Antigravity (legacy workflows) | 66 | 66 `global_workflows/*.md` | None | None | None | None | 2 |
+| Claude Code | 284 | 67 native `.claude/commands/<group>/<name>.md` | None | 6 `.claude/agents/*.md` | External `.claude/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.claude.json` | 4 |
+| Codex | 358 | 67 explicit command skills in `.agents/skills/*` (not native workflows) | `.codex/AGENTS.md` + 6 scoped refs | 6 `.codex/agents/*.toml` | External `.agents/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.codex/config.toml` | 5 |
+| Deep Agents Code | 286 | 67 command skills in `.deepagents/agent/skills/*` | `.deepagents/agent/AGENTS.md` + 6 scoped refs | Worker only at `.deepagents/agent/agents/worker/AGENTS.md` | External `.deepagents/agent/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.deepagents/.mcp.json` | 4 |
+| Cursor | 87 | 67 native `.cursor/commands/*.md` | 12 native scoped `.cursor/rules/*.mdc` | 6 `.cursor/agents/*.md` | None | Synapse + Grimoire MCP in `.cursor/mcp.json`; `.cursorignore` | 5 |
+| Droid | 291 | 67 native `.factory/commands/*.md` | `.factory/AGENTS.md` + 6 scoped refs | 6 `.factory/droids/*.md` | External `.factory/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.factory/mcp.json` | 5 |
+| Cline | 292 | 67 workflows in `~/Documents/Cline/Workflows/*.md` | `~/Documents/Cline/Rules/agent-surface.md` + 6 scoped refs | 6 `.cline/agents/*.yaml` | External `.cline/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in CLI settings and VS Code/Cursor/Windsurf extension global storage; `.clineignore` | 5 |
+| Kilo | 87 | 67 workflows in `.config/kilo/commands/*.md` | 6 always-on `.config/kilo/rules/*.md` + 6 scoped refs | 6 `.config/kilo/agents/*.md` | None | Synapse + Grimoire MCP, full access, and auto-share disabled in `kilo.jsonc`; `.kilocodeignore` | 5 |
+| Antigravity CLI | 298 | 67 plugin skills in `config/plugins/agent-surface/skills/*.md` | 6 always-on rules + 6 scoped refs | 6 `config/plugins/agent-surface/agents/*.md` | External plugin skills (Anthropic excluded) | `plugin.json`; Synapse + Grimoire MCP in `config/plugins/agent-surface/mcp_config.json` | 5 |
+| Antigravity (legacy workflows) | 67 | 67 `global_workflows/*.md` | None | None | None | None | 2 |
 | GitHub Copilot | 7 | None | `instructions/agent-surface-copilot.instructions.md` + 6 scoped refs | None | None | None | 2 |
 | VS Code | 9 | None | `instructions/agent-surface.instructions.md` + 6 scoped refs | None | None | Synapse + Grimoire MCP in `mcp.json`; `prompts/agent-surface.prompt.md` | 2 |
 | VSCodium | 9 | None | `instructions/agent-surface.instructions.md` + 6 scoped refs | None | None | Synapse + Grimoire MCP in `mcp.json`; `prompts/agent-surface.prompt.md` | 2 |
-| OpenCode | 80 | 66 native `.config/opencode/commands/*.md` | `.config/opencode/AGENTS.md` + 6 scoped refs | 6 `.config/opencode/agents/*.md` | None | Synapse + Grimoire MCP in `.config/opencode/opencode.json` | 5 |
-| OpenHands | 312 | 66 AgentSkills in `.agents/skills/*` | User legacy `.openhands/skills/agent-surface-rules.md`; project `AGENTS.md`; 6 scoped refs | None | External `.agents/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.openhands/mcp.json` (user-scope) | 4 |
+| OpenCode | 81 | 67 native `.config/opencode/commands/*.md` | `.config/opencode/AGENTS.md` + 6 scoped refs | 6 `.config/opencode/agents/*.md` | None | Synapse + Grimoire MCP, full access, and auto-share disabled in `.config/opencode/opencode.json` | 5 |
+| OpenHands | 285 | 67 AgentSkills in `.agents/skills/*` | User legacy `.openhands/skills/agent-surface-rules.md`; project `AGENTS.md`; 6 scoped refs | None | External `.agents/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.openhands/mcp.json` (user-scope) | 4 |
 | Trae | 8 | None | `.trae/user_rules.md` + 6 scoped refs | None | None | Synapse + Grimoire MCP in `.trae/mcp.json` | 2 |
-| Goose | 67 | 66 recipes in `recipes/*.yaml` | None | None | None | Synapse + Grimoire MCP in `~/.config/goose/config.yaml` (`extensions`, user-scope) | 3 |
-| Grok Build | 305 | 66 command skills in `.grok/skills/*` | Project install emits `AGENTS.md`; default user build emits none | None | External `.grok/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.grok/settings.json` | 4 |
-| Pi | 311 | 66 command skills in `.pi/agent/skills/*` | `.pi/agent/AGENTS.md` + 6 scoped refs | None | External `.pi/agent/skills/*` (Anthropic excluded) | None | 4 |
-| Poolside | 312 | 66 command skills in `.config/poolside/skills/*` | `.config/poolside/.poolside` + 6 scoped refs | None | External `.config/poolside/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `settings.yaml` (`mcp_servers`) | 4 |
-| Windsurf | 312 | 66 workflows in `.codeium/windsurf/global_workflows/*.md` | `.codeium/windsurf/memories/global_rules.md` + 6 scoped refs | None | External `.codeium/windsurf/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.codeium/windsurf/mcp_config.json` | 4 |
-| Zed | 312 | 66 command skills in `.agents/skills/*` | `.config/zed/AGENTS.md` + 6 scoped refs | None | External `.agents/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.config/zed/settings.json` | 4 |
+| Goose | 68 | 67 recipes in `recipes/*.yaml` | None | None | None | Synapse + Grimoire MCP in `~/.config/goose/config.yaml` (`extensions`, user-scope) | 3 |
+| Grok Build | 278 | 67 command skills in `.grok/skills/*` | Project install emits `AGENTS.md`; default user build emits none | None | External `.grok/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.grok/settings.json` | 4 |
+| Pi | 284 | 67 command skills in `.pi/agent/skills/*` | `.pi/agent/AGENTS.md` + 6 scoped refs | None | External `.pi/agent/skills/*` (Anthropic excluded) | None | 4 |
+| Poolside | 285 | 67 command skills in `.config/poolside/skills/*` | `.config/poolside/.poolside` + 6 scoped refs | None | External `.config/poolside/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `settings.yaml` (`mcp_servers`) | 4 |
+| Windsurf | 285 | 67 workflows in `.codeium/windsurf/global_workflows/*.md` | `.codeium/windsurf/memories/global_rules.md` + 6 scoped refs | None | External `.codeium/windsurf/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.codeium/windsurf/mcp_config.json` | 4 |
+| Zed | 285 | 67 command skills in `.agents/skills/*` | `.config/zed/AGENTS.md` + 6 scoped refs | None | External `.agents/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.config/zed/settings.json` | 4 |
 
 Bundled instruction targets inline only `alwaysApply: true` rules. Cybersecurity (`04`) and language rules (`10`–`14`) ship as separate reference files under each target's config tree, selected by project-aware commands such as `boot-new`. Cursor keeps all 12 as native `.mdc`; Kilo config-merges the 6 always-on rules and keeps the 6 scoped policies as references.
+
+Generated-file presence proves only distribution. `workflow-runtime` separately grades host discovery, native invocation, authentication, full-autonomy execution, exact materialized world state, output contract, and MCP tool calls. A target may therefore be generated while its installed CLI is `BLOCKED`, `PARTIAL`, or `UNREACHABLE` on a particular machine.
+
+## Cline Notes
+
+Cline CLI and the IDE extension share `~/Documents/Cline/Workflows` and `~/Documents/Cline/Rules`, but they do not share one MCP settings file. The CLI reads `~/.cline/data/settings/cline_mcp_settings.json`; VS Code, Cursor, and Windsurf each read the Cline extension's `settings/cline_mcp_settings.json` under that IDE's `globalStorage`. agent-surface merges first-party MCP entries into all four routes and prunes the retired `.cline/mcp.json` route when it owns those entries. On Windows, scope-derived installs honor `%APPDATA%`; explicit `--dest` installs relocate the conventional `AppData/Roaming` subtree under the destination. Project workflows and bundled rules retain the supported `.clinerules` roots, while project agents and skills use `.cline/`.
+
+The Cline `subagents` render token consumes the repository's existing `subagents/*.md` source primitive and emits Cline Configured Agents as `.cline/agents/*.yaml`. It does not refer to Cline's separate built-in `spawn_agent` delegation feature.
+
+Live Cline CLI `3.0.46` probes on 2026-07-25 used its OpenRouter provider with auto-approval. The CLI called `synapse__lock_list` and `grimoire__grimoire_search` through its configured MCP route and returned the required exact result. Running Cursor extension hosts reloaded their updated global-storage config and logged both servers, but no extension-originated MCP tool call was run; extension task-level MCP behavior therefore remains unproven.
+
+Current headless Cline resolves a generated workflow by stem, such as `/workflow-runtime`; `/workflow-runtime.md` falls through as ordinary prompt text. A loaded runtime-audit workflow also cannot safely launch `cline` from inside its own active Cline daemon: the nested process collides with inherited hub state and can produce a false `UNREACHABLE` verdict. `workflow-runtime` now requires bounded inputs, honors inspect-only requests, and blocks same-family self-probes pending an external driver.
+
+Cline's built-in `spawn_agent` delegation is runtime behavior and needs no generated file, so it is neither a missing mapping nor the meaning of the `subagents` render token. Hooks, plugins, scheduling/cron specs, connectors, provider settings, and persistent agent-team state are real Cline configuration or state surfaces but are not generated; agent-surface has no matching source primitive for those surfaces, and several are executable, credential-bearing, or runtime-owned.
 
 ## OpenHands Notes
 

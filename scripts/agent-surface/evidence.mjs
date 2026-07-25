@@ -1,13 +1,13 @@
 // The `run` command: execute a verify command and capture tamper-evident evidence
 // (redacted stdout/stderr, hashes, git tree, timing) for a workflow round. Secret
-// redaction and command-class approval gating live here.
+// redaction and command-class recording live here.
 import { spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
 import { gitValue } from "./proc.mjs";
-import { argValues, fail, requiredArgValue, safeFilename, safeTimestamp, sha256 } from "./util.mjs";
+import { fail, requiredArgValue, safeFilename, safeTimestamp, sha256 } from "./util.mjs";
 
 export async function runEvidence(args) {
   const separator = args.indexOf("--");
@@ -23,13 +23,9 @@ export async function runEvidence(args) {
   const timeoutMs = Number(requiredArgValue(options, "--timeout"));
   const outDir = path.resolve(requiredArgValue(options, "--out"));
   const allowedClasses = new Set(["read_only", "build_test", "network", "filesystem_destructive", "deployment", "database_mutation"]);
-  const approval = approvalForClass(klass, options);
 
   if (!allowedClasses.has(klass)) fail(`unsupported command class: ${klass}`);
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) fail("--timeout must be a positive integer");
-  if (!approval.approved) {
-    fail(`command class ${klass} requires explicit approval via --approved ${klass} or AGENT_SURFACE_APPROVED_CLASSES`);
-  }
 
   await mkdir(outDir, { recursive: true });
 
@@ -49,7 +45,7 @@ export async function runEvidence(args) {
   const stdoutRedacted = redactEvidenceText(stdoutRaw);
   const stderrRedacted = redactEvidenceText(stderrRaw);
   const cmdRaw = [command, ...commandArgs];
-  const cmdRedacted = cmdRaw.map((part) => redactEvidenceText(part));
+  const cmdRedacted = redactEvidenceCmd(cmdRaw);
   const stdout = stdoutRedacted.text;
   const stderr = stderrRedacted.text;
   const stdoutPath = path.join(outDir, `${basename}.stdout.log`);
@@ -59,10 +55,13 @@ export async function runEvidence(args) {
   const evidence = {
     task_id: taskId,
     class: klass,
-    cmd: cmdRedacted.map((part) => part.text),
+    cmd: cmdRedacted.cmd,
     cmd_hash_raw: `sha256:${sha256(JSON.stringify(cmdRaw))}`,
     cwd: process.cwd(),
-    approval,
+    execution_consent: {
+      mode: "full-access",
+      source: "rules/00-precedence-and-safety.mdc",
+    },
     timeout_ms: timeoutMs,
     exit_code: exitCode,
     signal: result.signal ?? null,
@@ -79,8 +78,8 @@ export async function runEvidence(args) {
     stderr_raw_hash: `sha256:${sha256(stderrRaw)}`,
     stderr_raw_stored: false,
     redaction: {
-      applied: stdoutRedacted.applied || stderrRedacted.applied || cmdRedacted.some((part) => part.applied),
-      patterns: [...new Set([...stdoutRedacted.patterns, ...stderrRedacted.patterns, ...cmdRedacted.flatMap((part) => part.patterns)])],
+      applied: stdoutRedacted.applied || stderrRedacted.applied || cmdRedacted.applied,
+      patterns: [...new Set([...stdoutRedacted.patterns, ...stderrRedacted.patterns, ...cmdRedacted.patterns])],
     },
   };
 
@@ -92,6 +91,36 @@ export async function runEvidence(args) {
   console.log(`metadata: ${path.relative(process.cwd(), evidencePath)}`);
   console.log(`exit_code: ${exitCode}`);
   process.exitCode = exitCode;
+}
+
+const SECRET_NAME_SEGMENTS = new Set(["secret", "token", "password", "passwd", "pwd", "apikey"]);
+// Single-dash options are only the bare secret names. Opaque values like
+// `-sentinel-secret-value` must not be classified as options.
+const SHORT_SECRET_OPTION_NAME = /^(?:api[_-]?key|secret|token|password|passwd|pwd)$/i;
+
+/** True for --token, --access-token, --client-secret, --aws-secret-access-key, etc. */
+function isSecretOptionName(name) {
+  const parts = String(name).toLowerCase().split(/[-_]+/).filter(Boolean);
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    if (SECRET_NAME_SEGMENTS.has(part)) return true;
+    if (part === "api" && parts[i + 1] === "key") return true;
+  }
+  return false;
+}
+
+function parseSecretOption(part) {
+  const eq = /^(--?)([^=]+)=(.*)$/.exec(part);
+  if (eq) {
+    const allowed = eq[1] === "--" ? isSecretOptionName(eq[2]) : SHORT_SECRET_OPTION_NAME.test(eq[2]);
+    if (allowed) return { kind: "eq", prefix: eq[1], name: eq[2] };
+  }
+  const flag = /^(--?)(.+)$/.exec(part);
+  if (flag && !part.includes("=")) {
+    const allowed = flag[1] === "--" ? isSecretOptionName(flag[2]) : SHORT_SECRET_OPTION_NAME.test(flag[2]);
+    if (allowed) return { kind: "flag", prefix: flag[1], name: flag[2] };
+  }
+  return null;
 }
 
 function redactEvidenceText(value) {
@@ -136,22 +165,36 @@ function redactEvidenceText(value) {
   return { text, applied: patterns.length > 0, patterns };
 }
 
-function approvalForClass(klass, options) {
-  const approvalRequired = !new Set(["read_only", "build_test"]).has(klass);
-  if (!approvalRequired) {
-    return { required: false, approved: true, sources: [] };
+/** Redact secret option values in argv (`--token x`, `--token=-x`, `--access-token x`). */
+function redactEvidenceCmd(cmdRaw) {
+  const patterns = [];
+  const cmd = [];
+  for (let i = 0; i < cmdRaw.length; i += 1) {
+    const part = cmdRaw[i];
+    const opt = parseSecretOption(part);
+
+    if (opt?.kind === "eq") {
+      cmd.push(`${opt.prefix}${opt.name}=[REDACTED]`);
+      patterns.push("secret-flag");
+      continue;
+    }
+
+    if (opt?.kind === "flag") {
+      cmd.push(part);
+      const next = i + 1 < cmdRaw.length ? cmdRaw[i + 1] : null;
+      // Values are opaque and may look like options. Only another recognized secret
+      // option is structural enough to process separately.
+      if (next !== null && parseSecretOption(next) === null) {
+        cmd.push("[REDACTED]");
+        patterns.push("secret-flag");
+        i += 1;
+      }
+      continue;
+    }
+
+    const textPart = redactEvidenceText(part);
+    patterns.push(...textPart.patterns);
+    cmd.push(textPart.text);
   }
-
-  const approvedArgs = new Set(argValues(options, "--approved"));
-  const approvedEnv = new Set((process.env.AGENT_SURFACE_APPROVED_CLASSES ?? "").split(",").map((item) => item.trim()).filter(Boolean));
-  const sources = [];
-
-  if (approvedArgs.has(klass) || approvedArgs.has("all")) sources.push("--approved");
-  if (approvedEnv.has(klass) || approvedEnv.has("all")) sources.push("AGENT_SURFACE_APPROVED_CLASSES");
-
-  return {
-    required: true,
-    approved: sources.length > 0,
-    sources,
-  };
+  return { cmd, applied: patterns.length > 0, patterns };
 }

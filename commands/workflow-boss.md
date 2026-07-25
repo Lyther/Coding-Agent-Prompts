@@ -5,8 +5,11 @@ description: "Decompose related tasks into an implementable spec without writing
 ---
 ## OBJECTIVE
 
-Decompose **a batch of related tasks** into an implementable spec **without writing code**.
-One round = as many tasks as the worker can chew through before a blocker or context-pressure handoff. BOSS's job is to enumerate the queue once, with enough rigor that the worker, reviewer, judger, and rescue all operate from the same artifact.
+Decompose an admitted **orchestrated or release** run into an implementable spec **without writing code**.
+
+IRON LAW: DO NOT TURN A LINEAR DEVELOPMENT TASK INTO A MULTI-ROLE WORKFLOW.
+
+One round contains the smallest coherent batch that earns durable workflow state. BOSS defines isolation, dependencies, acceptance, and proof; it does not maximize task count.
 
 Output must be sufficient for any agent (human, Cursor, Claude Code, Codex) to implement from alone.
 
@@ -14,6 +17,8 @@ Output must be sufficient for any agent (human, Cursor, Claude Code, Codex) to i
 
 You receive: a task description (which may bundle multiple related sub-tasks) plus any constraints.
 If essential repo context is missing, run `boot-context` first.
+
+Require an `ops-flow` routing object or an explicit user request for formal workflow decomposition. If the profile is `direct`, `standard`, or `reviewed`, stop and return the route-specific development command instead of creating a ledger.
 
 ## COMMAND REUSE
 
@@ -27,16 +32,16 @@ Use existing commands as helper functions when they improve the BOSS spec:
 
 Helper command output is evidence for `boss.context_capsule`, task AC, risk notes, and verify gates. It does not change the workflow graph or output contract: in workflow mode, always write `boss.json` in the BOSS format and set the normal `workflow.next_command`.
 
-## DESIGN PHILOSOPHY (v3 — Validated Batched Rounds)
+## DESIGN PHILOSOPHY (v3 — Formal Orchestrated/Release Rounds)
 
-- **A round is a batch.** A `boss.json` enumerates a queue of 1 to N tasks.
+- **A round is a bounded batch.** A `boss.json` normally enumerates 1 to 3 tasks and must never exceed 5.
 - **The worker burns through the queue** in dependency order, stopping only on (a) a blocker on the current task, (b) self-assessed context pressure, or (c) the queue going empty.
 - **The reviewer reviews the batch**, emitting per-task verdicts plus an aggregate status.
 - **Single-task runs are still legal** — a queue of one uses the same v3 ledger shape.
-- **Maximize coherent batching.** Assign as many related tasks as can be specified safely in one round, constrained by shared FILESCOPE, route, dependency chain, risk, context budget, and verification cost.
+- **Minimize coordination.** Prefer one owner for sequential or overlapping work. Split tasks only when the dependency graph, filescope isolation, or release evidence benefits from distinct ownership.
 - **Don't over-batch.** Group tasks that share FILESCOPE, contract, or test surface. Don't queue unrelated chores or mixed-risk work into one BOSS — that defeats reviewer focus.
 - **Expose parallelism explicitly.** When tasks are independent, mark that they can run in parallel and name the required isolation. Do not rely on downstream agents to infer safe fan-out.
-- **Use workflow only when it earns its overhead.** Direct small edits do not need six roles. Use this path for medium/high-risk, multi-step, cross-file, security-sensitive, or ambiguity-heavy work.
+- **Use workflow only when it earns its overhead.** Cross-file or high-risk work normally needs one owner plus review, not automatically BOSS. Use this path for genuine parallel width, long-running dependency state, or formal release proof.
 - **The run ledger is the source of truth.** `run.json` plus `events.ndjson` records state transitions; role files are artifacts, not state authority.
 
 ## PROTOCOL
@@ -48,7 +53,7 @@ Helper command output is evidence for `boss.context_capsule`, task AC, risk note
 - Write the active-run pointer at `.agent-surface/workflows/current.json`.
 - Treat `.cursor/.workflow/` as a Cursor compatibility surface only. It may mirror latest role files, but it is not canonical.
 - Single active run only.
-- Before starting, require `git status --porcelain` to be clean. If not clean, stop unless the user explicitly authorizes dirty-baseline mode; if authorized, record `dirty_baseline: true` plus the exact dirty file list.
+- Before starting, record `git status --porcelain`. A dirty tree is allowed: set `dirty_baseline: true`, record the exact dirty file list, and preserve those changes throughout the run.
 - Verify `.agent-surface/workflows/<run_id>/` is ignored by `.gitignore` or `.git/info/exclude`; if not, stop and instruct the human to add it before creating workflow artifacts.
 - Record `branch`, `base_commit`, `base_tree_hash`, and `created_at` in the run. If the branch changes later, downstream roles must fail closed.
 - Create `.agent-surface/workflows/<run_id>/lock` before writing artifacts. Use temp-file-and-rename for JSON writes.
@@ -94,11 +99,11 @@ Build a list of 1 to N tasks. Each task is independently reviewable, verifiable,
 - Prefer a full useful queue over a tiny handoff. If more related tasks fit the same route, FILESCOPE, and verification surface, include them instead of leaving obvious follow-up tasks for a later BOSS round.
 - Assign as much independent work as possible in the first round when it can be isolated by filescope, test surface, or worktree. This is how the orchestrator can launch parallel workers or a worker lead can launch runtime-native subagents without re-reading the repo for each small task.
 - Prefer one concern, one testable behavior, one reversible patch per task. Estimate by filescope size, dependency count, and verify cost, not line count.
-- Split the run instead of batching when tasks require different worker routes, unrelated filescopes, incompatible risk levels, or separate human approvals.
+- Split the run instead of batching when tasks require different worker routes, unrelated filescopes, incompatible risk levels, different irreversible targets, or separate human-only actions.
 - Each task gets its own `plan` (3–8 steps), `ac`, and `verify` commands.
 - Don't pre-commit the worker to a specific implementation — leave room for judgment, but pin the contract.
-- Each task must be isolatable: require either `patch_required: true` (default) or `commit_required: true` if the user wants per-task commits. Without patch/commit isolation, `MERGE_PARTIAL` is disabled.
-- Default `max_tasks_per_round` to 3 until local telemetry proves larger batches preserve clean-pass rate. Use 5 only for explicitly low/medium-risk coherent queues with shared filescope, cheap verification, and no security/data/dependency/approval-gated surface. Anything above 5 requires recent workflow telemetry showing clean-pass rate is not dropping.
+- Set `patch_required: true` only when partial merge, concurrent writable isolation, or explicit audit policy needs a per-task patch object. `parallel_group` and `separate_worktree` require it mechanically. A serial single-owner task may use `patch_required: false`; `MERGE_PARTIAL` is then disabled for that task.
+- Default `max_tasks_per_round` to 3. Five is the hard maximum and is allowed only for explicitly low/medium-risk coherent queues with cheap verification and no conflicting security, data, dependency, or target surface.
 
 Keep the process deterministic: route by explicit `workflow.next_command` plus the task queue, not free-form agent debate.
 
@@ -110,21 +115,23 @@ Keep the process deterministic: route by explicit `workflow.next_command` plus t
 - Give each AC a `type`: `functional`, `failure_path`, `security`, `performance`, `accessibility`, `compatibility`, `documentation`, `observability`, or `data_safety`.
 - Add documentation AC when public behavior, API, CLI, config, security posture, or operational behavior changes.
 
+For a brownfield fix, make the task contract explicit: current behavior, expected behavior, and behavior that must remain unchanged.
+
 ### Phase 5: Verify gates (per task)
 
 - Minimal ordered list of deterministic commands to validate that task's AC.
 - Scoped tests first, then broader gates if needed.
 - A task with no `verify` array is invalid.
 - Classify every verify command as `read_only`, `build_test`, `network`, `filesystem_destructive`, `deployment`, or `database_mutation`.
-- `network`, `filesystem_destructive`, `deployment`, and `database_mutation` commands require explicit human authorization or must be replaced with simulation.
+- Execute every command class under durable full-execution consent when the task names the target and boundary. Preserve the class in evidence so destructive, deployment, and mutation effects remain auditable.
 - Include timeout budgets. Commands without timeout/resource expectations are invalid.
 
 ### Phase 6: Risk + Sandbox
 
-- Set `sandbox_required: true` for security/pentest tasks (simulation-only unless user authorizes).
+- Set `sandbox_required: true` for simulation-only security/pentest tasks. Use the resolved live target only when the task explicitly scopes live testing.
 - Risk applies at the batch level; per-task notes go in the task's own `risk_notes`.
 - Default network access is off unless a task explicitly requires it.
-- New dependencies require approval notes: manifest/lockfile impact, vulnerability scan expectation, and reason existing dependencies are insufficient.
+- New dependencies require risk notes: manifest/lockfile impact, vulnerability scan expectation, and reason existing dependencies are insufficient.
 
 ### Phase 7: Batch policy
 
@@ -132,7 +139,7 @@ Define when the worker should stop the round:
 
 - `stop_on`: subset of `["blocker", "context_pressure", "queue_empty", "max_tasks_cap", "drift_check"]` (default: all five).
 - `context_pressure_threshold_pct`: heuristic for context budget (default: 70), backed by concrete counters.
-- `max_tasks_per_round`: default 3. Use 5 only when the queue is explicitly low/medium-risk, coherent, and cheap to verify; justify anything higher than 5 with measured prior clean-pass and rework data, not just a desire to reduce handoff count.
+- `max_tasks_per_round`: default 3 and hard maximum 5. If more work remains, create a later round after reviewing the current batch.
 - `drift_check_every`: re-read BOSS spec after this many completed tasks (default: 5). Catches scope drift before it metastasizes.
 - `timeout_budget_ms`: max elapsed runner time for a round before handoff.
 - Context pressure counters: files opened, total bytes read, commands run, verify cycles, log bytes, failed attempts, elapsed time, and model-reported context usage when available.
@@ -179,7 +186,7 @@ Use this shape (v3):
   "filescope": {
     "allowed": ["batch-level paths/modules allowed to change"],
     "forbidden": ["paths/modules forbidden to change"],
-    "protected": ["paths requiring explicit review or approval"]
+    "protected": ["paths requiring explicit ownership and review"]
   },
   "requirements": [
     { "id": "R1", "quote": "exact user quote", "interpretation": "what it means", "satisfied_by": ["T1", "T3"] }

@@ -4,19 +4,21 @@
 // calls these; each merger preserves user-owned siblings/comments and throws (→ blocked, never
 // clobber) on an ambiguous shape.
 import { tomlString } from "./format.mjs";
-import { parseJsoncResult, setJsoncRootObjectProperty } from "./jsonc.mjs";
+import { parseJsoncResult, setJsoncRootObjectProperty, setJsoncRootProperty } from "./jsonc.mjs";
 import { fail } from "./util.mjs";
 
-export function renderMcpConfig(format, entries) {
+export function renderMcpConfig(format, entries, rootProperties = {}) {
   if (YAML_MCP_FORMATS.has(format)) return renderYamlMcpConfig(format, entries);
   const servers = optionalServiceMcpServers(entries, format);
   if (format === "codex-toml") {
-    return entries.map(([id, service]) => renderCodexMcpServer(id, service)).join("\n");
+    const settings = renderCodexRootStringProperties(rootProperties);
+    const mcp = entries.map(([id, service]) => renderCodexMcpServer(id, service)).join("\n");
+    return [settings, mcp].filter(Boolean).join("\n");
   }
-  if (format === "vscode-servers") return `${JSON.stringify({ servers }, null, 2)}\n`;
-  if (format === "zed-context-servers") return `${JSON.stringify({ context_servers: servers }, null, 2)}\n`;
-  if (format === "local-command-map") return `${JSON.stringify({ mcp: servers }, null, 2)}\n`;
-  return `${JSON.stringify({ mcpServers: servers }, null, 2)}\n`;
+  if (format === "vscode-servers") return `${JSON.stringify({ ...rootProperties, servers }, null, 2)}\n`;
+  if (format === "zed-context-servers") return `${JSON.stringify({ ...rootProperties, context_servers: servers }, null, 2)}\n`;
+  if (format === "local-command-map") return `${JSON.stringify({ ...rootProperties, mcp: servers }, null, 2)}\n`;
+  return `${JSON.stringify({ ...rootProperties, mcpServers: servers }, null, 2)}\n`;
 }
 
 export function optionalServiceMcpServers(entries, format) {
@@ -62,22 +64,28 @@ function renderCodexMcpServer(id, service) {
 // is agent-surface-owned and the merged value is fully regenerated, while user-owned
 // sibling servers under the same key are preserved by value. Bad config shapes block
 // rather than clobber.
-export function mergeJsonMcpConfig(text, format, entries, removeIds = []) {
+export function mergeJsonMcpConfig(text, format, entries, removeIds = [], rootProperties = {}) {
   const parsed = parseJsoncResult(text);
   if (!parsed.ok) throw new Error(`invalid JSON/JSONC: ${parsed.error.message}`);
   if (parsed.value === null || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
     throw new Error("config must be an object");
   }
   const key = mcpConfigRootKey(format);
-  if (!Object.hasOwn(parsed.value, key) && entries.length === 0) return text;
-  const current = parsed.value[key] ?? {};
-  if (current === null || typeof current !== "object" || Array.isArray(current)) {
-    throw new Error(`${key} must be an object`);
+  let content = text;
+  if (Object.hasOwn(parsed.value, key) || entries.length > 0 || removeIds.length > 0) {
+    const current = parsed.value[key] ?? {};
+    if (current === null || typeof current !== "object" || Array.isArray(current)) {
+      throw new Error(`${key} must be an object`);
+    }
+    const next = { ...current };
+    for (const id of removeIds) delete next[id];
+    Object.assign(next, optionalServiceMcpServers(entries, format));
+    content = setJsoncRootObjectProperty(content, key, next);
   }
-  const next = { ...current };
-  for (const id of removeIds) delete next[id];
-  Object.assign(next, optionalServiceMcpServers(entries, format));
-  return setJsoncRootObjectProperty(text, key, next);
+  for (const [property, value] of Object.entries(rootProperties)) {
+    content = setJsoncRootProperty(content, property, value);
+  }
+  return content;
 }
 
 function mcpConfigRootKey(format) {
@@ -168,13 +176,39 @@ export function mergeYamlMcpConfig(text, format, entries, removeIds = []) {
   return out;
 }
 
-export function mergeCodexMcpToml(text, entries, removeIds = []) {
+export function mergeCodexMcpToml(text, entries, removeIds = [], rootProperties = {}) {
   const ids = uniqueStrings([...entries.map(([id]) => id), ...removeIds]);
-  const cleaned = stripCodexMcpTomlBlocks(text, ids);
+  const cleaned = mergeCodexRootStringProperties(stripCodexMcpTomlBlocks(text, ids), rootProperties);
   if (entries.length === 0) return cleaned;
   const block = entries.map(([id, service]) => renderCodexMcpServer(id, service)).join("\n").trimEnd();
   const joiner = cleaned.trim().length === 0 ? "" : "\n\n";
   return `${cleaned.trimEnd()}${joiner}${block}\n`;
+}
+
+function renderCodexRootStringProperties(properties) {
+  const lines = Object.entries(properties).map(([key, value]) => {
+    if (typeof value !== "string") fail(`Codex root property ${key} must be a string`);
+    return `${key} = "${tomlString(value)}"`;
+  });
+  return lines.length > 0 ? `${lines.join("\n")}\n` : "";
+}
+
+function mergeCodexRootStringProperties(text, properties) {
+  if (Object.keys(properties).length === 0) return text;
+  const lines = text.split(/\r?\n/);
+  const firstSection = lines.findIndex((line) => /^\s*\[.+\]\s*$/.test(line));
+  const topEnd = firstSection === -1 ? lines.length : firstSection;
+  const missing = [];
+  for (const [key, value] of Object.entries(properties)) {
+    if (typeof value !== "string") fail(`Codex root property ${key} must be a string`);
+    const rendered = `${key} = "${tomlString(value)}"`;
+    const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+    const index = lines.slice(0, topEnd).findIndex((line) => pattern.test(line));
+    if (index === -1) missing.push(rendered);
+    else lines[index] = rendered;
+  }
+  if (missing.length > 0) lines.splice(topEnd, 0, ...missing, "");
+  return lines.join("\n");
 }
 
 function uniqueStrings(values) {

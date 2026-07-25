@@ -19,7 +19,7 @@
         "Deep Agents MCP: ~/.deepagents/.mcp.json mcpServers.synapse (auto-generated/merged)",
         "Cursor MCP: ~/.cursor/mcp.json mcpServers.synapse (auto-generated/merged)",
         "Droid MCP: ~/.factory/mcp.json mcpServers.synapse (auto-generated/merged)",
-        "Cline MCP: ~/.cline/mcp.json mcpServers.synapse (auto-generated/merged)",
+        "Cline MCP: ~/.cline/data/settings/cline_mcp_settings.json mcpServers.synapse (auto-generated/merged, user-scope)",
         "Kilo MCP: ~/.config/kilo/kilo.jsonc mcp.synapse (auto-generated/merged)",
         "OpenCode MCP: ~/.config/opencode/opencode.json mcp.synapse (auto-generated/merged)",
         "OpenHands MCP: ~/.openhands/mcp.json mcpServers.synapse (auto-generated/merged, user-scope)",
@@ -60,7 +60,7 @@
         "Deep Agents MCP: ~/.deepagents/.mcp.json mcpServers.grimoire (auto-generated/merged)",
         "Cursor MCP: ~/.cursor/mcp.json mcpServers.grimoire (auto-generated/merged)",
         "Droid MCP: ~/.factory/mcp.json mcpServers.grimoire (auto-generated/merged)",
-        "Cline MCP: ~/.cline/mcp.json mcpServers.grimoire (auto-generated/merged)",
+        "Cline MCP: ~/.cline/data/settings/cline_mcp_settings.json mcpServers.grimoire (auto-generated/merged, user-scope)",
         "Kilo MCP: ~/.config/kilo/kilo.jsonc mcp.grimoire (auto-generated/merged)",
         "OpenCode MCP: ~/.config/opencode/opencode.json mcp.grimoire (auto-generated/merged)",
         "OpenHands MCP: ~/.openhands/mcp.json mcpServers.grimoire (auto-generated/merged, user-scope)",
@@ -141,28 +141,6 @@
       "notes": [
         "Already wired locally before this optional submodule was added.",
         "Optional CTF skill pack; some skills may recommend installing challenge tools on demand."
-      ]
-    },
-    "pua": {
-      "status": "optional-caution",
-      "source_url": "https://github.com/tanweai/pua",
-      "path": "external/pua",
-      "commit": "56332fe2eb33fc2600016adbb4468510e6289fbd",
-      "kind": "behavior-pack",
-      "optional": true,
-      "skill_roots": [
-        "external/pua/skills/pua",
-        "external/pua/skills/pua-en"
-      ],
-      "local_wiring": [
-        "Codex/agent skills: ~/.agents/skills/pua and ~/.agents/skills/pua-en",
-        "Claude skills: ~/.claude/skills/pua and ~/.claude/skills/pua-en",
-        "Cline/Kilo/Antigravity/OpenCode skills: only pua and pua-en mirrored into each target's native skill directory",
-        "Droid skills: ~/.factory/skills/pua and ~/.factory/skills/pua-en"
-      ],
-      "notes": [
-        "Already wired locally before this optional submodule was added.",
-        "Use narrowly because this behavior pack can increase token use and reduce model performance on normal tasks."
       ]
     },
     "anthropic-cybersecurity-skills": {

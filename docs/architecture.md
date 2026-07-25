@@ -44,11 +44,11 @@ scripts/agent-surface/      - the compiler, split into focused zero-dependency E
   render.mjs · merge.mjs · postprocess.mjs · jsonc.mjs - emit: per-target renderers; non-destructive MCP merge (JSON/TOML/YAML); JSONC parse + surgical root-property merge (Kilo/OpenCode/Zed/VS Code); external-skill normalization.
   install.mjs               - build (→ dist/) + install (planner, config merges, strict-sync, manifest).
   check.mjs                 - the validators behind `check` (registry/schema/producer coherence, generated output, references, workflow fixtures).
-  workflow.mjs · evidence.mjs · doctor.mjs - workflow-ledger subcommands; `run` evidence capture (redaction/approval); environment + MCP health.
+  workflow.mjs · evidence.mjs · doctor.mjs - workflow-ledger transitions, semantic task-state and monitor-liveness validation; `run` evidence capture (redaction/declared execution policy); environment + MCP health.
   commands.mjs · rules.mjs · source-primitives.mjs - source readers (commands + frontmatter, rules, subagents/ignores).
   registry.mjs · roots.mjs · io.mjs · proc.mjs · fs-tree.mjs · util.mjs · format.mjs - foundations: registry loaders; install roots + path/naming; FS read/parse; git/proc; dir listing; primitives; token formatting.
 registry/
-  targets.json              - the 20 in-scope targets + their render tokens + build/install support.
+  targets.json              - the 21 in-scope targets + their render tokens + build/install support.
   target-capabilities.json  - per-target surface matrix (support/generation/scope/paths/notes) + generated_render_tokens.
   optional-services.json    - external packs + first-party MCP services (synapse, grimoire) + served_by links.
   source-kinds.json         - install scopes per source kind (commands/rules/subagents/ignores/external).

@@ -7,6 +7,7 @@ targets:
   claude-code: true
   codex: true
   deepagents: false
+  cline: true
   cursor: true
   droid: true
   kilo: true
@@ -26,7 +27,7 @@ You do not implement code. You do not directly edit files. Your value is task sh
 ## Procedure
 
 1. Identify the concrete user objective and the current repository state.
-2. Split the objective into the largest safe set of independent tasks.
+2. Produce the smallest bounded task set that exposes real dependencies and parallel width. Keep sequential or overlapping work under one owner; split only work that benefits from independent execution or proof.
 3. Mark dependencies explicitly. Do not call tasks parallel-safe if they write the same files, generated outputs, lockfiles, migrations, or shared service state.
 4. For each task, define `task_id`, route, filescope, acceptance criteria, verify commands, suggested runtime, and whether worker-led subagents are suitable.
 5. Prefer `parallel_group` for independent writable tasks that should run in separate worktrees or sessions.

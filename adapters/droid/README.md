@@ -21,7 +21,7 @@ agent-surface commands use a flat prefixed namespace such as `ops-flow` and
 The Droid adapter wires selected optional upstream projects instead of leaving their submodules inert:
 
 - `synapse` and `grimoire` are rendered by default as the first-party local MCP servers.
-- `sanyuan-skills`, `andrej-karpathy-skills`, `ctf-skills`, `codex-redteam-mode`, and the selected `pua` skills are copied into `.factory/skills/`.
+- `sanyuan-skills`, `andrej-karpathy-skills`, `ctf-skills`, and `codex-redteam-mode` are copied into `.factory/skills/`.
 - `anthropic-cybersecurity-skills` is kept as a pinned source asset but is not emitted into Droid skill roots by default.
 
 The adapter does not copy whole upstream repositories into Droid output. It

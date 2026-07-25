@@ -45,13 +45,13 @@ For each entry in `worker.tasks_processed`, run this checklist independently:
 - Correctness: logic bugs, edge cases, error handling, determinism — relative to that task's stated AC.
 - Security: injection, secret leakage, authz gaps, unsafe APIs introduced by this task.
 - Integrity: no disabled checks, no test sabotage, no phantom deps. The task's `verify` commands must have run; sabotaged tests = REJECT.
-- Sandbox: for security tasks, confirm simulation-only unless authorized.
+- Sandbox: for security tasks, confirm the executed target matches BOSS scope; use simulation unless the task explicitly names a live target.
 - Reject lazy patterns: `assert True`, empty tests, mock-only tests, deleted tests, TODO placeholders.
 - Reviewer independence: worker self-audit can guide inspection, but it is never proof.
 - Independent verification: rerun each completed task's verify commands when safe. If rerun is impossible, set `review_mode: "log_only"` with a concrete reason and validate hashes/tree binding.
-- Formatter/lint gate: the task's patched files must pass the repo's own formatter/linter on the patched (staged) content — `ruff format --check` + `ruff check`, `gofumpt -l`, `shfmt -d`, `prettier --check` as the stack dictates. Drift a worker committed from editor format-on-save (wrong line length, reordered imports, re-indented shell) = REJECT; judge the staged snapshot, not an earlier clean tree.
+- Formatter/lint gate: the task's patched files must pass the repo's own formatter/linter on the patched (staged) content — for example `ruff format --check` + `ruff check`, `gofumpt -l`, `shfmt -d`, or the repository's checked-in lint/format script. Drift a worker committed from editor format-on-save (wrong line length, reordered imports, re-indented shell) = REJECT; judge the staged snapshot, not an earlier clean tree.
 - Evidence binding: verify command evidence records `cmd`, `cwd`, command class, timeout, exit code, start time, duration, tree hash, stdout/stderr refs, hashes, and redaction status.
-- Patch isolation: verify each completed task has `patch_ref`, `patch_hash`, `pre_tree_hash`, `post_tree_hash`, `name_status_ref`, and `applies_cleanly: true` from `agent-surface workflow patch verify`.
+- Patch isolation: when BOSS set `patch_required=true`, verify `patch_ref`, `patch_hash`, `pre_tree_hash`, `post_tree_hash`, `name_status_ref`, and `applies_cleanly: true`. When false, ordinary diff evidence is allowed but the task cannot be accepted through `MERGE_PARTIAL`.
 
 ## CROSS-DOMAIN QA CHECKLIST (completed batch)
 
@@ -92,7 +92,7 @@ After per-task review, also check **batch-level invariants**:
 - Structured artifact validity: malformed JSON, missing `workflow.next_command`, missing per-task evidence refs = REJECT.
 - Stop reason sanity: if `stop_reason=queue_empty`, every task must appear in either `tasks_processed` or have an upstream blocker recorded. Mismatch = REJECT.
 - Cross-task coherence: completed tasks should not contradict each other (e.g., T1 adds an API, T3 removes it without `depends_on` chaining).
-- Run ledger coherence: `accepted_task_ids`, `active_task_ids`, `deferred_task_ids`, and `rework_task_ids` must be consistent with BOSS dependencies and reviewer/judger handoffs.
+- Run ledger coherence: `active_task_ids`, `accepted_task_ids`, `rework_task_ids`, `deferred_task_ids`, and `closed_task_ids` are mutually exclusive; every current BOSS task appears in one bucket; prior-round accepted/closed IDs remain allowed; and transitions match reviewer/judger handoffs. Run `workflow-doctor`; schema-valid contradictory buckets are a blocker.
 - Dirty worktree: reject if uncommitted changes cannot be attributed to current task patches or accepted prior task patches.
 - Security/privacy: reject evidence that contains obvious secrets, unredacted `.env` data, production credentials, or irrelevant customer data.
 - Blocker taxonomy: for current worker outputs, a `BLOCKED` task should include `blocker.resolution_class`, `blocker.attempts`, and `blocker.recommended_decision`. Legacy v3 artifacts with only `type`, `detail`, and `needs` are schema-compatible but lower-confidence evidence.

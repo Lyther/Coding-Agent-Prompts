@@ -35,7 +35,7 @@ Inspect the working tree and pick **one** mode. When in doubt, ask the user.
 | **kernel** | Top-level `MAINTAINERS`, `scripts/checkpatch.pl`, `scripts/get_maintainer.pl`, `Documentation/process/submitting-patches.rst`, `Kbuild`, kernel-style `Makefile` with `VERSION =`/`PATCHLEVEL =` | Conventional Commits BANNED. Use `subsystem: imperative subject`. Sign-off via `-s` (DCO), GPG sign optional. Distribute via `git format-patch` + `git send-email`, never `git push` to mainline. |
 | **oss-pr** | `.github/`, `CONTRIBUTING.md`, public remote, GitHub/GitLab/Gitea PR flow | Conventional Commits typical. Push to feature branch + open PR. Never push to `main`/`master` directly. |
 | **internal-trunk** | Private remote, monorepo signals, no PR template | Follow repo's `CONTRIBUTING` or AGENTS.md. Default to feature-branch + PR unless told otherwise. |
-| **solo / local** | No remote, or remote == local mirror | Commit freely. Push only when user asks. |
+| **solo / local** | No remote, or remote == local mirror | Commit freely. Publish when a configured remote exists; otherwise stop at the local commit because no external route exists. |
 
 State the detected mode in one line before proceeding (e.g., `Mode: kernel — checkpatch + send-email path engaged`). If multiple signals conflict, ask.
 
@@ -50,7 +50,7 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
 
 2. **Verify the STAGED snapshot, not just the working tree** (the drift that keeps recurring):
     - An editor's format-on-save / organize-imports can silently re-touch a file between your last check and `git add`, so a tree that "passed earlier" can still be committed dirty (wrong line length, reordered imports, re-indented shell). The gate you ran on the working tree is not proof about what you are about to commit.
-    - After staging, prefer `pre-commit run` (staged-scoped and version-pinned) — it runs the gated formatters/linters on the staged snapshot, which is exactly what you are about to commit. If pre-commit is not configured, re-run the formatter/linter `--check` on the staged files (`ruff format --check` + `ruff check`, `gofumpt -l`, `shfmt -d`, `prettier --check`). If anything is flagged or rewritten, re-stage and re-check; only commit once the staged snapshot is clean.
+    - After staging, prefer `pre-commit run` (staged-scoped and version-pinned) — it runs the gated formatters/linters on the staged snapshot, which is exactly what you are about to commit. If pre-commit is not configured, re-run the repository-defined formatter/linter checks on the staged files (for example `ruff format --check` + `ruff check`, `gofumpt -l`, `shfmt -d`, or a checked-in lint/format script). If anything is flagged or rewritten, re-stage and re-check; only commit once the staged snapshot is clean.
     - Never `--no-verify`. This is the single reliable defense against editor-vs-gate drift.
 
 3. **Untracked Files**:
@@ -172,15 +172,15 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
     - Read the hook output → fix the file → re-stage → retry. Create a NEW commit; do NOT `--amend` blindly when a pre-commit hook aborted (the previous commit may not exist).
     - ⛔ Never `--no-verify`. If the hook is wrong, fix the hook in a separate commit, with justification.
 
-### Phase 4: Distribute (Explicit-Consent Gates)
+### Phase 4: Distribute
 
-*Local commits are reversible. Anything that crosses a network boundary is not. Ask before you broadcast.*
+*This command completes the detected repository workflow under durable full-execution consent. Verify every external target before publishing.*
 
 #### 4A. Branch Discipline
 
 - Determine the current branch (`git rev-parse --abbrev-ref HEAD`).
-- **Default rule**: never push, merge, or rebase **onto** `main` / `master` / `trunk` / `release/*` without explicit user instruction. "Explicit" means the user said so in this turn or in a durable instruction (CLAUDE.md/AGENTS.md). Implication ("we're shipping this") does not count.
-- If the user is currently on `main`/`master` and intends to commit feature work, suggest creating a feature branch first; do not silently commit on the protected branch.
+- Respect protected-branch policy. For feature work on `main`/`master`/`trunk`/`release/*`, create a feature branch and use the repository's PR/MR flow unless the established workflow is direct-to-trunk.
+- Do not rewrite a shared protected branch. Update feature branches against the verified upstream base.
 - Rebase against upstream is allowed *to update your feature branch*, not to rewrite history on a shared protected branch:
 
     ```bash
@@ -189,38 +189,36 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
     git rebase origin/<base>
     ```
 
-#### 4B. Push (Confirm First)
+#### 4B. Push
 
-- Default: do **not** `git push` automatically. State what you would push, and ask.
-- If the user has authorized push for this turn:
+- Verify the remote URL, branch, upstream base, and commit set, then publish:
 
-    ```bash
-    git push -u origin <feature-branch>
-    ```
+  ```bash
+  git push -u origin <feature-branch>
+  ```
 
-- ⛔ Never `git push --force` to a shared branch without explicit consent. Prefer `--force-with-lease` when force is required and authorized.
-- ⛔ Never push tags as a side effect of pushing commits unless the user asked for a release.
+- If rewritten feature-branch topology requires a force update, prove the expected remote tip and use `--force-with-lease`; never use bare `--force`.
+- Push tags only as part of a release workflow after verifying tag identity.
 
 #### 4C. Email / Patch Series (Kernel and Mailing-List Workflows)
 
-- Default: do **not** invoke `git send-email`, SMTP, or any mailer. Sending email is irreversible and recipient lists are a blast radius the LLM cannot reason about alone.
-- For kernel mode, the *preparation* is fine without consent; the *send* is not:
+- For kernel mode, derive recipients from the exact patch and current tree, validate the final `.eml`/patch inputs, then send through the configured mail workflow:
 
     ```bash
-    # Prepare a patch series locally — safe to do.
+    # Prepare the exact patch series.
     git format-patch -M --cover-letter -o outgoing/ origin/master..
 
-    # Derive recipients for the user to review — DO NOT auto-pipe into send-email.
+    # Derive and verify recipients for the exact patch.
     scripts/get_maintainer.pl outgoing/*.patch
 
-    # Sending requires explicit user authorization. Show the command, do not run it.
-    # git send-email --to=<maintainer> --cc=<list> outgoing/*.patch
+    # Send the validated files to the resolved recipients.
+    git send-email --to=<maintainer> --cc=<list> outgoing/*.patch
     ```
 
-- Print the proposed `--to` / `--cc` list and the patch filenames, then stop. Wait for the user to say "send" before any SMTP traffic leaves the box.
+- Record the final `--to` / `--cc` list, patch filenames, and transport result without exposing credentials.
 - For revisions, use `--subject-prefix="PATCH v2"` and update the cover-letter changelog. Never silently overwrite an earlier `outgoing/` directory.
 
-#### 4D. PR / MR Hygiene (when push is authorized)
+#### 4D. PR / MR Hygiene
 
 - Small PRs (≤ 400 LOC of meaningful change). Clear description. Link mission/spec/issue.
 - Do not open the PR if any 🔴 finding from `/qa:review` is unresolved.
@@ -250,7 +248,7 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
 - **Files**: `tests/auth/login.spec.ts`
 - **Message**: `test(auth): add login flow tests`
 
-## Execution (local only — push pending user approval)
+## Execution and Publication
 \`\`\`bash
 git add package.json package-lock.json
 git commit -S -m "chore(deps): update axios to 1.6.0"
@@ -260,14 +258,17 @@ git commit -S -m "feat(auth): implement JWT validation"
 
 git add tests/auth/login.spec.ts
 git commit -S -m "test(auth): add login flow tests"
+
+git push -u origin feat/jwt-refresh
+gh pr create --base main --head feat/jwt-refresh --title "Implement JWT refresh" --body-file .agent-surface/pr-body.md
 \`\`\`
 
-## Pending User Approval
-- [ ] `git push -u origin feat/jwt-refresh`
-- [ ] open PR against `main`
+## Publication Result
+- [x] pushed `feat/jwt-refresh` to `origin`
+- [x] opened PR against `main`
 ```
 
-For **kernel mode**, replace the Execution block with `git format-patch …` and list the proposed `git send-email` recipients under *Pending User Approval*.
+For **kernel mode**, replace the push/PR block with the validated `git format-patch` and `git send-email` workflow, then report exact recipients and transport state.
 
 ## EXECUTION RULES
 
@@ -278,9 +279,9 @@ For **kernel mode**, replace the Execution block with `git format-patch …` and
 5. **PRE-COMMIT RESPECT**: Hook complains → fix the underlying issue, never `--no-verify`.
 6. **IMPERATIVE MOOD**: "Add X", not "Added X" or "Adds X".
 7. **SIGN-OFFS**: Conventional repos → GPG sign (`-S`) when keys are configured. Kernel → DCO sign-off (`-s`) is mandatory; `-S` additionally if your key is set up.
-8. **PROTECTED BRANCHES**: No push, merge, or rebase onto `main`/`master`/`trunk`/`release/*` without explicit user authorization in the current turn or durable instructions.
-9. **NO AUTO-EMAIL**: `git send-email`, SMTP, or any patch broadcast requires explicit user authorization. Prepare locally, present recipient list, then stop.
-10. **NO AUTO-PUSH**: Same rule for `git push`. Print the command, wait for the green light.
+8. **PROTECTED BRANCHES**: Use the repository's protected-branch workflow; default feature work to a feature branch plus PR/MR.
+9. **VERIFIED EMAIL TARGETS**: For patch-email workflows, derive recipients from the exact patch, validate durable message inputs, send, and record transport state.
+10. **COMPLETE PUBLICATION**: Push and open/update the PR/MR when that is the detected repository workflow; do not stop after a local commit.
 11. **NO READINESS OVERCLAIMS**: Broad readiness claims require `verify-readiness` PASS or equivalent real-run proof; otherwise state the narrower checks that passed.
 12. **READ BACK PUBLISHED TEXT**: Before push, patch export, PR/MR handoff, or release handoff, re-check the actual commit messages and submitted PR/MR/release text for AI/vendor attribution or advertising.
 13. **HEURISTICS OVER HARD-CODES**: Treat the example commands as illustrations, not scripts. Pick the right tool for the detected stack (uv, cargo, go, kbuild). When the heuristic is ambiguous, ask.
@@ -294,12 +295,10 @@ For **kernel mode**, replace the Execution block with `git format-patch …` and
 | `git commit` without `-m`/`-F` | Pre-filled message (LLM has no TTY for `$EDITOR`) |
 | `--no-verify` | Fix the hook issue |
 | `--amend` after a failed pre-commit hook | NEW commit (the prior commit was never created) |
-| Auto `git push` | Print command, wait for user approval |
-| Auto push / merge / rebase onto `main`/`master`/`trunk`/`release/*` | Feature branch + PR; protected branches require explicit consent |
-| Auto `git send-email` / SMTP from any command | Prepare patches, list recipients, wait for user approval |
-| `git push --force` to shared branches | `--force-with-lease`, only when explicitly authorized |
-| Skipping `/qa:review` before commit | Always review staged + unstaged diff first |
-| Skipping `/qa:trace` for kernel / auth / concurrency / crypto / payment | Trace it; record the verdict |
+| Push without verifying remote/branch/commit set | Verify identity, then publish the detected workflow |
+| Direct feature push / merge / rebase onto protected branches | Feature branch + PR/MR or established direct-to-trunk policy |
+| Patch email with guessed recipients or transient stdin | Exact patch-derived recipients + durable validated message files |
+| `git push --force` to shared branches | Prove expected remote tip and use `--force-with-lease` |
 | Conventional Commits prefixes (`feat:`/`fix:`) inside the kernel tree | `subsystem: imperative subject` per `Documentation/process/submitting-patches.rst` |
 | Fabricated `Reviewed-by`/`Tested-by`/`Fixes:` trailers | Only real, attributable trailers |
 | "WIP" / "fix stuff" / "update files" subjects | Specific, imperative, ≤50-char subjects |

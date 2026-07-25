@@ -39,23 +39,19 @@ When reviewing a patch, diff, PR, MR, mailing-list submission, or issue fix, jud
 | `--round N` | 1 | Current review iteration |
 | `--fix-after N` | 3 | After N rejected rounds, output fix only (unified diff, no prose) |
 | `--focus <domains>` | all | Comma-separated: `security`, `logic`, `config`, `quality`, `perf`, `tests`, `docs`, `deps` |
-| `--auto-approve` | off | Skip Phase 0 scope confirmation. Use in headless/agentic environments |
+| `--auto-approve` | on | Compatibility flag; scope resolution never waits for a confirmation prompt |
 | `--state <path>` | none | Path to previous round's output (e.g., `.review_state.md`). Required for `--round 2+` |
 
 ## PROTOCOL
 
-### Phase 0: Scope Confirmation
-
-**Skip this phase entirely if `--auto-approve` is set.** Proceed directly to Phase 1.
-
-If interactive:
+### Phase 0: Scope Resolution
 
 1. **Enumerate** the directory tree of `<target>`.
 2. **Classify** each file/directory:
    - ✅ **IN SCOPE**
    - ⛔ **AUTO-EXCLUDED** (see exclusion list)
-   - ❓ **AMBIGUOUS** — ask the user
-3. **Present scope summary.** Wait for confirmation, then proceed.
+   - ❓ **AMBIGUOUS** — resolve from task, Git state, and project config; if no unique target exists, report the missing selector
+3. **Record scope summary and proceed.** Do not wait for confirmation.
 
 ### Review Surface (Default Inclusion)
 
@@ -202,7 +198,7 @@ Run this pass in addition to the normal domains for Linux kernel trees, kernel-l
 - [ ] Dead code, commented-out code, TODO/FIXME without issue tracking
 - [ ] Language idioms: code written in the style of the language, or fighting it?
 - [ ] API design: consistent naming, proper HTTP methods, sensible status codes, pagination
-- [ ] **Formatter/lint drift**: does the staged diff match the repo's gate? If you have tool access, run the repo's formatter/linter `--check` on the changed files (`ruff format --check` + `ruff check`, `gofumpt -l`, `shfmt -d`, `prettier --check`). Drift (wrong line length, reordered imports, re-indented shell from a mis-set editor) is a 🟡 MUST-FIX — flag it and point at the editor/config mismatch, not just the file.
+- [ ] **Formatter/lint drift**: does the staged diff match the repo's gate? If you have tool access, run the repository-defined formatter/linter checks on the changed files (for example `ruff format --check` + `ruff check`, `gofumpt -l`, `shfmt -d`, or a checked-in lint/format script). Drift (wrong line length, reordered imports, re-indented shell from a mis-set editor) is a 🟡 MUST-FIX — flag it and point at the editor/config mismatch, not just the file.
 
 #### 5. Performance
 
@@ -362,7 +358,7 @@ STATE_END -->
 
 ```text
 User:      /review .
-Assistant: [Phase 0: scope summary] → User confirms
+Assistant: [Phase 0: resolved scope summary] → proceeds
 Assistant: [Phase 1: multi-pass review] → Findings + STATE BLOCK
 User:      /review . --round 2 --state .review_state.md
 Assistant: [Delta + new scan] → Findings + STATE BLOCK

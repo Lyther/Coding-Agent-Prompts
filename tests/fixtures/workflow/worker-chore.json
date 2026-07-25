@@ -7,6 +7,7 @@
     {
       "task_id": "T1",
       "status": "PASS",
+      "patch_required": true,
       "files_changed": [
         "registry/artifacts.json"
       ],

@@ -2,18 +2,20 @@
 // `install` plans + applies a target's outputs (with strict-sync stale removal
 // and MCP/Kilo config merges) into a host root. Both drive the shared producer
 // engine in targets.mjs; neither owns rendering or validation.
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
 import { exportableCommands, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
 import { readFileIfExists, readJsonIfExists, removeTree } from "./io.mjs";
-import { mergeKiloInstructionJsonc, parseJsoncResult } from "./jsonc.mjs";
+import { mergeKiloInstructionJsonc, parseJsoncResult, setJsoncRootProperty } from "./jsonc.mjs";
 import { YAML_MCP_FORMATS, mergeCodexMcpToml, mergeJsonMcpConfig, mergeYamlMcpConfig, optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { packageVersion, readSourceKinds, relative, root } from "./registry.mjs";
 import { readRules } from "./rules.mjs";
-import { kiloRuleInstructionPaths, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
-import { argValue, argValues, fail, isSafeRelativePath, isSafeTargetName, splitArgValues, uniqueStrings } from "./util.mjs";
+import { adapterMcpConfigs, kiloRuleInstructionPaths, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
+import { argValue, argValues, fail, isPathInside, isSafeRelativePath, isSafeTargetName, splitArgValues, uniqueStrings } from "./util.mjs";
 
 export async function build(args) {
   const target = argValue(args, "--target") ?? "all";
@@ -193,7 +195,10 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const version = await packageVersion();
   const generatedAt = new Date().toISOString();
   const manifestPath = path.join(installRoot, ".agent-surface", `${target}-manifest.json`);
-  const previousManifest = await readJsonIfExists(manifestPath);
+  const blocked = [];
+  const manifestRouteError = await installPathError(installRoot, manifestPath, "manifest path");
+  if (manifestRouteError) blocked.push(manifestRouteError);
+  const previousManifest = manifestRouteError ? null : await readJsonIfExists(manifestPath);
   const legacyOwnership = await readLegacyOwnership(target);
   const outputs = (await targetOutputs(adapter, commandFiles, {
     target,
@@ -205,7 +210,6 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   })).filter((output) => outputAppliesToCategory(output, categoryFilter));
   const writes = [];
   const managed = [];
-  const blocked = [];
   const nonApplicable = [];
 
   for (const item of outputs) {
@@ -235,6 +239,12 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   }
 
   for (const item of writes) {
+    const routeError = await installPathError(installRoot, item.output, `managed output ${item.relativeOutput}`);
+    if (routeError) {
+      blocked.push(routeError);
+      item.action = "blocked";
+      continue;
+    }
     const current = await readFileIfExists(item.output);
     if (current === null) {
       item.action = "write";
@@ -263,33 +273,55 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const ownedConfigEntries = [...previousConfigEntries, ...legacyOwnership.config_entries];
   const pruneConfigEntries = (!categoryFilter || categoryFilter.has("mcps")) && optionalServices === null;
   const liveConfigRoutes = new Set();
+  const configRouteContext = {
+    target,
+    scope,
+    mode: "install",
+    agentName: options.agentName ?? "agent",
+    relocateExternalRoutes: rootSource === "explicit --dest",
+    categoryFilter,
+    optionalServices,
+  };
+  // Scope-retired routes still need cleanup. Use every adapter-declared route to
+  // establish the target-owned namespace, even when that route is not emitted at
+  // the current scope; manifest data alone never establishes a writable namespace.
+  const trustedConfigRoutes = adapterMcpConfigs(adapter).map((mcpConfig) => ({
+    relativeOutput: outputRootFor(mcpConfig.relativeOutput, configRouteContext),
+  }));
   if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps"))) {
     const merge = await kiloConfigMerge(installRoot, scope, {
       includeInstructions: !categoryFilter || categoryFilter.has("rules"),
       includeMcp: !categoryFilter || categoryFilter.has("mcps"),
+      includeRootProperties: !categoryFilter,
       categoryFilter,
       optionalServices,
     });
     liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
+    trustedConfigRoutes.push(merge);
     const prepared = await prepareKiloConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
     if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
-  } else if (adapter.mcpConfig && (!categoryFilter || categoryFilter.has("mcps")) && mcpConfigScopeAllows(adapter.mcpConfig, scope)) {
-    const merge = await mcpConfigMerge(adapter, installRoot, scope, {
-      target,
-      scope,
-      mode: "install",
-      agentName: options.agentName ?? "agent",
-      categoryFilter,
-      optionalServices,
-    });
-    liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
-    const prepared = await prepareMcpConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
-    if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
+  } else if (!categoryFilter || categoryFilter.has("mcps")) {
+    for (const mcpConfig of adapterMcpConfigs(adapter).filter((item) => mcpConfigScopeAllows(item, scope))) {
+      const merge = await mcpConfigMerge(mcpConfig, installRoot, scope, {
+        ...configRouteContext,
+      });
+      liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
+      trustedConfigRoutes.push(merge);
+      const prepared = await prepareMcpConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
+      if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
+    }
   }
 
   const pruneObsoleteConfigRoutes = !partialInstall;
   if (pruneObsoleteConfigRoutes) {
-    await addObsoleteConfigRouteMerges(configMerges, ownedConfigEntries, liveConfigRoutes, installRoot);
+    await addObsoleteConfigRouteMerges(
+      configMerges,
+      ownedConfigEntries,
+      liveConfigRoutes,
+      trustedConfigRoutes,
+      legacyOwnership.config_entries,
+      installRoot,
+    );
   }
 
   for (const item of configMerges) {
@@ -303,6 +335,11 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     }
 
     const output = path.join(installRoot, item.output);
+    const routeError = await installPathError(installRoot, output, `stale managed output ${item.output}`);
+    if (routeError) {
+      blocked.push(routeError);
+      continue;
+    }
     const current = await readFileIfExists(output);
     if (current === null) {
       staleRemovalActions.push({ output, relativeOutput: item.output, action: "missing" });
@@ -432,24 +469,45 @@ function groupedConfigEntries(entries) {
   return [...grouped.values()].sort((left, right) => configEntryKey(left.path, left.format).localeCompare(configEntryKey(right.path, right.format)));
 }
 
-async function addObsoleteConfigRouteMerges(configMerges, ownedConfigEntries, liveConfigRoutes, installRoot) {
+async function addObsoleteConfigRouteMerges(
+  configMerges,
+  ownedConfigEntries,
+  liveConfigRoutes,
+  trustedConfigRoutes,
+  legacyConfigEntries,
+  installRoot,
+) {
   const mergeIndexesByPath = new Map(configMerges.map((merge, index) => [merge.relativeOutput, index]));
   const obsoleteRoutes = groupedConfigEntries(ownedConfigEntries)
     .filter((entry) => !liveConfigRoutes.has(configEntryKey(entry.path, entry.format)));
+  const trustedLegacyRoutes = new Set(legacyConfigEntries.map((entry) => configEntryKey(entry.path, entry.format)));
 
   for (const entry of obsoleteRoutes) {
+    if (!trustedLegacyRoutes.has(configEntryKey(entry.path, entry.format))
+      && !trustedConfigRoutes.some((route) => configRouteSharesNamespace(entry.path, route.relativeOutput))) {
+      configMerges.push({
+        kind: "mcp",
+        action: "blocked",
+        relativeOutput: entry.path,
+        error: `untrusted obsolete MCP config route in manifest: ${entry.path}; register an exact legacy-owned route before cleanup`,
+      });
+      continue;
+    }
     const existingIndex = mergeIndexesByPath.get(entry.path);
     if (existingIndex !== undefined) {
       configMerges[existingIndex] = mergeObsoleteConfigRoute(configMerges[existingIndex], entry);
       continue;
     }
 
+    const safetyRoot = configRouteSafetyRoot(entry.path, path.isAbsolute(entry.path), installRoot);
     const prepared = await prepareMcpConfigMerge({
       kind: "mcp",
-      output: path.join(installRoot, entry.path),
+      output: path.isAbsolute(entry.path) ? path.normalize(entry.path) : path.join(installRoot, entry.path),
       relativeOutput: entry.path,
       format: entry.format,
       entries: [],
+      allowAbsoluteOutput: path.isAbsolute(entry.path),
+      safetyRoot,
     }, [entry], true);
     if (isEmptyConfigNoop(prepared)) continue;
     mergeIndexesByPath.set(entry.path, configMerges.length);
@@ -562,7 +620,12 @@ function printInstallPlan(plan) {
         const removeServers = item.removeMcpServers ?? [];
         if (addServers.length > 0) console.log(`  ${item.relativeOutput} MCP += ${addServers.join(", ")}`);
         if (removeServers.length > 0) console.log(`  ${item.relativeOutput} MCP -= ${removeServers.join(", ")}`);
-        if (addServers.length === 0 && removeServers.length === 0) console.log(`  ${item.relativeOutput} MCP unchanged`);
+        for (const [property, value] of Object.entries(item.rootProperties ?? {})) {
+          console.log(`  ${item.relativeOutput} ${property} := ${JSON.stringify(value)}`);
+        }
+        if (addServers.length === 0 && removeServers.length === 0 && Object.keys(item.rootProperties ?? {}).length === 0) {
+          console.log(`  ${item.relativeOutput} MCP unchanged`);
+        }
         continue;
       }
       const addInstructions = item.addInstructions ?? item.instructions;
@@ -577,7 +640,13 @@ function printInstallPlan(plan) {
       if (addMcpServers.length > 0) {
         console.log(`  ${item.relativeOutput} MCP += ${addMcpServers.join(", ")}`);
       }
-      if (addInstructions.length === 0 && removeInstructions.length === 0 && addMcpServers.length === 0) {
+      for (const [property, value] of Object.entries(item.rootProperties ?? {})) {
+        console.log(`  ${item.relativeOutput} ${property} := ${JSON.stringify(value)}`);
+      }
+      if (addInstructions.length === 0
+        && removeInstructions.length === 0
+        && addMcpServers.length === 0
+        && Object.keys(item.rootProperties ?? {}).length === 0) {
         console.log(`  ${item.relativeOutput} config unchanged`);
       }
     }
@@ -611,13 +680,19 @@ async function applyInstallPlan(plan) {
       continue;
     }
 
+    const routeError = await installPathError(plan.installRoot, item.output, `managed output ${item.relativeOutput}`);
+    if (routeError) fail(routeError);
     await mkdir(path.dirname(item.output), { recursive: true });
+    const postMkdirRouteError = await installPathError(plan.installRoot, item.output, `managed output ${item.relativeOutput}`);
+    if (postMkdirRouteError) fail(postMkdirRouteError);
     await writeFile(item.output, item.content);
     written += 1;
   }
 
   for (const item of plan.staleRemovalActions) {
     if (item.action !== "remove") continue;
+    const routeError = await installPathError(plan.installRoot, item.output, `stale managed output ${item.relativeOutput}`);
+    if (routeError) fail(routeError);
     await rm(item.output, { force: true });
     removed += 1;
   }
@@ -627,10 +702,18 @@ async function applyInstallPlan(plan) {
     configMerges += result.changed ? 1 : 0;
   }
 
+  const manifestRouteError = await installPathError(plan.installRoot, plan.manifestPath, "manifest path");
+  if (manifestRouteError) fail(manifestRouteError);
   await mkdir(path.dirname(plan.manifestPath), { recursive: true });
-  const manifestTmp = `${plan.manifestPath}.tmp`;
-  await writeFile(manifestTmp, `${JSON.stringify(plan.manifest, null, 2)}\n`);
-  await rename(manifestTmp, plan.manifestPath);
+  const postMkdirManifestRouteError = await installPathError(plan.installRoot, plan.manifestPath, "manifest path");
+  if (postMkdirManifestRouteError) fail(postMkdirManifestRouteError);
+  const manifestTmp = `${plan.manifestPath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(manifestTmp, `${JSON.stringify(plan.manifest, null, 2)}\n`, { flag: "wx" });
+    await rename(manifestTmp, plan.manifestPath);
+  } finally {
+    await rm(manifestTmp, { force: true });
+  }
 
   console.log("installed:");
   console.log(`  wrote: ${written}`);
@@ -639,22 +722,29 @@ async function applyInstallPlan(plan) {
   console.log(`  config merges: ${configMerges}`);
 }
 
-async function mcpConfigMerge(adapter, installRoot, scope, context) {
-  const entries = await selectedMcpServiceEntries(adapter.mcpConfig.defaultEnabled, context);
-  const relativeOutput = outputRootFor(adapter.mcpConfig.relativeOutput, { ...context, scope });
+async function mcpConfigMerge(mcpConfig, installRoot, scope, context) {
+  const entries = await selectedMcpServiceEntries(mcpConfig.defaultEnabled, context);
+  const relativeOutput = outputRootFor(mcpConfig.relativeOutput, { ...context, scope });
+  const absoluteOutput = path.isAbsolute(relativeOutput);
+  const safetyRoot = configRouteSafetyRoot(relativeOutput, mcpConfig.allowAbsoluteOutput === true, installRoot);
   return {
     kind: "mcp",
-    output: path.join(installRoot, relativeOutput),
+    output: absoluteOutput ? path.normalize(relativeOutput) : path.join(installRoot, relativeOutput),
     relativeOutput,
-    format: adapter.mcpConfig.format,
+    format: mcpConfig.format,
     entries,
+    rootProperties: context.categoryFilter ? {} : (mcpConfig.rootProperties ?? {}),
+    allowAbsoluteOutput: mcpConfig.allowAbsoluteOutput === true,
+    safetyRoot,
   };
 }
 
 async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneConfigEntries) {
-  if (!isSafeRelativePath(merge.relativeOutput)) {
+  if (!merge.safetyRoot) {
     return { ...merge, action: "blocked", error: `unsafe MCP config path: ${merge.relativeOutput}` };
   }
+  const routeError = await installPathError(merge.safetyRoot, merge.output, `MCP config ${merge.relativeOutput}`);
+  if (routeError) return { ...merge, action: "blocked", error: routeError };
 
   const currentIds = merge.entries.map(([id]) => id).sort();
   const previousIds = previousConfigIds(previousConfigEntries, merge.relativeOutput, merge.format);
@@ -672,14 +762,14 @@ async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneConfigEn
       addMcpServers,
       removeMcpServers,
       removeIds,
-      content: renderMcpConfig(merge.format, merge.entries),
+      content: renderMcpConfig(merge.format, merge.entries, merge.rootProperties),
     };
   }
 
   const text = existing.toString("utf8");
   let content;
   try {
-    content = mergeMcpConfigContent(text, merge.format, merge.entries, removeIds);
+    content = mergeMcpConfigContent(text, merge.format, merge.entries, removeIds, merge.rootProperties);
   } catch (error) {
     return { ...merge, action: "blocked", error: `${merge.relativeOutput}: ${error.message}` };
   }
@@ -687,16 +777,87 @@ async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneConfigEn
   return { ...merge, action: "merge", addMcpServers, removeMcpServers, removeIds, content };
 }
 
-function mergeMcpConfigContent(text, format, entries, removeIds) {
-  if (format === "codex-toml") return mergeCodexMcpToml(text, entries, removeIds);
+function configRouteSafetyRoot(configPath, allowAbsoluteOutput, installRoot) {
+  if (!path.isAbsolute(configPath)) return isSafeRelativePath(configPath) ? installRoot : null;
+  if (!allowAbsoluteOutput) return null;
+  const trustedRoots = uniqueStrings([
+    os.homedir(),
+    process.env.APPDATA,
+  ].filter((value) => typeof value === "string" && value.length > 0).map((value) => path.resolve(value)));
+  const normalized = path.resolve(configPath);
+  return trustedRoots.find((trustedRoot) => isPathInside(trustedRoot, normalized)) ?? null;
+}
+
+function configRouteSharesNamespace(candidate, trustedRoute) {
+  const normalizedCandidate = path.normalize(candidate);
+  const normalizedTrusted = path.normalize(trustedRoute);
+  if (path.isAbsolute(normalizedCandidate) !== path.isAbsolute(normalizedTrusted)) return false;
+  const trustedNamespace = configRouteNamespace(normalizedTrusted);
+  if (trustedNamespace === null) return normalizedCandidate === normalizedTrusted;
+  return isPathInside(trustedNamespace, normalizedCandidate);
+}
+
+function configRouteNamespace(configPath) {
+  const parsed = path.parse(configPath);
+  const relativePath = path.relative(parsed.root, configPath);
+  const parts = relativePath.split(path.sep).filter(Boolean);
+  if (parts.length <= 1) return null;
+  if (parts[0] === ".config" && parts[1]) return path.join(parsed.root, parts[0], parts[1]);
+  if (parts[0] === "Library" && parts[1] === "Application Support" && parts[2]) {
+    return path.join(parsed.root, parts[0], parts[1], parts[2]);
+  }
+  if (parts[0] === "AppData" && parts[1] === "Roaming" && parts[2]) {
+    return path.join(parsed.root, parts[0], parts[1], parts[2]);
+  }
+  if (parts[0].startsWith(".")) return path.join(parsed.root, parts[0]);
+  return path.dirname(configPath);
+}
+
+async function installPathError(safetyRoot, candidate, label) {
+  const normalizedRoot = path.resolve(safetyRoot);
+  const normalizedCandidate = path.resolve(candidate);
+  if (!isPathInside(normalizedRoot, normalizedCandidate)) {
+    return `${label} escapes its install root: ${candidate}`;
+  }
+
+  const relativePath = path.relative(normalizedRoot, normalizedCandidate);
+  const components = relativePath === "" ? [] : relativePath.split(path.sep);
+  const paths = [normalizedRoot];
+  let current = normalizedRoot;
+  for (const component of components) {
+    current = path.join(current, component);
+    paths.push(current);
+  }
+
+  for (const [index, item] of paths.entries()) {
+    let info;
+    try {
+      info = await lstat(item);
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      return `${label} cannot be inspected safely: ${error.message}`;
+    }
+    if (info.isSymbolicLink()) {
+      return `${label} traverses symbolic link: ${item}`;
+    }
+    if (index < paths.length - 1 && !info.isDirectory()) {
+      return `${label} has a non-directory ancestor: ${item}`;
+    }
+  }
+  return null;
+}
+
+function mergeMcpConfigContent(text, format, entries, removeIds, rootProperties = {}) {
+  if (format === "codex-toml") return mergeCodexMcpToml(text, entries, removeIds, rootProperties);
   if (YAML_MCP_FORMATS.has(format)) return mergeYamlMcpConfig(text, format, entries, removeIds);
-  return mergeJsonMcpConfig(text, format, entries, removeIds);
+  return mergeJsonMcpConfig(text, format, entries, removeIds, rootProperties);
 }
 
 async function kiloConfigMerge(installRoot, scope, options = {}) {
   const relativeOutput = scope === "user" ? path.join(".config", "kilo", "kilo.jsonc") : "kilo.jsonc";
   const includeInstructions = options.includeInstructions !== false;
   const includeMcp = options.includeMcp === true;
+  const includeRootProperties = options.includeRootProperties === true;
   const instructions = includeInstructions ? await kiloRuleInstructionPaths(scope) : [];
   const legacyRuleRoot = scope === "user" ? "./rules" : ".kilo/rules";
   const legacyScopedRuleInstructions = (await readRules())
@@ -722,6 +883,9 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
     format: "local-command-map",
     instructions,
     legacyInstructions: includeInstructions ? legacyInstructions : [],
+    rootProperties: includeRootProperties
+      ? { permission: { "*": "allow" }, share: "disabled" }
+      : {},
     mcpEntries: includeMcp
       ? await selectedMcpServiceEntries(true, {
         mode: "install",
@@ -729,13 +893,18 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
         optionalServices: options.optionalServices ?? null,
       })
       : [],
+    safetyRoot: installRoot,
   };
 }
 
 async function applyConfigMerge(merge) {
   if (merge.action === "skip") return { changed: false };
   if (merge.action === "blocked") fail(merge.error);
+  const routeError = await installPathError(merge.safetyRoot, merge.output, `config ${merge.relativeOutput}`);
+  if (routeError) fail(routeError);
   await mkdir(path.dirname(merge.output), { recursive: true });
+  const postMkdirRouteError = await installPathError(merge.safetyRoot, merge.output, `config ${merge.relativeOutput}`);
+  if (postMkdirRouteError) fail(postMkdirRouteError);
   await writeFile(merge.output, merge.content);
   return { changed: true };
 }
@@ -744,6 +913,8 @@ async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneConfigE
   if (!isSafeRelativePath(merge.relativeOutput)) {
     return { ...merge, action: "blocked", error: `unsafe Kilo config path: ${merge.relativeOutput}` };
   }
+  const routeError = await installPathError(merge.safetyRoot, merge.output, `Kilo config ${merge.relativeOutput}`);
+  if (routeError) return { ...merge, action: "blocked", error: routeError };
 
   const currentMcpIds = merge.mcpEntries.map(([id]) => id).sort();
   const previousMcpIds = previousConfigIds(previousConfigEntries, merge.relativeOutput, merge.format);
@@ -752,6 +923,7 @@ async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneConfigE
   if (existing === null) {
     const content = {
       $schema: "https://app.kilo.ai/config.json",
+      ...merge.rootProperties,
     };
     if (merge.instructions.length > 0) content.instructions = merge.instructions;
     if (merge.mcpEntries.length > 0) content.mcp = optionalServiceMcpServers(merge.mcpEntries, "local-command-map");
@@ -803,6 +975,9 @@ async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneConfigE
     } catch (error) {
       return { ...merge, action: "blocked", error: `${merge.relativeOutput}: ${error.message}` };
     }
+  }
+  for (const [property, value] of Object.entries(merge.rootProperties)) {
+    content = setJsoncRootProperty(content, property, value);
   }
 
   if (content === text) {
