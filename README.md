@@ -90,7 +90,9 @@ Built from `mcps/`, installed once, then auto-wired (non-destructive merge) into
 
 ## Workflow kernel (optional)
 
-A multi-role pipeline whose state lives under `.agent-surface/workflows/<run_id>/`: `workflow-orchestrator` routes BOSS → worker → reviewer → judger → rescue → close; `workflow-doctor` validates run state; `verify-readiness` certifies production-ready claims with real evidence.
+`ops-flow` chooses the lightest safe profile: direct, standard single-owner development, writer-plus-reviewer, formal orchestration, or release proof. Only orchestrated/release profiles use the durable ledger under `.agent-surface/workflows/<run_id>/`; `workflow-runtime` qualifies external/native runtimes, `workflow-doctor` rejects schema, task-state, and liveness drift, and `verify-readiness` gates production-ready claims on real evidence.
+
+`workflow-runtime` treats generated artifacts, command discovery, provider authentication, permission mode, tool execution, world-state materialization, output shape, and MCP calls as separate gates. This user distribution launches writable workers with each host's full-access equivalent while preserving read-only tool profiles for reviewer and analysis roles. Kilo and OpenCode config explicitly disables automatic session sharing. Codex source commands compile to explicit `$name` Agent Skills; they are not advertised as a separate native workflow surface.
 
 ## More
 

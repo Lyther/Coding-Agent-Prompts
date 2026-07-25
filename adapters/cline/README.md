@@ -2,18 +2,20 @@
 
 The adapter maps agent-surface sources onto Cline's current file-backed configuration surfaces.
 
-Last runtime probe: Cline CLI `3.0.46` on 2026-07-21, using an isolated user home and project. Cline discovered the generated configured agents, workflow/skill catalog, bundled rule, and both MCP registrations without accessing provider credentials.
+Last runtime probe: Cline CLI `3.0.46` on 2026-07-25. With auto-approval and its configured OpenRouter provider, the CLI called both first-party MCPs and returned the required exact result. Running Cursor extension hosts reloaded both MCP registrations from their global-storage route, but an extension-originated tool call was not run.
 
 ## Generated paths
 
 User scope:
 
-- workflows: `~/.cline/workflows/*.md`
-- rules: `~/.cline/rules/agent-surface.md`
-- scoped rule references: `~/.cline/rules/references/rules/<rule>.md`
+- workflows: `~/Documents/Cline/Workflows/*.md`
+- rules: `~/Documents/Cline/Rules/agent-surface.md`
+- scoped rule references: `~/Documents/Cline/Rules/references/rules/<rule>.md`
 - configured agents: `~/.cline/agents/*.yaml`
 - external Agent Skills: `~/.cline/skills/<skill>/...`
-- MCP: `~/.cline/data/settings/cline_mcp_settings.json`
+- MCP (CLI): `~/.cline/data/settings/cline_mcp_settings.json`
+- MCP (VS Code extension): the Cline extension's `globalStorage/.../settings/cline_mcp_settings.json`
+- MCP (Cursor extension): the Cline extension's `globalStorage/.../settings/cline_mcp_settings.json`
 
 Project scope:
 
@@ -28,7 +30,7 @@ Project scope:
 
 ## Runtime contracts
 
-Cline command sources remain workflows. They are not duplicated as Agent Skills.
+Cline command sources remain workflows. They are not duplicated as Agent Skills. Invoke a current headless workflow by stem, for example `/workflow-runtime`; adding the `.md` suffix does not resolve the command.
 
 `registry/targets.json` records normalized render classes, not Cline product labels. The Cline mappings are:
 
@@ -51,9 +53,9 @@ Configured Agents are distinct from Cline's built-in `spawn_agent` delegation an
 
 The bundled rule file contains only always-on rules. Cline's rule loader reads direct files from each rules root and does not recursively activate `references/rules/`; scoped policies remain reference-only until a matching project workflow attaches them.
 
-MCP is user-global. The current shared Cline loader resolves `~/.cline/data/settings/cline_mcp_settings.json`; it does not load the older `.cline/mcp.json` route. Synapse and Grimoire are non-destructively merged into `mcpServers`. External or secret-bearing MCP services remain opt-in.
+MCP is user-global but not stored in one shared file. The CLI resolves `~/.cline/data/settings/cline_mcp_settings.json`; the VS Code, Cursor, and Windsurf extensions each resolve `settings/cline_mcp_settings.json` under their own extension `globalStorage`. The installer non-destructively merges Synapse and Grimoire into all four routes. Scope-derived Windows installs honor `%APPDATA%`; explicit `--dest` installs relocate the conventional `AppData/Roaming` subtree. None of the current loaders use the older `.cline/mcp.json` route. External or secret-bearing MCP services remain opt-in.
 
-The current Cline configuration guide and runtime source disagree on the user workflow directory: the guide shows `~/.cline/data/workflows`, while the loader scans `~/.cline/workflows`. The adapter follows the executable loader. Project workflows retain the supported `.clinerules/workflows` compatibility route.
+The shared `~/Documents/Cline/Workflows` and `~/Documents/Cline/Rules` directories are discovered by both the CLI and IDE extension. Project workflows retain the supported `.clinerules/workflows` compatibility route. Runtime-audit workflows must use another runtime as the driver; recursively starting Cline from an active Cline workflow inherits hub state and is invalid qualification evidence.
 
 ## Not generated
 

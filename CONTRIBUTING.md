@@ -1,6 +1,6 @@
 # Contributing
 
-agent-surface compiles one source tree into 20 agent-host targets. Architecture: [docs/architecture.md](docs/architecture.md). Registries are the source of truth; `check` + `test` gate every change.
+agent-surface compiles one source tree into 21 agent-host targets. Architecture: [docs/architecture.md](docs/architecture.md). Registries are the source of truth; `check` + `test` gate every change.
 
 ## Setup
 
