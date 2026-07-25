@@ -2,17 +2,95 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readCommands } from "../scripts/agent-surface/commands.mjs";
+import { ideUserDataRoot } from "../scripts/agent-surface/roots.mjs";
+import { targetOutputs, targets } from "../scripts/agent-surface/targets.mjs";
+import { canonicalJson, sha256 } from "../scripts/agent-surface/util.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = path.join(root, "scripts", "agent-surface.mjs");
 const stripAiAttributionHook = path.join(root, "hooks", "strip-ai-attribution.sh");
 const opsServerCommandPath = path.join(root, "commands", "ops-server.md");
 const hasLocalOpsServerCommand = existsSync(opsServerCommandPath);
-const expectedCommandCount = hasLocalOpsServerCommand ? 67 : 66;
+const expectedCommandCount = hasLocalOpsServerCommand ? 68 : 67;
+const clineIdeUserDataRoot = (product) => {
+  if (process.platform === "darwin") return path.join("Library", "Application Support", product);
+  if (process.platform === "win32") return path.join("AppData", "Roaming", product);
+  return path.join(".config", product);
+};
+const clineUserMcpRoutes = [
+  path.join(".cline", "data", "settings", "cline_mcp_settings.json"),
+  ...["Code", "Cursor", "Windsurf"].map((product) => path.join(
+    clineIdeUserDataRoot(product),
+    "User",
+    "globalStorage",
+    "saoudrizwan.claude-dev",
+    "settings",
+    "cline_mcp_settings.json",
+  )),
+].sort();
+assert.equal(
+  ideUserDataRoot("Code", { platform: "win32", appData: "D:\\Profiles\\agent\\AppData\\Roaming" }),
+  "D:\\Profiles\\agent\\AppData\\Roaming\\Code",
+);
+assert.equal(
+  ideUserDataRoot("Code", { platform: "win32", appData: "D:\\Relocated", relocateExternalRoutes: true }),
+  "AppData\\Roaming\\Code",
+);
+
+const publishableCommandPaths = new Set(
+  execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "--", "commands/*.md"], {
+    cwd: root,
+    encoding: "utf8",
+  }).split(/\r?\n/).filter(Boolean),
+);
+const publishableCommands = (await readCommands()).filter((command) => publishableCommandPaths.has(command.relativePath));
+assert.equal(publishableCommands.length, 67, "committed target matrix command count must match publishable Git inputs");
+const targetMatrixRows = new Map(
+  readFileSync(path.join(root, "docs", "reference", "targets.md"), "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.match(/^\| ([^|]+) \| (\d+) \|/))
+    .filter(Boolean)
+    .map((match) => [match[1].trim(), Number(match[2])]),
+);
+const targetMatrixLabels = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+  deepagents: "Deep Agents Code",
+  goose: "Goose",
+  "grok-build": "Grok Build",
+  pi: "Pi",
+  pool: "Poolside",
+  cline: "Cline",
+  kilo: "Kilo",
+  antigravity: "Antigravity (legacy workflows)",
+  "antigravity-cli": "Antigravity CLI",
+  cursor: "Cursor",
+  droid: "Droid",
+  copilot: "GitHub Copilot",
+  vscode: "VS Code",
+  vscodium: "VSCodium",
+  opencode: "OpenCode",
+  openhands: "OpenHands",
+  trae: "Trae",
+  windsurf: "Windsurf",
+  zed: "Zed",
+};
+for (const [target, adapter] of Object.entries(targets)) {
+  const outputs = await targetOutputs(adapter, publishableCommands, {
+    target,
+    scope: "user",
+    mode: "build",
+    agentName: "agent",
+    categoryFilter: null,
+    optionalServices: null,
+  });
+  assert.equal(targetMatrixRows.get(targetMatrixLabels[target]), outputs.length, `${target}: committed target matrix count`);
+}
 
 function run(args, options = {}) {
   return execFileSync(process.execPath, [cli, ...args], {
@@ -179,6 +257,66 @@ assertStripAiAttributionHook();
 assert.equal(run(["check"]).trim(), "check: ok");
 assert.match(run(["check", "commands"]), /commands check: ok/);
 
+const workflowRuntime = readFileSync(path.join(root, "commands", "workflow-runtime.md"), "utf8");
+const precedenceRule = readFileSync(path.join(root, "rules", "00-precedence-and-safety.mdc"), "utf8");
+const opsNukeCommand = readFileSync(path.join(root, "commands", "ops-nuke.md"), "utf8");
+const alwaysOnRuleText = readdirSync(path.join(root, "rules"))
+  .filter((name) => name.endsWith(".mdc"))
+  .map((name) => readFileSync(path.join(root, "rules", name), "utf8"))
+  .filter((text) => /^alwaysApply:\s*true$/m.test(text))
+  .join("\n");
+const fullExecutionCommandText = [
+  "arch-diagram.md",
+  "boot-new.md",
+  "dev-chore.md",
+  "dev-feature.md",
+  "dev-fix.md",
+  "dev-refactor.md",
+  "lint-kernel.md",
+  "ops-nuke.md",
+  "ops-report.md",
+  "ops-swarm.md",
+  "qa-audit.md",
+  "qa-review.md",
+  "qa-sec.md",
+  "qa-trace.md",
+  "ship-commit.md",
+  "ship-deploy.md",
+  "ship-release.md",
+  "verify-edge.md",
+  "verify-prove.md",
+  "workflow-boss.md",
+  "workflow-orchestrator.md",
+  "workflow-rescue.md",
+  "workflow-reviewer.md",
+].map((name) => readFileSync(path.join(root, "commands", name), "utf8")).join("\n");
+assert.match(precedenceRule, /^## Full-Execution Consent$/m);
+assert.match(precedenceRule, /operator policy for this distribution is `full access` \/ `never ask`/);
+assert.match(precedenceRule, /Do not request manual approval solely because an operation/);
+assert.doesNotMatch(precedenceRule, /^## Approval Classes$/m);
+assert.doesNotMatch(precedenceRule, /Explicit approval is required for:/);
+assert.doesNotMatch(alwaysOnRuleText, /without explicit (?:user )?approval/i);
+assert.doesNotMatch(alwaysOnRuleText, /explicit approval is required/i);
+assert.doesNotMatch(fullExecutionCommandText, /requires explicit (?:user )?(?:approval|authorization)/i);
+assert.doesNotMatch(fullExecutionCommandText, /wait for (?:the )?user (?:approval|to approve|to authorize|to say)/i);
+assert.doesNotMatch(fullExecutionCommandText, /pending user approval|awaiting explicit user authorization|green light/i);
+assert.match(opsNukeCommand, /Restore the bundle into a disposable staging directory/);
+assert.doesNotMatch(opsNukeCommand, /RESTORE[^\n]*from Git/i);
+assert.match(workflowRuntime, /^## PHASE GATE - EVALUATE FIRST$/m);
+assert.match(workflowRuntime, /Do not call any tool, including shell, file-read, MCP, search, or `echo`/);
+assert.match(workflowRuntime, /None of the execution, discovery, probe, result-schema, or verdict instructions below apply/);
+assert.match(workflowRuntime, /--phase inspect\|discovery\|materialization\|mcp\|full/);
+assert.match(workflowRuntime, /BLOCKED: external_driver_required/);
+assert.match(workflowRuntime, /explicit `inspect`, `reference-only`, `do not execute`, or `do not call tools` request always wins/);
+assert.match(workflowRuntime, /\| Cline \| workflow Markdown \| `\/<name>` \|/);
+assert.doesNotMatch(workflowRuntime, /Invoke a generated workflow as `\/<name>\.md`/);
+assert.match(workflowRuntime, /require `share` to be exactly `disabled`/);
+assert.match(workflowRuntime, /If a probe creates a share, stop, revoke it/);
+assert.match(workflowRuntime, /never use `cat`, `head`, `tail`, `sed`, `rg`/);
+const npmIgnore = readFileSync(path.join(root, ".npmignore"), "utf8");
+assert.match(npmIgnore, /^\.env$/m);
+assert.match(npmIgnore, /^\.env\.\*$/m);
+
 const targetCapabilities = JSON.parse(readFileSync(path.join(root, "registry", "target-capabilities.json"), "utf8"));
 const clineCapabilities = targetCapabilities.targets.cline;
 assert.ok(clineCapabilities.generated_render_tokens.includes("subagents"));
@@ -276,14 +414,18 @@ const inventory = run(["inventory"]);
 assert.match(inventory, /^rules: 12$/m);
 assert.match(inventory, new RegExp(`^commands: ${expectedCommandCount}$`, "m"));
 assert.match(inventory, /^subagents: 6$/m);
-assert.match(inventory, /^external: 6$/m);
-assert.match(inventory, /^schemas: 15$/m);
+assert.match(inventory, /^external: 5$/m);
+assert.match(inventory, /^schemas: 16$/m);
 
 const registry = JSON.parse(run(["commands", "--json"]));
 assert.equal(registry.count, expectedCommandCount);
 const readinessCommand = registry.commands.find((command) => command.name === "verify-readiness");
 assert.ok(readinessCommand);
 assert.equal(readinessCommand.phase, "verify");
+const archDiagramCommand = registry.commands.find((command) => command.name === "arch-diagram");
+assert.ok(archDiagramCommand);
+assert.equal(archDiagramCommand.phase, "decide");
+assert.match(archDiagramCommand.description, /evidence-backed architecture atlas/);
 const opsFlowCommand = registry.commands.find((command) => command.name === "ops-flow");
 assert.ok(opsFlowCommand);
 assert.equal(opsFlowCommand.phase, "decide");
@@ -297,7 +439,7 @@ assert.equal(Object.hasOwn(opsFlowCommand, "body"), false);
 assert.equal(opsFlowCommand.targets["claude-code"], path.join(".claude", "commands", "ops", "flow.md"));
 assert.equal(opsFlowCommand.targets.codex, path.join(".agents", "skills", "ops-flow", "SKILL.md"));
 assert.equal(opsFlowCommand.targets.deepagents, path.join(".deepagents", "agent", "skills", "ops-flow", "SKILL.md"));
-assert.equal(opsFlowCommand.targets.cline, path.join(".cline", "workflows", "ops-flow.md"));
+assert.equal(opsFlowCommand.targets.cline, path.join("Documents", "Cline", "Workflows", "ops-flow.md"));
 assert.equal(opsFlowCommand.targets.kilo, path.join(".config", "kilo", "commands", "ops-flow.md"));
 assert.equal(opsFlowCommand.targets["antigravity-cli"], path.join("config", "plugins", "agent-surface", "skills", "ops-flow.md"));
 assert.equal(Object.hasOwn(opsFlowCommand.targets, "gemini-cli"), false);
@@ -320,7 +462,7 @@ assert.equal(bootConceptCommand.metadata_source, "frontmatter");
 assert.equal(bootConceptCommand.targets["claude-code"], path.join(".claude", "commands", "boot", "concept.md"));
 assert.equal(bootConceptCommand.targets.codex, path.join(".agents", "skills", "boot-concept", "SKILL.md"));
 assert.equal(bootConceptCommand.targets.deepagents, path.join(".deepagents", "agent", "skills", "boot-concept", "SKILL.md"));
-assert.equal(bootConceptCommand.targets.cline, path.join(".cline", "workflows", "boot-concept.md"));
+assert.equal(bootConceptCommand.targets.cline, path.join("Documents", "Cline", "Workflows", "boot-concept.md"));
 assert.equal(bootConceptCommand.targets.kilo, path.join(".config", "kilo", "commands", "boot-concept.md"));
 assert.equal(bootConceptCommand.targets["antigravity-cli"], path.join("config", "plugins", "agent-surface", "skills", "boot-concept.md"));
 assert.equal(Object.hasOwn(bootConceptCommand.targets, "gemini-cli"), false);
@@ -402,14 +544,18 @@ if (existsSync(anthropicCybersecuritySkillRoot)) {
 assertCodexAgentTomlParses();
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "claude-code", ".claude", "commands", "ops", "flow.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "claude-code", ".claude", "commands", "ops", "swarm.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "claude-code", ".claude", "commands", "arch", "diagram.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "claude-code", ".claude", "commands", "workflow", "orchestrator.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "claude-code", ".claude", "commands", "workflow", "runtime.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "claude-code", ".claude", "commands", "boot", "facade.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "claude-code", ".claude", "commands", "boot", "concept.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "claude-code", ".claude", "agents", "boss.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "ops-flow", "SKILL.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "arch-diagram", "SKILL.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "verify-readiness", "SKILL.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "ops-swarm", "SKILL.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "workflow-orchestrator", "SKILL.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "workflow-runtime", "SKILL.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "boot-concept", "SKILL.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "conducting-cloud-penetration-testing", "SKILL.md"))), false);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "codex", ".agents", "skills", "ops-flow", "agents", "openai.yaml"))), true);
@@ -435,8 +581,8 @@ assert.equal(generated.some((file) => file.endsWith(path.join("dist", "pool", ".
 assert.equal(generated.some((file) => file.includes(`${path.sep}dist${path.sep}gemini-cli${path.sep}`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}.gemini${path.sep}extensions${path.sep}agent-surface${path.sep}`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}.agent-surface${path.sep}claude-plugin${path.sep}`)), false);
-assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "rules", "agent-surface.md"))), true);
-assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "workflows", "verify-readiness.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", "Documents", "Cline", "Rules", "agent-surface.md"))), true);
+assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", "Documents", "Cline", "Workflows", "verify-readiness.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "agents", "boss.yaml"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "skills", "karpathy-guidelines", "SKILL.md"))), true);
 assert.equal(generated.some((file) => file.endsWith(path.join("dist", "cline", ".cline", "data", "settings", "cline_mcp_settings.json"))), true);
@@ -502,6 +648,17 @@ assert.doesNotMatch(codexInstructions, /## 10-python\.mdc/);
 const codexVerifyTest = readFileSync(path.join(root, "dist", "codex", ".agents", "skills", "verify-test", "SKILL.md"), "utf8");
 assert.match(codexVerifyTest, /No substitute-backed proof on any path/);
 assert.match(codexVerifyTest, /Substitute-backed results excluded from evidence/);
+const claudeArchDiagram = readFileSync(
+  path.join(root, "dist", "claude-code", ".claude", "commands", "arch", "diagram.md"),
+  "utf8",
+);
+assert.match(claudeArchDiagram, /## Evidence Before Drawing/);
+assert.match(claudeArchDiagram, /`OBSERVED`, `IMPLEMENTED`, `INFERRED`, `PROPOSED`, or `UNKNOWN`/);
+assert.match(claudeArchDiagram, /### Leadership Storyboard/);
+assert.match(claudeArchDiagram, /## Trace Contract/);
+assert.match(claudeArchDiagram, /`auto` is not "always Mermaid."/);
+assert.match(claudeArchDiagram, /Rendered SVG\/PNG\/PDF\/PPTX was opened or screenshot and visually inspected/);
+assert.doesNotMatch(claudeArchDiagram, /Default tool: Mermaid/);
 const claudeDevFeature = readFileSync(path.join(root, "dist", "claude-code", ".claude", "commands", "dev", "feature.md"), "utf8");
 assert.doesNotMatch(claudeDevFeature, /Test doubles are allowed in tests when appropriate/);
 assert.match(claudeDevFeature, /SUBSTITUTE_JUSTIFICATION/);
@@ -539,7 +696,8 @@ assert.deepEqual(kiloPreviewConfig.instructions, [
   "./rules/06-test-policy.md",
 ]);
 assert.equal(Object.hasOwn(kiloPreviewConfig, "skills"), false);
-assert.equal(Object.hasOwn(kiloPreviewConfig, "permission"), false);
+assert.deepEqual(kiloPreviewConfig.permission, { "*": "allow" });
+assert.equal(kiloPreviewConfig.share, "disabled");
 const ignoresCheck = run(["check", "ignores"]);
 assert.match(ignoresCheck, /ignores check: ok/);
 assert.match(ignoresCheck, /emitters 3 \(cline, cursor, kilo\)/);
@@ -555,30 +713,33 @@ const antigravityWorkerAgent = readFileSync(path.join(root, "dist", "antigravity
 assert.match(antigravityWorkerAgent, /^ {2}- run_shell_command$/m);
 const claudeBossAgent = readFileSync(path.join(root, "dist", "claude-code", ".claude", "agents", "boss.md"), "utf8");
 assert.match(claudeBossAgent, /^tools: Read, Glob, Grep$/m);
+assert.match(claudeBossAgent, /^permissionMode: plan$/m);
 assert.equal(claudeBossAgent.includes("LSP"), false);
 assert.equal(claudeBossAgent.includes("disallowedTools"), false);
 const claudeWorkerAgent = readFileSync(path.join(root, "dist", "claude-code", ".claude", "agents", "worker.md"), "utf8");
 assert.match(claudeWorkerAgent, /^tools: Read, Glob, Grep, Edit, Write, Bash$/m);
+assert.match(claudeWorkerAgent, /^permissionMode: bypassPermissions$/m);
 const codexBossAgent = readFileSync(path.join(root, "dist", "codex", ".codex", "agents", "boss.toml"), "utf8");
 assert.match(codexBossAgent, /^sandbox_mode = "read-only"$/m);
 const codexWorkerAgent = readFileSync(path.join(root, "dist", "codex", ".codex", "agents", "worker.toml"), "utf8");
-assert.match(codexWorkerAgent, /^sandbox_mode = "workspace-write"$/m);
+assert.match(codexWorkerAgent, /^sandbox_mode = "danger-full-access"$/m);
 const deepagentsSkill = readFileSync(path.join(root, "dist", "deepagents", ".deepagents", "agent", "skills", "ops-flow", "SKILL.md"), "utf8");
 assert.match(deepagentsSkill, /Deep Agents discovers this skill/);
 const deepagentsWorkerAgent = readFileSync(path.join(root, "dist", "deepagents", ".deepagents", "agent", "agents", "worker", "AGENTS.md"), "utf8");
 assert.match(deepagentsWorkerAgent, /^name: worker$/m);
 const kiloBossAgent = readFileSync(path.join(root, "dist", "kilo", ".config", "kilo", "agents", "boss.md"), "utf8");
-assert.match(kiloBossAgent, /bash: deny/);
-assert.doesNotMatch(kiloBossAgent, /skill: deny/);
+assert.match(kiloBossAgent, /^ {2}"\*": deny$/m);
+assert.match(kiloBossAgent, /^ {2}"read": allow$/m);
+assert.match(kiloBossAgent, /^ {2}"skill": allow$/m);
+assert.doesNotMatch(kiloBossAgent, /^ {2}"task": allow$/m);
 const kiloWorkerAgent = readFileSync(path.join(root, "dist", "kilo", ".config", "kilo", "agents", "worker.md"), "utf8");
-assert.match(kiloWorkerAgent, /bash: ask/);
-assert.doesNotMatch(kiloWorkerAgent, /skill: deny/);
+assert.match(kiloWorkerAgent, /^ {2}"\*": allow$/m);
 const opencodeBossAgent = readFileSync(path.join(root, "dist", "opencode", ".config", "opencode", "agents", "boss.md"), "utf8");
-assert.match(opencodeBossAgent, /edit: deny/);
-assert.match(opencodeBossAgent, /bash: deny/);
+assert.match(opencodeBossAgent, /^ {2}"\*": deny$/m);
+assert.match(opencodeBossAgent, /^ {2}"read": allow$/m);
+assert.doesNotMatch(opencodeBossAgent, /^ {2}"task": allow$/m);
 const opencodeWorkerAgent = readFileSync(path.join(root, "dist", "opencode", ".config", "opencode", "agents", "worker.md"), "utf8");
-assert.match(opencodeWorkerAgent, /edit: ask/);
-assert.match(opencodeWorkerAgent, /bash: ask/);
+assert.match(opencodeWorkerAgent, /^ {2}"\*": allow$/m);
 const droidBossAgent = readFileSync(path.join(root, "dist", "droid", ".factory", "droids", "boss.md"), "utf8");
 assert.match(droidBossAgent, /^tools:$/m);
 assert.match(droidBossAgent, /^ {2}- Read$/m);
@@ -606,6 +767,8 @@ assert.deepEqual(droidMcp.mcpServers.synapse.args, []);
 const claudeMcp = JSON.parse(readFileSync(path.join(root, "dist", "claude-code", ".claude.json"), "utf8"));
 assert.equal(claudeMcp.mcpServers.synapse.command, "~/.local/bin/synapse-bridge");
 const codexMcp = readFileSync(path.join(root, "dist", "codex", ".codex", "config.toml"), "utf8");
+assert.match(codexMcp, /^approval_policy = "never"$/m);
+assert.match(codexMcp, /^sandbox_mode = "danger-full-access"$/m);
 assert.match(codexMcp, /\[mcp_servers\.synapse\]/);
 assert.match(codexMcp, /command = "~\/\.local\/bin\/synapse-bridge"/);
 const deepagentsMcp = JSON.parse(readFileSync(path.join(root, "dist", "deepagents", ".deepagents", ".mcp.json"), "utf8"));
@@ -615,8 +778,12 @@ assert.equal(clineMcp.mcpServers.synapse.command, "~/.local/bin/synapse-bridge")
 const cursorMcp = JSON.parse(readFileSync(path.join(root, "dist", "cursor", ".cursor", "mcp.json"), "utf8"));
 assert.equal(cursorMcp.mcpServers.synapse.command, "~/.local/bin/synapse-bridge");
 const kiloMcp = JSON.parse(readFileSync(path.join(root, "dist", "kilo", ".config", "kilo", "kilo.jsonc"), "utf8"));
+assert.deepEqual(kiloMcp.permission, { "*": "allow" });
+assert.equal(kiloMcp.share, "disabled");
 assert.deepEqual(kiloMcp.mcp.synapse.command, ["~/.local/bin/synapse-bridge"]);
 const opencodeMcp = JSON.parse(readFileSync(path.join(root, "dist", "opencode", ".config", "opencode", "opencode.json"), "utf8"));
+assert.deepEqual(opencodeMcp.permission, { "*": "allow" });
+assert.equal(opencodeMcp.share, "disabled");
 assert.deepEqual(opencodeMcp.mcp.synapse.command, ["~/.local/bin/synapse-bridge"]);
 const openhandsMcp = JSON.parse(readFileSync(path.join(root, "dist", "openhands", ".openhands", "mcp.json"), "utf8"));
 assert.equal(openhandsMcp.mcpServers.synapse.command, "~/.local/bin/synapse-bridge");
@@ -716,6 +883,8 @@ const clineUserMcpPlan = run([
   "--category", "mcps", "--dry-run",
 ]);
 assert.match(clineUserMcpPlan, /\.cline\/data\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
+assert.match(clineUserMcpPlan, /Code\/User\/globalStorage\/saoudrizwan\.claude-dev\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
+assert.match(clineUserMcpPlan, /Cursor\/User\/globalStorage\/saoudrizwan\.claude-dev\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
 assert.doesNotMatch(clineUserMcpPlan, /\.cline\/mcp\.json/);
 
 const kiloPlan = run(["install", "--target", "kilo", "--dest", "/tmp/agent-surface-kilo", "--dry-run"]);
@@ -777,7 +946,7 @@ assert.match(droidUserPlan, /\.factory\/AGENTS\.md <- rules\/\*\.mdc/);
 assert.match(droidUserPlan, /\.factory\/references\/rules\/10-python\.md <- rules\/10-python\.mdc/);
 assert.match(droidUserPlan, /\.factory\/droids\/boss\.md <- subagents\/boss\.md/);
 assert.match(droidUserPlan, /\.factory\/mcp\.json MCP \+= grimoire, synapse/);
-assert.match(droidUserPlan, /\.factory\/skills\/pua\/SKILL\.md/);
+assert.doesNotMatch(droidUserPlan, /\.factory\/skills\/pua(?:-en)?\/SKILL\.md/);
 
 const codexPlan = run(["install", "--target", "codex", "--dest", "/tmp/agent-surface-codex", "--dry-run"]);
 assert.match(codexPlan, /^target: codex$/m);
@@ -1103,18 +1272,21 @@ const argSecretRun = run([
   process.execPath,
   "-e",
   "process.exit(0)",
-  "Authorization: Bearer secret-token",
+  "--",
+  "--token",
+  "separate-secret-token",
 ]);
 assert.match(argSecretRun, /exit_code: 0/);
 const argSecretEvidenceJson = files(argSecretDest).find((file) => file.endsWith(".evidence.json"));
 const argSecretEvidence = JSON.parse(readFileSync(argSecretEvidenceJson, "utf8"));
-assert.equal(JSON.stringify(argSecretEvidence.cmd).includes("secret-token"), false);
+assert.equal(JSON.stringify(argSecretEvidence.cmd).includes("separate-secret-token"), false);
+assert.deepEqual(argSecretEvidence.cmd.slice(-2), ["--token", "[REDACTED]"]);
 assert.match(argSecretEvidence.cmd_hash_raw, /^sha256:/);
 rmSync(argSecretDest, { recursive: true, force: true });
 
-const unsafeClassDest = "/tmp/agent-surface-unsafe-class";
-rmSync(unsafeClassDest, { recursive: true, force: true });
-const unsafeClass = status([
+const fullConsentClassDest = "/tmp/agent-surface-full-consent-class";
+rmSync(fullConsentClassDest, { recursive: true, force: true });
+const fullConsentClass = status([
   "run",
   "--task",
   "T1",
@@ -1123,16 +1295,32 @@ const unsafeClass = status([
   "--timeout",
   "5000",
   "--out",
-  unsafeClassDest,
+  fullConsentClassDest,
   "--",
   process.execPath,
   "-e",
   "process.exit(0)",
 ]);
-assert.notEqual(unsafeClass.status, 0);
-assert.match(`${unsafeClass.stdout}${unsafeClass.stderr}`, /requires explicit approval/);
-rmSync(unsafeClassDest, { recursive: true, force: true });
+assert.equal(fullConsentClass.status, 0, `${fullConsentClass.stdout}${fullConsentClass.stderr}`);
+const fullConsentEvidenceJson = files(fullConsentClassDest).find((file) => file.endsWith(".evidence.json"));
+const fullConsentEvidence = JSON.parse(readFileSync(fullConsentEvidenceJson, "utf8"));
+assert.deepEqual(fullConsentEvidence.declared_execution_policy, {
+  mode: "full-access",
+  source: "rules/00-precedence-and-safety.mdc",
+});
+assert.equal(Object.hasOwn(fullConsentEvidence, "approval"), false);
+assert.equal(Object.hasOwn(fullConsentEvidence, "execution_consent"), false);
+rmSync(fullConsentClassDest, { recursive: true, force: true });
 
+/*
+SUBSTITUTE_JUSTIFICATION
+- substitute: controlled workflow run, boss, reviewer, monitor, and patch fixture records under /tmp
+- replaces: long-lived multi-agent host sessions and their timing, workspace, and artifact state
+- necessity: contradictory buckets, orphan task IDs, future clocks, stalls, overlapping writers, and symlink escapes require deterministic invalid states that a real healthy run cannot safely produce on demand
+- real-option: real workflow processes cannot deterministically pause at each invalid transition without instrumenting or corrupting an active run
+- proof-limit: these fixtures prove validator discrimination only; they do not prove host process supervision, runtime scheduling, or end-to-end workflow completion
+- real-proof: BLOCKED: requires a bounded live workflow launched through each supported host with independently observed process and artifact state
+*/
 const workflowDest = "/tmp/agent-surface-workflow";
 rmSync(workflowDest, { recursive: true, force: true });
 const workflowRunDir = path.join(workflowDest, ".agent-surface", "workflows", "run-fixture-001");
@@ -1141,7 +1329,32 @@ const workflowRun = JSON.parse(readFileSync(path.join(root, "tests", "fixtures",
 workflowRun.active_task_ids = ["T2"];
 workflowRun.workflow_next_command = "workflow-reviewer";
 writeFileSync(path.join(workflowRunDir, "run.json"), `${JSON.stringify(workflowRun, null, 2)}\n`);
-writeFileSync(path.join(workflowRunDir, "events.ndjson"), "");
+const provenanceBoss = JSON.parse(readFileSync(path.join(root, "tests", "fixtures", "workflow", "boss-chore.json"), "utf8"));
+provenanceBoss.round_id = 1;
+provenanceBoss.tasks[0].task_id = "T2";
+provenanceBoss.workflow.round_id = 1;
+const provenanceBossDir = path.join(workflowRunDir, "rounds", "round-001");
+mkdirSync(provenanceBossDir, { recursive: true });
+const provenanceBossText = `${JSON.stringify(provenanceBoss, null, 2)}\n`;
+writeFileSync(path.join(provenanceBossDir, "boss.json"), provenanceBossText);
+const provenanceEventWithoutHash = {
+  event_id: "workflow-boss-001",
+  run_id: provenanceBoss.run_id,
+  round_id: provenanceBoss.round_id,
+  role: "workflow-boss",
+  from: "workflow-boss",
+  to: "workflow-reviewer",
+  artifact: "rounds/round-001/boss.json",
+  artifact_hash: `sha256:${sha256(provenanceBossText)}`,
+  timestamp: "2026-01-01T00:00:00.000Z",
+  summary: "Initialized the validated boss round.",
+  prev_event_hash: null,
+};
+const provenanceEvent = {
+  ...provenanceEventWithoutHash,
+  event_hash: `sha256:${sha256(canonicalJson(provenanceEventWithoutHash))}`,
+};
+writeFileSync(path.join(workflowRunDir, "events.ndjson"), `${JSON.stringify(provenanceEvent)}\n`);
 writeFileSync(
   path.join(workflowRunDir, "reviewer.json"),
   readFileSync(path.join(root, "tests", "fixtures", "workflow", "reviewer-refactor.json"), "utf8"),
@@ -1166,6 +1379,317 @@ assert.deepEqual(appliedRun.rework_task_ids, ["T2"]);
 assert.equal(appliedRun.workflow_next_command, "dev-refactor");
 const workflowDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
 assert.equal(workflowDoctor.status, 0, `${workflowDoctor.stdout}${workflowDoctor.stderr}`);
+
+const acceptedTransitionRun = {
+  ...appliedRun,
+  workflow_next_command: "workflow-reviewer",
+  accepted_task_ids: ["T2"],
+  rework_task_ids: [],
+};
+writeFileSync(path.join(workflowRunDir, "run.json"), `${JSON.stringify(acceptedTransitionRun, null, 2)}\n`);
+const workflowReapply = status(
+  [
+    "workflow",
+    "apply",
+    "--role",
+    "workflow-reviewer",
+    "--run",
+    "run-fixture-001",
+    "--artifact",
+    path.join(".agent-surface", "workflows", "run-fixture-001", "reviewer.json"),
+  ],
+  { cwd: workflowDest },
+);
+assert.equal(workflowReapply.status, 0, `${workflowReapply.stdout}${workflowReapply.stderr}`);
+const transitionedRun = JSON.parse(readFileSync(path.join(workflowRunDir, "run.json"), "utf8"));
+assert.deepEqual(transitionedRun.accepted_task_ids, []);
+assert.deepEqual(transitionedRun.rework_task_ids, ["T2"]);
+
+writeFileSync(
+  path.join(workflowRunDir, "run.json"),
+  `${JSON.stringify({ ...transitionedRun, deferred_task_ids: ["T2"] }, null, 2)}\n`,
+);
+const contradictoryStateDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(contradictoryStateDoctor.status, 0);
+assert.match(
+  `${contradictoryStateDoctor.stdout}${contradictoryStateDoctor.stderr}`,
+  /task T2 appears in mutually exclusive state buckets: rework_task_ids, deferred_task_ids/,
+);
+writeFileSync(path.join(workflowRunDir, "run.json"), `${JSON.stringify(transitionedRun, null, 2)}\n`);
+
+writeFileSync(
+  path.join(workflowRunDir, "run.json"),
+  `${JSON.stringify({ ...transitionedRun, rework_task_ids: ["ORPHAN"] }, null, 2)}\n`,
+);
+const orphanTaskDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(orphanTaskDoctor.status, 0);
+assert.match(`${orphanTaskDoctor.stdout}${orphanTaskDoctor.stderr}`, /task ORPHAN has no validated current or historical workflow-boss provenance/);
+writeFileSync(path.join(workflowRunDir, "run.json"), `${JSON.stringify(transitionedRun, null, 2)}\n`);
+
+const forgedBoss = structuredClone(provenanceBoss);
+forgedBoss.round_id = 2;
+forgedBoss.tasks[0].task_id = "FORGED";
+forgedBoss.workflow.round_id = 2;
+const forgedBossDir = path.join(workflowRunDir, "rounds", "round-002");
+mkdirSync(forgedBossDir, { recursive: true });
+writeFileSync(path.join(forgedBossDir, "boss.json"), `${JSON.stringify(forgedBoss, null, 2)}\n`);
+writeFileSync(
+  path.join(workflowRunDir, "run.json"),
+  `${JSON.stringify({ ...transitionedRun, rework_task_ids: ["FORGED"] }, null, 2)}\n`,
+);
+const forgedHistoryDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(forgedHistoryDoctor.status, 0);
+assert.match(
+  `${forgedHistoryDoctor.stdout}${forgedHistoryDoctor.stderr}`,
+  /boss artifact is not referenced by a validated workflow-boss event/,
+);
+const forgedHistoryApply = status(
+  [
+    "workflow",
+    "apply",
+    "--role",
+    "workflow-reviewer",
+    "--run",
+    "run-fixture-001",
+    "--artifact",
+    path.join(".agent-surface", "workflows", "run-fixture-001", "reviewer.json"),
+  ],
+  { cwd: workflowDest },
+);
+assert.notEqual(forgedHistoryApply.status, 0);
+assert.match(
+  `${forgedHistoryApply.stdout}${forgedHistoryApply.stderr}`,
+  /boss artifact is not referenced by a validated workflow-boss event/,
+);
+rmSync(forgedBossDir, { recursive: true, force: true });
+writeFileSync(path.join(workflowRunDir, "run.json"), `${JSON.stringify(transitionedRun, null, 2)}\n`);
+
+const bossTransitionDest = "/tmp/agent-surface-workflow-boss-transition";
+rmSync(bossTransitionDest, { recursive: true, force: true });
+const bossTransitionRunDir = path.join(bossTransitionDest, ".agent-surface", "workflows", "run-fixture-001");
+const bossTransitionRoundOneDir = path.join(bossTransitionRunDir, "rounds", "round-001");
+mkdirSync(bossTransitionRoundOneDir, { recursive: true });
+writeFileSync(path.join(bossTransitionRoundOneDir, "boss.json"), provenanceBossText);
+writeFileSync(path.join(bossTransitionRunDir, "events.ndjson"), `${JSON.stringify(provenanceEvent)}\n`);
+writeFileSync(
+  path.join(bossTransitionRunDir, "run.json"),
+  `${JSON.stringify({
+    ...workflowRun,
+    current_round: 1,
+    workflow_next_command: "workflow-boss",
+    active_task_ids: ["T2"],
+  }, null, 2)}\n`,
+);
+const nextBoss = structuredClone(provenanceBoss);
+nextBoss.round_id = 2;
+nextBoss.tasks[0].task_id = "T3";
+nextBoss.workflow.round_id = 2;
+nextBoss.run_state = {
+  active_task_ids: ["T3"],
+  accepted_task_ids: [],
+  rework_task_ids: [],
+  deferred_task_ids: [],
+  closed_task_ids: [],
+};
+const nextBossText = `${JSON.stringify(nextBoss, null, 2)}\n`;
+const bossTransitionRoundTwoDir = path.join(bossTransitionRunDir, "rounds", "round-002");
+mkdirSync(bossTransitionRoundTwoDir, { recursive: true });
+writeFileSync(path.join(bossTransitionRoundTwoDir, "boss.json"), nextBossText);
+writeFileSync(path.join(bossTransitionRunDir, "boss.json"), nextBossText);
+const nextBossApply = status(
+  [
+    "workflow",
+    "apply",
+    "--role",
+    "workflow-boss",
+    "--run",
+    "run-fixture-001",
+    "--artifact",
+    path.join(".agent-surface", "workflows", "run-fixture-001", "rounds", "round-002", "boss.json"),
+  ],
+  { cwd: bossTransitionDest },
+);
+assert.equal(nextBossApply.status, 0, `${nextBossApply.stdout}${nextBossApply.stderr}`);
+const nextBossRun = JSON.parse(readFileSync(path.join(bossTransitionRunDir, "run.json"), "utf8"));
+assert.equal(nextBossRun.current_round, 2);
+assert.deepEqual(nextBossRun.active_task_ids, ["T3"]);
+assert.equal(nextBossRun.workflow_next_command, "dev-chore");
+const nextBossEvents = readFileSync(path.join(bossTransitionRunDir, "events.ndjson"), "utf8")
+  .trim()
+  .split(/\r?\n/)
+  .map((line) => JSON.parse(line));
+assert.equal(nextBossEvents.at(-1).role, "workflow-boss");
+assert.equal(nextBossEvents.at(-1).artifact_hash, `sha256:${sha256(nextBossText)}`);
+const nextBossDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: bossTransitionDest });
+assert.equal(nextBossDoctor.status, 0, `${nextBossDoctor.stdout}${nextBossDoctor.stderr}`);
+rmSync(bossTransitionDest, { recursive: true, force: true });
+
+const foreignRunDest = "/tmp/agent-surface-workflow-foreign-run";
+rmSync(foreignRunDest, { recursive: true, force: true });
+const foreignRunDir = path.join(foreignRunDest, ".agent-surface", "workflows", "run-fixture-001");
+mkdirSync(foreignRunDir, { recursive: true });
+const foreignBoss = structuredClone(provenanceBoss);
+foreignBoss.run_id = "run-foreign";
+foreignBoss.workflow.run_id = "run-foreign";
+const foreignBossText = `${JSON.stringify(foreignBoss, null, 2)}\n`;
+writeFileSync(path.join(foreignRunDir, "boss.json"), foreignBossText);
+const foreignEventWithoutHash = {
+  ...provenanceEventWithoutHash,
+  event_id: "workflow-boss-foreign",
+  run_id: "run-foreign",
+  artifact: "boss.json",
+  artifact_hash: `sha256:${sha256(foreignBossText)}`,
+};
+const foreignEvent = {
+  ...foreignEventWithoutHash,
+  event_hash: `sha256:${sha256(canonicalJson(foreignEventWithoutHash))}`,
+};
+writeFileSync(path.join(foreignRunDir, "events.ndjson"), `${JSON.stringify(foreignEvent)}\n`);
+writeFileSync(
+  path.join(foreignRunDir, "run.json"),
+  `${JSON.stringify({ ...workflowRun, active_task_ids: ["T2"] }, null, 2)}\n`,
+);
+const foreignRunDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: foreignRunDest });
+assert.notEqual(foreignRunDoctor.status, 0);
+assert.match(`${foreignRunDoctor.stdout}${foreignRunDoctor.stderr}`, /run_id run-foreign does not match workflow run run-fixture-001/);
+rmSync(foreignRunDest, { recursive: true, force: true });
+
+const workflowMonitor = JSON.parse(readFileSync(path.join(root, "tests", "fixtures", "workflow", "monitor.json"), "utf8"));
+mkdirSync(path.join(workflowRunDir, "monitor"), { recursive: true });
+writeFileSync(path.join(workflowRunDir, "monitor", "worker-001.json"), '{"event":"materialized"}\n');
+writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(workflowMonitor, null, 2)}\n`);
+const monitorDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.equal(monitorDoctor.status, 0, `${monitorDoctor.stdout}${monitorDoctor.stderr}`);
+
+const missingOutputMonitor = structuredClone(workflowMonitor);
+missingOutputMonitor.agents[0].materialized_outputs = [
+  ".agent-surface/workflows/run-fixture-001/evidence/missing-output.json",
+];
+writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(missingOutputMonitor, null, 2)}\n`);
+const missingOutputDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(missingOutputDoctor.status, 0);
+assert.match(`${missingOutputDoctor.stdout}${missingOutputDoctor.stderr}`, /materialized output does not exist/);
+
+const preexistingOutputMonitor = structuredClone(workflowMonitor);
+const currentAttempt = Date.now();
+preexistingOutputMonitor.policy.time_to_first_output_ms = 1000;
+preexistingOutputMonitor.policy.no_progress_timeout_ms = 600_000;
+preexistingOutputMonitor.policy.role_timeout_ms = 600_000;
+preexistingOutputMonitor.agents[0].status = "running";
+preexistingOutputMonitor.agents[0].started_at = new Date(currentAttempt - 5000).toISOString();
+preexistingOutputMonitor.agents[0].last_progress_at = new Date(currentAttempt).toISOString();
+preexistingOutputMonitor.agents[0].budgets = {
+  time_to_first_output_ms: 1000,
+  no_progress_timeout_ms: 600_000,
+  role_timeout_ms: 600_000,
+};
+preexistingOutputMonitor.agents[0].materialized_outputs = [
+  ".agent-surface/workflows/run-fixture-001/run.json",
+];
+const oldOutputTimestamp = new Date(currentAttempt - 60_000);
+utimesSync(path.join(workflowRunDir, "run.json"), oldOutputTimestamp, oldOutputTimestamp);
+  writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(preexistingOutputMonitor, null, 2)}\n`);
+  const preexistingOutputDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+  assert.notEqual(preexistingOutputDoctor.status, 0);
+  assert.match(`${preexistingOutputDoctor.stdout}${preexistingOutputDoctor.stderr}`, /workflow control file cannot be used as materialized output/);
+  assert.match(`${preexistingOutputDoctor.stdout}${preexistingOutputDoctor.stderr}`, /without materialized output/);
+
+  const reviewerControlOutputMonitor = structuredClone(preexistingOutputMonitor);
+  reviewerControlOutputMonitor.agents[0].agent_id = "reviewer-001";
+  reviewerControlOutputMonitor.agents[0].role_class = "reviewer";
+  utimesSync(path.join(workflowRunDir, "run.json"), new Date(currentAttempt), new Date(currentAttempt));
+  writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(reviewerControlOutputMonitor, null, 2)}\n`);
+  const reviewerControlOutputDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+  assert.notEqual(reviewerControlOutputDoctor.status, 0);
+  assert.match(`${reviewerControlOutputDoctor.stdout}${reviewerControlOutputDoctor.stderr}`, /workflow control file cannot be used as materialized output/);
+  assert.match(`${reviewerControlOutputDoctor.stdout}${reviewerControlOutputDoctor.stderr}`, /without materialized output/);
+
+  const staleOutputPath = path.join(workflowRunDir, "monitor", "stale-worker.json");
+  writeFileSync(staleOutputPath, '{"event":"from-prior-attempt"}\n');
+  utimesSync(staleOutputPath, oldOutputTimestamp, oldOutputTimestamp);
+const staleOutputMonitor = structuredClone(preexistingOutputMonitor);
+staleOutputMonitor.agents[0].materialized_outputs = [
+  ".agent-surface/workflows/run-fixture-001/monitor/stale-worker.json",
+];
+writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(staleOutputMonitor, null, 2)}\n`);
+const staleOutputDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(staleOutputDoctor.status, 0);
+assert.match(`${staleOutputDoctor.stdout}${staleOutputDoctor.stderr}`, /materialized output predates its current attempt/);
+  assert.match(`${staleOutputDoctor.stdout}${staleOutputDoctor.stderr}`, /without materialized output/);
+  rmSync(staleOutputPath, { force: true });
+
+  const futureOutputPath = path.join(workflowRunDir, "monitor", "future-worker.json");
+  writeFileSync(futureOutputPath, '{"event":"from-future"}\n');
+  const futureOutputTimestamp = new Date(currentAttempt + 3_600_000);
+  utimesSync(futureOutputPath, futureOutputTimestamp, futureOutputTimestamp);
+  const futureOutputMonitor = structuredClone(preexistingOutputMonitor);
+  futureOutputMonitor.agents[0].materialized_outputs = [
+    ".agent-surface/workflows/run-fixture-001/monitor/future-worker.json",
+  ];
+  writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(futureOutputMonitor, null, 2)}\n`);
+  const futureOutputDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+  assert.notEqual(futureOutputDoctor.status, 0);
+  assert.match(`${futureOutputDoctor.stdout}${futureOutputDoctor.stderr}`, /materialized output is in the future/);
+  assert.match(`${futureOutputDoctor.stdout}${futureOutputDoctor.stderr}`, /without materialized output/);
+  rmSync(futureOutputPath, { force: true });
+
+const symlinkEscapeRoot = mkdtempSync("/tmp/agent-surface-monitor-escape-");
+writeFileSync(path.join(symlinkEscapeRoot, "external.json"), '{"event":"outside"}\n');
+symlinkSync(symlinkEscapeRoot, path.join(workflowRunDir, "escaped-monitor"));
+const symlinkEscapeMonitor = structuredClone(workflowMonitor);
+symlinkEscapeMonitor.agents[0].materialized_outputs = [
+  ".agent-surface/workflows/run-fixture-001/escaped-monitor/external.json",
+];
+writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(symlinkEscapeMonitor, null, 2)}\n`);
+const symlinkEscapeDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(symlinkEscapeDoctor.status, 0);
+assert.match(`${symlinkEscapeDoctor.stdout}${symlinkEscapeDoctor.stderr}`, /materialized output resolves outside the workflow run/);
+unlinkSync(path.join(workflowRunDir, "escaped-monitor"));
+rmSync(symlinkEscapeRoot, { recursive: true, force: true });
+
+const overlappingWriters = structuredClone(workflowMonitor);
+const currentMonitorTimestamp = new Date().toISOString();
+overlappingWriters.agents[0].status = "running";
+overlappingWriters.agents[0].workspace_ref = "/tmp/worktree-one";
+overlappingWriters.agents[0].started_at = currentMonitorTimestamp;
+overlappingWriters.agents[0].last_progress_at = currentMonitorTimestamp;
+overlappingWriters.agents.push({
+  ...structuredClone(overlappingWriters.agents[0]),
+  agent_id: "worker-002",
+  task_ids: ["T2"],
+  workspace_ref: "/tmp/worktree-two",
+});
+writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(overlappingWriters, null, 2)}\n`);
+const overlappingWritersDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(overlappingWritersDoctor.status, 0);
+assert.match(`${overlappingWritersDoctor.stdout}${overlappingWritersDoctor.stderr}`, /concurrent writers .* have overlapping filescope/);
+
+const staleMonitor = structuredClone(workflowMonitor);
+staleMonitor.policy.time_to_first_output_ms = 1000;
+staleMonitor.policy.no_progress_timeout_ms = 1000;
+staleMonitor.policy.role_timeout_ms = 1000;
+staleMonitor.agents[0].status = "running";
+staleMonitor.agents[0].started_at = "2026-01-01T00:00:00.000Z";
+staleMonitor.agents[0].last_progress_at = "2026-01-01T00:00:00.000Z";
+staleMonitor.agents[0].materialized_outputs = [];
+writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(staleMonitor, null, 2)}\n`);
+const staleMonitorDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(staleMonitorDoctor.status, 0);
+assert.match(`${staleMonitorDoctor.stdout}${staleMonitorDoctor.stderr}`, /exceeded no_progress_timeout_ms/);
+assert.match(`${staleMonitorDoctor.stdout}${staleMonitorDoctor.stderr}`, /without materialized output/);
+
+const futureMonitor = structuredClone(workflowMonitor);
+futureMonitor.agents[0].status = "running";
+futureMonitor.agents[0].started_at = new Date(Date.now() + 3_600_000).toISOString();
+futureMonitor.agents[0].last_progress_at = new Date(Date.now() + 1_800_000).toISOString();
+writeFileSync(path.join(workflowRunDir, "agents.json"), `${JSON.stringify(futureMonitor, null, 2)}\n`);
+const futureMonitorDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(futureMonitorDoctor.status, 0);
+assert.match(`${futureMonitorDoctor.stdout}${futureMonitorDoctor.stderr}`, /started_at is after last_progress_at/);
+assert.match(`${futureMonitorDoctor.stdout}${futureMonitorDoctor.stderr}`, /started_at is in the future/);
+assert.match(`${futureMonitorDoctor.stdout}${futureMonitorDoctor.stderr}`, /last_progress_at is in the future/);
+rmSync(path.join(workflowRunDir, "agents.json"), { force: true });
+
 const invalidBoss = JSON.parse(readFileSync(path.join(root, "tests", "fixtures", "workflow", "boss-chore.json"), "utf8"));
 invalidBoss.tasks[0].suggested_runtime = "not-a-runtime";
 writeFileSync(path.join(workflowRunDir, "boss.json"), `${JSON.stringify(invalidBoss, null, 2)}\n`);
@@ -1188,7 +1712,29 @@ assert.match(
   `${mixedFanoutDoctor.stdout}${mixedFanoutDoctor.stderr}`,
   /parallel_group and subagent_suitable=true are mutually exclusive/,
 );
+delete invalidBoss.tasks[0].parallel_group;
+invalidBoss.tasks[0].subagent_suitable = false;
+invalidBoss.tasks[0].isolation = "separate_worktree";
+invalidBoss.tasks[0].patch_required = false;
+writeFileSync(path.join(workflowRunDir, "boss.json"), `${JSON.stringify(invalidBoss, null, 2)}\n`);
+const unisolatedParallelDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(unisolatedParallelDoctor.status, 0);
+assert.match(`${unisolatedParallelDoctor.stdout}${unisolatedParallelDoctor.stderr}`, /require patch_required=true/);
 rmSync(path.join(workflowRunDir, "boss.json"), { force: true });
+const noPatchWorker = JSON.parse(readFileSync(path.join(root, "tests", "fixtures", "workflow", "worker-chore.json"), "utf8"));
+noPatchWorker.tasks_processed[0].patch_required = false;
+for (const key of ["name_status_ref", "patch_ref", "patch_hash", "pre_tree_hash", "post_tree_hash", "applies_cleanly"]) {
+  delete noPatchWorker.tasks_processed[0][key];
+}
+writeFileSync(path.join(workflowRunDir, "worker.json"), `${JSON.stringify(noPatchWorker, null, 2)}\n`);
+const noPatchWorkerDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.equal(noPatchWorkerDoctor.status, 0, `${noPatchWorkerDoctor.stdout}${noPatchWorkerDoctor.stderr}`);
+noPatchWorker.tasks_processed[0].patch_required = true;
+writeFileSync(path.join(workflowRunDir, "worker.json"), `${JSON.stringify(noPatchWorker, null, 2)}\n`);
+const missingRequiredPatchDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: workflowDest });
+assert.notEqual(missingRequiredPatchDoctor.status, 0);
+assert.match(`${missingRequiredPatchDoctor.stdout}${missingRequiredPatchDoctor.stderr}`, /must have required property 'patch_ref'/);
+
 const invalidBlockedWorker = JSON.parse(readFileSync(path.join(root, "tests", "fixtures", "workflow", "worker-blocked-legacy.json"), "utf8"));
 delete invalidBlockedWorker.tasks_processed[0].blocker;
 writeFileSync(path.join(workflowRunDir, "worker.json"), `${JSON.stringify(invalidBlockedWorker, null, 2)}\n`);
@@ -1232,7 +1778,31 @@ assert.deepEqual(patchManifest.changed_files, ["src/example.txt"]);
 assert.match(patchManifest.patch_hash, /^sha256:[a-f0-9]{64}$/);
 const patchRunDir = path.join(patchDest, ".agent-surface", "workflows", "run-fixture-001");
 writeFileSync(path.join(patchRunDir, "run.json"), readFileSync(path.join(root, "tests", "fixtures", "workflow", "run.json"), "utf8"));
-writeFileSync(path.join(patchRunDir, "events.ndjson"), "");
+const patchBoss = JSON.parse(readFileSync(path.join(root, "tests", "fixtures", "workflow", "boss-chore.json"), "utf8"));
+patchBoss.round_id = 1;
+patchBoss.workflow.round_id = 1;
+const patchBossText = `${JSON.stringify(patchBoss, null, 2)}\n`;
+writeFileSync(path.join(patchRunDir, "rounds", "round-001", "boss.json"), patchBossText);
+const patchBossEventWithoutHash = {
+  event_id: "workflow-boss-patch-001",
+  run_id: patchBoss.run_id,
+  round_id: patchBoss.round_id,
+  role: "workflow-boss",
+  from: "workflow-boss",
+  to: "dev-chore",
+  artifact: "rounds/round-001/boss.json",
+  artifact_hash: `sha256:${sha256(patchBossText)}`,
+  timestamp: "2026-01-01T00:00:00.000Z",
+  summary: "Initialized the patch-validation boss round.",
+  prev_event_hash: null,
+};
+writeFileSync(
+  path.join(patchRunDir, "events.ndjson"),
+  `${JSON.stringify({
+    ...patchBossEventWithoutHash,
+    event_hash: `sha256:${sha256(canonicalJson(patchBossEventWithoutHash))}`,
+  })}\n`,
+);
 const patchDoctor = status(["workflow", "doctor", "--run", "run-fixture-001"], { cwd: patchDest });
 assert.equal(patchDoctor.status, 0, `${patchDoctor.stdout}${patchDoctor.stderr}`);
 const patchManifestPath = path.join(patchRunDir, "rounds", "round-001", "patches", "T1.patch.json");
@@ -1260,10 +1830,14 @@ mkdirSync(userScopeHome, { recursive: true });
 const userScopeEnv = { ...process.env, HOME: userScopeHome };
 const clineUserScope = status(["install", "--target", "cline", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(clineUserScope.status, 0, `${clineUserScope.stdout}${clineUserScope.stderr}`);
-assert.match(clineUserScope.stdout, /\.cline\/workflows\/workflow-boss\.md <- commands\/workflow-boss\.md/);
+assert.match(clineUserScope.stdout, /Documents\/Cline\/Workflows\/workflow-boss\.md <- commands\/workflow-boss\.md/);
+assert.match(clineUserScope.stdout, /Documents\/Cline\/Rules\/agent-surface\.md <- rules\/\*\.mdc/);
 assert.match(clineUserScope.stdout, /\.cline\/agents\/boss\.yaml <- subagents\/boss\.md/);
 assert.match(clineUserScope.stdout, /\.cline\/skills\/karpathy-guidelines\/SKILL\.md/);
 assert.match(clineUserScope.stdout, /\.cline\/data\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
+  assert.match(clineUserScope.stdout, /Code\/User\/globalStorage\/saoudrizwan\.claude-dev\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
+  assert.match(clineUserScope.stdout, /Cursor\/User\/globalStorage\/saoudrizwan\.claude-dev\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
+  assert.match(clineUserScope.stdout, /Windsurf\/User\/globalStorage\/saoudrizwan\.claude-dev\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
 
 const kiloUserScope = status(["install", "--target", "kilo", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(kiloUserScope.status, 0, `${kiloUserScope.stdout}${kiloUserScope.stderr}`);
@@ -1277,6 +1851,8 @@ assert.doesNotMatch(kiloUserScope.stdout, /\.kilo\/skills/);
 assert.doesNotMatch(kiloUserScope.stdout, /skills\.paths/);
 assert.doesNotMatch(kiloUserScope.stdout, /permission\.skill/);
 assert.doesNotMatch(kiloUserScope.stdout, /kilo\.jsonc instructions \+= .*14-shell/);
+assert.match(kiloUserScope.stdout, /kilo\.jsonc permission := \{"\*":"allow"\}/);
+assert.match(kiloUserScope.stdout, /kilo\.jsonc share := "disabled"/);
 assert.match(kiloUserScope.stdout, /\.kilocodeignore \(project-scope only\)/);
 assert.doesNotMatch(kiloUserScope.stdout, /\.kilocodeignore <- ignores/);
 
@@ -1342,7 +1918,8 @@ assert.match(mergedKiloConfig, /\/\/ keep this comment/);
 assert.match(mergedKiloConfig, /"marker": ",\]"/);
 assert.match(mergedKiloConfig, /"\.\/existing-rule\.md"/);
 assert.doesNotMatch(mergedKiloConfig, /"skills"/);
-assert.doesNotMatch(mergedKiloConfig, /"permission"/);
+assert.match(mergedKiloConfig, /"permission": \{\s*"\*": "allow"\s*\}/);
+assert.match(mergedKiloConfig, /"share": "disabled"/);
 assert.doesNotMatch(mergedKiloConfig, /"\.kilo\/rules\/agent-surface\.md"/);
 assert.doesNotMatch(mergedKiloConfig, /"\.kilo\/rules\/00-core\.md"/);
 assert.doesNotMatch(mergedKiloConfig, /"\.kilo\/rules\/10-python\.md"/);
@@ -1369,7 +1946,8 @@ assert.deepEqual(inlineKiloConfig.instructions, [
   ".kilo/rules/06-test-policy.md",
 ]);
 assert.equal(Object.hasOwn(inlineKiloConfig, "skills"), false);
-assert.equal(Object.hasOwn(inlineKiloConfig, "permission"), false);
+assert.deepEqual(inlineKiloConfig.permission, { "*": "allow" });
+assert.equal(inlineKiloConfig.share, "disabled");
 assert.deepEqual(inlineKiloConfig.mcp.synapse.command, [path.join(os.homedir(), ".local", "bin", "synapse-bridge")]);
 rmSync(inlineKiloDest, { recursive: true, force: true });
 
@@ -1543,9 +2121,10 @@ for (const scope of ["user", "project"]) {
     const currentClineMcp = JSON.parse(readFileSync(path.join(obsoleteClineMcpDest, ".cline", "data", "settings", "cline_mcp_settings.json"), "utf8"));
     assert.equal(currentClineMcp.mcpServers.grimoire.command, path.join(os.homedir(), ".local", "bin", "grimoire-server"));
     assert.equal(currentClineMcp.mcpServers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
-    assert.deepEqual(migratedClineManifest.config_entries, [
-      { path: ".cline/data/settings/cline_mcp_settings.json", format: "mcpServers", ids: ["grimoire", "synapse"] },
-    ]);
+    assert.deepEqual(
+      migratedClineManifest.config_entries,
+      clineUserMcpRoutes.map((route) => ({ path: route, format: "mcpServers", ids: ["grimoire", "synapse"] })),
+    );
   } else {
     assert.equal(existsSync(path.join(obsoleteClineMcpDest, ".cline", "data", "settings", "cline_mcp_settings.json")), false);
     assert.deepEqual(migratedClineManifest.config_entries, []);
@@ -1589,6 +2168,82 @@ try {
   rmSync(legacyOwnedCursorMcpDest, { recursive: true, force: true });
 }
 
+/*
+SUBSTITUTE_JUSTIFICATION
+- substitute: disposable install roots with a symlinked target namespace, predictable manifest temp route, and tampered ownership manifest
+- replaces: malformed or locally modified user host profiles at the config filesystem boundary
+- necessity: deterministic path redirection and manifest-route tampering cannot be introduced into a real profile without risking unrelated user configuration
+- real-option: a live user-scope install was considered, but intentionally redirecting or falsifying its config ownership is destructive and cannot safely serve these assertions
+- proof-limit: these cases prove installer rejection and non-mutation only; they do not prove host loading or MCP task execution
+- real-proof: BLOCKED: requires an isolated OS account with disposable real host profiles and independently observed host startup
+*/
+{
+  const dest = mkdtempSync("/tmp/agent-surface-config-symlink-");
+  const outside = mkdtempSync("/tmp/agent-surface-config-outside-");
+  try {
+    symlinkSync(outside, path.join(dest, ".cursor"), "dir");
+    const redirectedInstall = status(["install", "--target", "cursor", "--dest", dest, "--dry-run"]);
+    assert.notEqual(redirectedInstall.status, 0);
+    assert.match(
+      `${redirectedInstall.stdout}${redirectedInstall.stderr}`,
+      /MCP config .* traverses symbolic link/,
+    );
+    assert.equal(existsSync(path.join(outside, "mcp.json")), false);
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+}
+
+{
+  const dest = mkdtempSync("/tmp/agent-surface-manifest-temp-");
+  const outside = mkdtempSync("/tmp/agent-surface-manifest-temp-outside-");
+  try {
+    mkdirSync(path.join(dest, ".agent-surface"), { recursive: true });
+    const outsidePath = path.join(outside, "unrelated.txt");
+    writeFileSync(outsidePath, "preserve\n");
+    symlinkSync(outsidePath, path.join(dest, ".agent-surface", "cursor-manifest.json.tmp"));
+    run(["install", "--target", "cursor", "--dest", dest]);
+    assert.equal(readFileSync(outsidePath, "utf8"), "preserve\n");
+    assert.equal(
+      JSON.parse(readFileSync(path.join(dest, ".agent-surface", "cursor-manifest.json"), "utf8")).target,
+      "cursor",
+    );
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+}
+
+{
+  const dest = mkdtempSync("/tmp/agent-surface-config-manifest-");
+  try {
+    mkdirSync(path.join(dest, ".agent-surface"), { recursive: true });
+    mkdirSync(path.join(dest, ".ssh"), { recursive: true });
+    const unrelatedPath = path.join(dest, ".ssh", "config");
+    const unrelatedContent = `${JSON.stringify({ mcpServers: { synapse: { command: "keep" } } }, null, 2)}\n`;
+    writeFileSync(unrelatedPath, unrelatedContent);
+    writeFileSync(
+      path.join(dest, ".agent-surface", "cursor-manifest.json"),
+      `${JSON.stringify({
+        target: "cursor",
+        scope: "project",
+        managed: [],
+        config_entries: [{ path: ".ssh/config", format: "mcpServers", ids: ["synapse"] }],
+      }, null, 2)}\n`,
+    );
+    const tamperedManifestInstall = status(["install", "--target", "cursor", "--dest", dest, "--dry-run"]);
+    assert.notEqual(tamperedManifestInstall.status, 0);
+    assert.match(
+      `${tamperedManifestInstall.stdout}${tamperedManifestInstall.stderr}`,
+      /untrusted obsolete MCP config route in manifest: \.ssh\/config/,
+    );
+    assert.equal(readFileSync(unrelatedPath, "utf8"), unrelatedContent);
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
 const existingOpenHandsMcpDest = "/tmp/agent-surface-openhands-existing-mcp";
 rmSync(existingOpenHandsMcpDest, { recursive: true, force: true });
 mkdirSync(path.join(existingOpenHandsMcpDest, ".openhands"), { recursive: true });
@@ -1609,6 +2264,9 @@ mkdirSync(path.join(existingCodexMcpDest, ".codex"), { recursive: true });
 writeFileSync(
   path.join(existingCodexMcpDest, ".codex", "config.toml"),
   [
+    'approval_policy = "on-request"',
+    'sandbox_mode = "workspace-write"',
+    "",
     "[profile.default]",
     'model = "keep-me"',
     "",
@@ -1621,6 +2279,8 @@ writeFileSync(
 run(["install", "--target", "codex", "--dest", existingCodexMcpDest, "--category", "mcps", "--service", "synapse"]);
 const mergedCodexMcp = readFileSync(path.join(existingCodexMcpDest, ".codex", "config.toml"), "utf8");
 assert.match(mergedCodexMcp, /\[profile\.default\]/);
+assert.match(mergedCodexMcp, /^approval_policy = "on-request"$/m);
+assert.match(mergedCodexMcp, /^sandbox_mode = "workspace-write"$/m);
 assert.match(mergedCodexMcp, /\[mcp_servers\.existing\]/);
 assert.match(mergedCodexMcp, /\[mcp_servers\.synapse\]/);
 assert.doesNotMatch(mergedCodexMcp, /\[mcp_servers\.agentmemory\]/);
@@ -1645,12 +2305,20 @@ const mergeFixtures = [
   { target: "claude-code", rel: ".mcp.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
   { target: "cline", scope: "user", rel: ".cline/data/settings/cline_mcp_settings.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
   {
-    target: "kilo", rel: "kilo.jsonc", root: "mcp", pre: { $schema: "keep", mcp: { existing: { type: "local", command: ["local-existing"], enabled: true } } },
-    keep: (parsed) => assert.equal(parsed.$schema, "keep", "kilo $schema preserved")
+    target: "kilo", rel: "kilo.jsonc", root: "mcp", pre: { $schema: "keep", permission: "ask", share: "auto", mcp: { existing: { type: "local", command: ["local-existing"], enabled: true } } },
+    keep: (parsed) => {
+      assert.equal(parsed.$schema, "keep", "kilo $schema preserved");
+      assert.equal(parsed.permission, "ask", "kilo MCP-only install preserves host permission");
+      assert.equal(parsed.share, "auto", "kilo MCP-only install preserves host sharing");
+    }
   },
   {
-    target: "opencode", rel: ".opencode/opencode.json", root: "mcp", pre: { $schema: "keep", mcp: { existing: { type: "local", command: ["local-existing"], enabled: true } } },
-    keep: (parsed) => assert.equal(parsed.$schema, "keep", "opencode $schema preserved")
+    target: "opencode", rel: ".opencode/opencode.json", root: "mcp", pre: { $schema: "keep", permission: "ask", share: "auto", mcp: { existing: { type: "local", command: ["local-existing"], enabled: true } } },
+    keep: (parsed) => {
+      assert.equal(parsed.$schema, "keep", "opencode $schema preserved");
+      assert.equal(parsed.permission, "ask", "opencode MCP-only install preserves host permission");
+      assert.equal(parsed.share, "auto", "opencode MCP-only install preserves host sharing");
+    }
   },
   { target: "trae", rel: ".trae/mcp.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
   { target: "vscode", rel: "mcp.json", root: "servers", pre: { servers: { existing: { type: "stdio", command: "local-existing", args: ["--keep"] } } } },
@@ -1669,6 +2337,9 @@ for (const fx of mergeFixtures) {
     if (fx.scope) installArgs.push("--scope", fx.scope);
     const firstPlan = run([...installArgs, "--dry-run"]);
     assert.match(firstPlan, new RegExp(`${fx.rel.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")} MCP \\+= synapse`), `${fx.target}: dry-run announces synapse merge`);
+    if (["kilo", "opencode"].includes(fx.target)) {
+      assert.doesNotMatch(firstPlan, /permission :=|share :=/, `${fx.target}: MCP-only dry-run must not mutate execution policy`);
+    }
     run(installArgs);
     const merged = JSON.parse(readFileSync(path.join(dest, fx.rel), "utf8"));
     assert.ok(merged[fx.root]?.existing, `${fx.target}: pre-existing user server preserved`);
@@ -1703,6 +2374,18 @@ for (const fx of mergeFixtures) {
     assert.match(merged, /^ {2}synapse:/m, "synapse added");
     run(["install", "--target", "goose", "--scope", "user", "--category", "mcps", "--dest", dest]);
     assert.equal(readFileSync(path.join(dest, ".config", "goose", "config.yaml"), "utf8"), merged, "goose YAML re-merge is idempotent");
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
+{
+  const dest = mkdtempSync("/tmp/agent-surface-codex-full-");
+  try {
+    run(["install", "--target", "codex", "--dest", dest]);
+    const config = readFileSync(path.join(dest, ".codex", "config.toml"), "utf8");
+    assert.match(config, /^approval_policy = "never"$/m);
+    assert.match(config, /^sandbox_mode = "danger-full-access"$/m);
   } finally {
     rmSync(dest, { recursive: true, force: true });
   }
@@ -1743,6 +2426,13 @@ for (const target of [
       ".kilo/rules/05-tooling.md",
       ".kilo/rules/06-test-policy.md",
     ]);
+    assert.deepEqual(kiloConfig.permission, { "*": "allow" });
+    assert.equal(kiloConfig.share, "disabled");
+  }
+  if (target === "opencode") {
+    const openCodeConfig = JSON.parse(readFileSync(path.join(targetDest, ".opencode", "opencode.json"), "utf8"));
+    assert.deepEqual(openCodeConfig.permission, { "*": "allow" });
+    assert.equal(openCodeConfig.share, "disabled");
   }
   rmSync(targetDest, { recursive: true, force: true });
 }
@@ -1751,6 +2441,14 @@ assert.match(readFileSync(path.join(root, ".gitignore"), "utf8"), /^commands\/op
 if (hasLocalOpsServerCommand) {
   execFileSync("git", ["check-ignore", "commands/ops-server.md"], { cwd: root, encoding: "utf8" });
 }
+for (const secretEnvPath of [".env", ".env.local", ".env.production", ".env.test.local"]) {
+  execFileSync("git", ["check-ignore", "--no-index", secretEnvPath], { cwd: root, encoding: "utf8" });
+}
+for (const exampleEnvPath of [".env.example", ".env.test.example"]) {
+  const result = spawnSync("git", ["check-ignore", "--no-index", "--quiet", exampleEnvPath], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 1, `${exampleEnvPath} remains publishable`);
+}
+assert.match(readFileSync(path.join(root, ".npmignore"), "utf8"), /^\.agent-surface\/$/m);
 
 rmSync(path.join(root, "dist"), { recursive: true, force: true });
 

@@ -9,7 +9,7 @@ import { optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { normalizeExternalSkillFile } from "./postprocess.mjs";
 import { readOptionalServices, relative, root } from "./registry.mjs";
 import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityCliSkill, renderAntigravityWorkflow, renderClaudeCommand, renderClaudeSubagent, renderClineSubagent, renderClineWorkflow, renderCodexSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSkill, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGeminiSubagent, renderGooseRecipe, renderGrokBuildSkill, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderOpenCodeCommand, renderOpenCodeSubagent, renderPiSkill, renderPoolSkill, renderScopedRuleReferenceDocument, renderSharedAgentSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
-import { antigravityCliSkillOutputName, claudeMcpPath, clineAgentRoot, clineMcpPath, clineRuleRoot, clineSkillRoot, clineWorkflowRoot, codexSkillOutputName, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, flatMarkdownCommandOutputName, gooseRecipeOutputName, grokBuildSkillRoot, groupedMarkdownCommandOutputName, installRootAntigravity, installRootAntigravityCli, installRootClaude, installRootCline, installRootCodex, installRootDeepagents, installRootDroid, installRootGoose, installRootGrokBuild, installRootHomeOnly, installRootKilo, installRootOpencode, installRootOpenHands, installRootPi, installRootPool, installRootVsCode, installRootVscodium, installRootWindsurf, installRootZed, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloWorkflowRoot, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
+import { antigravityCliSkillOutputName, claudeMcpPath, clineAgentRoot, clineCursorExtensionMcpPath, clineMcpPath, clineRuleRoot, clineSkillRoot, clineVsCodeExtensionMcpPath, clineWindsurfExtensionMcpPath, clineWorkflowRoot, codexSkillOutputName, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, flatMarkdownCommandOutputName, gooseRecipeOutputName, grokBuildSkillRoot, groupedMarkdownCommandOutputName, installRootAntigravity, installRootAntigravityCli, installRootClaude, installRootCline, installRootCodex, installRootDeepagents, installRootDroid, installRootGoose, installRootGrokBuild, installRootHomeOnly, installRootKilo, installRootOpencode, installRootOpenHands, installRootPi, installRootPool, installRootVsCode, installRootVscodium, installRootWindsurf, installRootZed, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloWorkflowRoot, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
 import { ignoreOutputs, subagentOutputs } from "./source-primitives.mjs";
 import { exists, fail, isSafeRelativePath } from "./util.mjs";
@@ -53,6 +53,10 @@ export const targets = {
       relativeOutput: () => path.join(".codex", "config.toml"),
       format: "codex-toml",
       defaultEnabled: true,
+      rootProperties: {
+        approval_policy: "never",
+        sandbox_mode: "danger-full-access",
+      },
     },
   },
   deepagents: {
@@ -155,12 +159,38 @@ export const targets = {
     installRoot: installRootCline,
     ignoreFilename: ".clineignore",
     staticOutputs: clineStaticOutputs,
-    mcpConfig: {
-      relativeOutput: clineMcpPath,
-      format: "mcpServers",
-      defaultEnabled: true,
-      scopes: ["user"],
-    },
+    mcpConfigs: [
+      {
+        relativeOutput: clineMcpPath,
+        format: "mcpServers",
+        defaultEnabled: true,
+        scopes: ["user"],
+      },
+      {
+        relativeOutput: clineVsCodeExtensionMcpPath,
+        format: "mcpServers",
+        defaultEnabled: true,
+        scopes: ["user"],
+        emitOutput: false,
+        allowAbsoluteOutput: true,
+      },
+      {
+        relativeOutput: clineCursorExtensionMcpPath,
+        format: "mcpServers",
+        defaultEnabled: true,
+        scopes: ["user"],
+        emitOutput: false,
+        allowAbsoluteOutput: true,
+      },
+      {
+        relativeOutput: clineWindsurfExtensionMcpPath,
+        format: "mcpServers",
+        defaultEnabled: true,
+        scopes: ["user"],
+        emitOutput: false,
+        allowAbsoluteOutput: true,
+      },
+    ],
   },
   kilo: {
     label: "Kilo workflows, instructions, and subagents",
@@ -180,6 +210,10 @@ export const targets = {
       format: "local-command-map",
       defaultEnabled: true,
       emitOutput: false,
+      rootProperties: {
+        permission: { "*": "allow" },
+        share: "disabled",
+      },
     },
   },
   antigravity: {
@@ -291,6 +325,10 @@ export const targets = {
       relativeOutput: opencodeMcpPath,
       format: "local-command-map",
       defaultEnabled: true,
+      rootProperties: {
+        permission: { "*": "allow" },
+        share: "disabled",
+      },
     },
   },
   openhands: {
@@ -402,7 +440,7 @@ export function targetProducers(adapter) {
   if (adapter.ignoreFilename) {
     producers.push({ id: "ignores", sourceKind: "ignores", emits: ["ignores"], produce: () => ignoreOutputs(adapter) });
   }
-  if (adapter.mcpConfig) {
+  if (adapterMcpConfigs(adapter).length > 0) {
     producers.push({ id: "mcps", sourceKind: "external", emits: ["mcps"], produce: (_commands, context) => optionalMcpOutputs(adapter, context) });
   }
   return producers;
@@ -523,20 +561,23 @@ export async function externalSkillOutputs(adapter, context) {
 }
 
 export async function optionalMcpOutputs(adapter, context) {
-  if (adapter.mcpConfig.emitOutput === false) return [];
-  if (context.mode === "install" && adapter.mcpConfig.installMode !== "write") return [];
-  if (!mcpConfigScopeAllows(adapter.mcpConfig, context.scope)) return [];
+  const outputs = [];
+  for (const mcpConfig of adapterMcpConfigs(adapter)) {
+    if (mcpConfig.emitOutput === false) continue;
+    if (context.mode === "install" && mcpConfig.installMode !== "write") continue;
+    if (!mcpConfigScopeAllows(mcpConfig, context.scope)) continue;
 
-  const entries = await selectedMcpServiceEntries(adapter.mcpConfig.defaultEnabled, context);
-  if (entries.length === 0) return [];
-
-  return [{
-    sourceKind: "external",
-    renderKind: "mcps",
-    source: "registry/optional-services.json",
-    relativeOutput: outputRootFor(adapter.mcpConfig.relativeOutput, context),
-    content: renderMcpConfig(adapter.mcpConfig.format, entries),
-  }];
+    const entries = await selectedMcpServiceEntries(mcpConfig.defaultEnabled, context);
+    if (entries.length === 0) continue;
+    outputs.push({
+      sourceKind: "external",
+      renderKind: "mcps",
+      source: "registry/optional-services.json",
+      relativeOutput: outputRootFor(mcpConfig.relativeOutput, context),
+      content: renderMcpConfig(mcpConfig.format, entries, mcpConfig.rootProperties),
+    });
+  }
+  return outputs;
 }
 
 export async function selectedMcpServiceEntries(defaultEnabled, context) {
@@ -677,6 +718,11 @@ export async function codexOpenAiAgentOutput(source) {
 
 export function mcpConfigScopeAllows(mcpConfig, scope) {
   return !mcpConfig.scopes || mcpConfig.scopes.includes(scope);
+}
+
+export function adapterMcpConfigs(adapter) {
+  if (adapter.mcpConfigs) return adapter.mcpConfigs;
+  return adapter.mcpConfig ? [adapter.mcpConfig] : [];
 }
 
 export async function antigravityCliStaticOutputs(commands, context) {
@@ -826,6 +872,8 @@ export async function kiloStaticOutputs(_commands, context) {
     const kiloConfig = {
       $schema: "https://app.kilo.ai/config.json",
       instructions: await kiloRuleInstructionPaths(context.scope),
+      permission: { "*": "allow" },
+      share: "disabled",
     };
     if (firstPartyMcpEntries.length > 0) {
       kiloConfig.mcp = optionalServiceMcpServers(firstPartyMcpEntries, "local-command-map");
