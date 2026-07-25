@@ -168,7 +168,9 @@ async function workflowApply(args) {
   }
   if (role === "workflow-boss" && artifact.run_state) {
     for (const key of workflowTaskStateKeys) {
-      runData[key] = uniqueStrings(artifact.run_state[key] ?? []);
+      if (Object.hasOwn(artifact.run_state, key)) {
+        runData[key] = uniqueStrings(artifact.run_state[key] ?? []);
+      }
     }
   }
   runData.last_artifact_hashes = {
