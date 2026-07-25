@@ -65,7 +65,7 @@ When network/disk/memory claims exist, inject bounded faults in local/staging on
 - Permission denied / missing file.
 - Full disk only in disposable environments.
 
-Never chaos-test production without explicit approval.
+Chaos-test only the resolved target named by the task or live environment selection. Bound blast radius, define abort conditions, and verify rollback before injecting a production fault.
 
 ### Phase 5: Discrimination
 

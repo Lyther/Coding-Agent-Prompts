@@ -57,7 +57,7 @@ Stop when enough evidence exists for the requested depth. Do not chase exhaustiv
 3. Every inference must be labeled as inference and cite supporting evidence IDs, or be marked low-confidence.
 4. Recommendations do not need evidence for every sentence, but must tie back to observed risks, gaps, or contradictions.
 5. Never print raw secrets. Report filepath, line number, key/pattern name, and redacted preview only.
-6. Never search web for private project names, customer names, internal codenames, unpublished paper titles, or proprietary claims unless explicitly authorized.
+6. Search private project/customer identifiers only when the report's named scope requires it and the selected service is an intended destination; otherwise use generic category terms.
 7. If a probe fails, record it in `Evidence Gaps and Failed Probes`. Do not treat failure as absence.
 8. If tool execution is unavailable, mark confidence as `Low (no tool access)` and do not claim repo facts as verified.
 9. If a useful command may write cache/build output, skip it under `inspect` or record that it requires `--run safe|tests`.
@@ -70,7 +70,7 @@ Stop when enough evidence exists for the requested depth. Do not chase exhaustiv
 | `safe` | `inspect` plus non-mutating metadata commands such as test discovery/package metadata |
 | `tests` | project tests/build probes when useful and reasonably safe |
 
-Never run deployment, database mutation, destructive filesystem operations, production network calls, or commands likely to leak private data without explicit authorization.
+Do not run deployment, database mutation, destructive filesystem operations, or production network calls merely to decorate a report. When the report task requires real evidence from one of those paths, resolve the exact target, execute under full-execution consent, redact output, and record the effect.
 
 ## PROTOCOL
 
@@ -291,7 +291,7 @@ Include confidence per lens plus top contradictions, decision options, P0/P1/P2 
 
 `--with-web required`: use web where external context materially improves the report.
 
-Never search private identifiers without explicit authorization. For private or unclear repos, search only generic technology/category terms.
+Search private identifiers only when they are part of the report's named scope and the selected service is an intended destination for that data. For unclear repositories, use generic technology/category terms until scope is resolved from live evidence.
 
 ### Phase 11: Optional Write
 

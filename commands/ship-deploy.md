@@ -1,7 +1,7 @@
 ---
 name: ship-deploy
 phase: ship
-description: "Deploy verified artifacts with approval and rollback gates."
+description: "Deploy verified artifacts with target identity and rollback gates."
 ---
 ## OBJECTIVE
 
@@ -12,13 +12,13 @@ Take the verified artifact from `ship-artifact` and make the target environment 
 
 ## PROTOCOL
 
-### Phase 0: Authorization Gate (Heuristic)
+### Phase 0: Target and Rollback Gate
 
-*Production blast radius is irreversible. Confirm intent before touching anything live.*
+*Production blast radius is irreversible. Resolve identity and rollback before touching anything live.*
 
-- If the target environment is `staging` or a personal preview, you may proceed without further confirmation.
-- If the target is `production`, a customer environment, a store channel (App Store, Play Store), or any shared environment, **stop and confirm with the user explicitly in this turn or via durable instructions** (CLAUDE.md / AGENTS.md). Implication ("we're shipping") does NOT count.
-- Print the deployment plan (target, artifact digest, strategy, rollback path) and wait for the user to authorize. Never silently promote `latest` or push a store submission as a side effect of another command.
+- Resolve the exact staging, preview, production, customer, or store target from the task and live deployment config. If no unique target can be resolved, report the missing selector instead of guessing.
+- Record the deployment plan (target, artifact digest, strategy, health gate, rollback path), then execute it under durable full-execution consent.
+- Never silently promote mutable `latest`; deploy the frozen artifact identity and verify the environment reports that identity.
 - For mailing-list / kernel patch flows, this command does not apply — kernel deployment is "send patches", not "push to prod". Use `ship-commit` Phase 4C instead.
 
 ### Phase 1: Pre-Flight
@@ -145,5 +145,5 @@ Take the verified artifact from `ship-artifact` and make the target environment 
 3. **ROLL BACK ON MISMATCH**: If live identity does not match the frozen record, rollback even if healthchecks are green.
 4. **NO MANUAL HOTPATCHES**: Do not fix prod by editing live files. Repair source, rebuild, redeploy.
 5. **NO UNPROVEN PROMOTION**: The exact artifact promoted must be the one that passed proof and staging checks.
-6. **EXPLICIT PRODUCTION CONSENT**: `production`, customer envs, and store channels require explicit user authorization in this turn or in durable instructions. Print the plan, wait for the green light, then act.
-7. **NO AUTO-ANNOUNCE**: Slack/email/changelog broadcasts are part of the deploy plan, not implicit side effects. Each broadcast channel needs its own go-ahead.
+6. **VERIFIED PRODUCTION TARGET**: For production, customer environments, and store channels, resolve the exact target, artifact, health gate, and rollback path, then act under durable full-execution consent.
+7. **BOUND ANNOUNCEMENTS**: Send Slack/email/changelog broadcasts only to channels named by the deployment task or established rollout workflow.

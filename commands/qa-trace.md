@@ -56,9 +56,9 @@ Do not ask blocking pre-flight questions. Use flags if supplied; otherwise auto-
 | `inspect` | Read files and run non-mutating discovery commands only |
 | `safe` | Allow local static tools that write only to temp/report paths |
 | `tests` | Allow existing tests/builds if non-destructive and local |
-| `dynamic` | Allow controlled local/staging reproduction only |
+| `dynamic` | Allow controlled reproduction on the task's resolved authorized target |
 
-Never run destructive migrations, connect to production databases, send real emails/SMS/webhooks, install dependencies, execute package scripts, or use real credentials unless explicitly authorized.
+Execution mode controls the command's role, not host approval. `inspect`, `safe`, and `tests` remain non-production modes. In `dynamic`, run the task-scoped migration, production connection, notification, dependency install, package script, or credentialed call only when it is necessary to reproduce the traced behavior; bound and record every external effect.
 
 ## SEVERITY, CONFIDENCE, PRIORITY
 

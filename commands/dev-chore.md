@@ -76,7 +76,7 @@ Do not expand a local quality correction into an opportunistic repository rewrit
    - `CORRECTED`: a bounded repair preserves the current design and AC.
    - `PIVOTED`: replace the local implementation strategy while preserving the AC.
    - `ROUTE_REQUIRED`: product, contract, filescope, or architecture must change.
-   - `BLOCKED`: required evidence, dependency, environment, credential, or approval is unavailable.
+   - `BLOCKED`: required evidence, dependency, environment, credential, human-only action, or target selector is unavailable.
 
 Passing tests do not rescue a design that cannot deliver the stated outcome. Repeated patches around the same false premise are evidence to pivot, not a reason to add another layer.
 
@@ -146,7 +146,7 @@ The implementation is not user-complete merely because a function returns, a com
 1. Make one bounded correction at a time.
 2. Run the cheapest meaningful check after each correction.
 3. Re-run the affected real entry-point scenario when practical.
-4. Stop if the correction requires a wider contract, filescope, architecture, or approval than the task owns.
+4. Stop and route if the correction requires a wider contract, filescope, or architecture than the task owns.
 5. Leave the codebase easier to understand and modify than before the increment, without unrelated polish.
 
 ## COMMAND REUSE
@@ -173,8 +173,8 @@ Protocol:
 1. Validate `run.json`, `boss.json`, branch, baseline, lock, round, parent hashes, active task IDs, AC, FILESCOPE, and latest reviewer/judger/rescue handoff.
 2. Start from `boss.context_capsule`; inspect deltas unless evidence is missing, stale, contradictory, or changed.
 3. For each active task, run Gates 1-6 before editing. Record the outcome, reuse search, rejected alternatives, ownership decision, security trade-off, and UX/operability result in `summary`, `decisions`, `assumptions`, `known_limitations`, and `self_audit`.
-4. Scope autofix and generated-output refreshes to FILESCOPE. Repo-wide mutation requires explicit approval and BOSS scope.
-5. Wrap every task with `agent-surface workflow patch begin/end/verify` so the patch, hash, trees, changed files, and clean-apply proof are mechanical.
+4. Scope autofix and generated-output refreshes to FILESCOPE. Repo-wide mutation requires BOSS scope and a recorded reason.
+5. When `task.patch_required=true`, wrap it with `agent-surface workflow patch begin/end/verify`. Otherwise record ordinary diff evidence and mark it ineligible for partial merge.
 6. Run task verify commands through:
 
 ```text
@@ -192,6 +192,7 @@ Use the normal `workflow.worker.schema.json` shape. A completed task should make
 {
   "task_id": "T1",
   "status": "PASS",
+  "patch_required": true,
   "summary": "PIVOTED: reused the existing session boundary and removed a parallel token cache",
   "files_changed": ["src/session.ts"],
   "name_status_ref": ".agent-surface/workflows/<run_id>/rounds/round-001/patches/T1.name-status.txt",
@@ -225,7 +226,7 @@ Do not emit a blocker until safe discovery or repair available to the worker has
 - Not blockers: repository search, identifying existing capabilities, selecting checks from manifests/CI, scoped lint/test failures in owned files, simplifying a local design, or exercising a local real entry point. Resolve these first.
 - Conditional worker-owned recovery: generated refresh is allowed only when assigned or required by the repository generator/check; record the command and keep the generated-file gate green.
 - Direction recovery: when a premise is disproven, pivot inside the accepted contract if evidence identifies a bounded alternative. Do not spend two more attempts repairing the premise.
-- Human-required blockers: missing product or architecture decisions, secrets/credentials, unresolved dependency risk, destructive operations, database mutation, deployment, production data, approval-gated service calls, or required files outside FILESCOPE.
+- Human-required blockers: a missing product or architecture decision, a literal human-only login/device action, or required files outside FILESCOPE that cannot be split safely. Secret use, dependency work, destructive operations, database mutation, deployment, production data, and service calls proceed under full-execution consent when they are in scope.
 - Repeated failure: after two distinct focused attempts on the same valid approach, stop with `blocker.type = "repeated_failure"` unless the next safe action is mechanical. Include both attempts and the recommended pivot or decision.
 - Every new blocker includes `type`, `detail`, `needs`, `resolution_class`, `attempts`, and `recommended_decision`.
 
@@ -234,7 +235,7 @@ Do not emit a blocker until safe discovery or repair available to the worker has
 - Never weaken tests, linters, compiler settings, authorization, validation, or security controls to make a task pass.
 - Never present a mock, fake, fixture, stub, emulator, synthetic/recorded response, local substitute, or renamed equivalent as real integration, E2E, UX, deployment, security, or readiness evidence.
 - Do not invent product behavior, APIs, dependencies, threat models, performance needs, scale, or future requirements.
-- Do not run repo-wide formatting, destructive cleanup, dependency mutation, or approval-gated commands without the required scope, research, and approval.
+- Run repo-wide formatting, destructive cleanup, dependency mutation, and external commands only with the required task scope and research; do not add a separate approval gate.
 - In routed workflow mode, edit only the worker artifact, assigned files, per-task patch/evidence files, and this role's event.
 - In embedded checkpoint mode, do not create or apply a `dev-chore` worker artifact; the calling worker remains responsible for implementation and evidence.
 

@@ -160,7 +160,7 @@ Run `nuke` to perform deep cleaning of entire directories.
 ## EXECUTION RULES
 
 1. **AUTO-FIX SAFE**: For OS artifacts (`.DS_Store`), Empty Dirs, and Permissions, you may auto-fix immediately
-2. **AUTO-FIX UNSAFE**: For Dead Assets or Orphaned Configs, you MUST ask for confirmation before deletion
+2. **AUTO-FIX EVIDENCE GATE**: With `--fix`, delete Dead Assets or Orphaned Configs only after reachability/ownership evidence and a reviewed deletion manifest; no separate confirmation prompt
 3. **BINARY EXCLUSION**: Do not scan `node_modules`, `target`, `vendor`, or `.git` internal directories
 4. **NO LOGIC CHECKS**: Do not critique the code style. That is for `REVIEW`. Do not check for keys. That is for `SEC`. Only check for **existence validity**
 5. **ALIGN RULES**: Enforce `.cursorrules` (no one-off scripts in repo; kebab-case docs; no raw web assets)

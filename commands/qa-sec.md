@@ -6,7 +6,7 @@ description: "Review security evidence and produce advisory findings."
 ## OBJECTIVE
 
 **SECURITY EVIDENCE REVIEW.**
-Your goal is to produce advisory, evidence-backed security findings and remediation guidance. Use static analysis, dependency review, configuration review, and local/staging reproduction where authorized. Treat EPSS, KEV, and CVSS as current-data inputs that must be verified before use.
+Your goal is to produce advisory, evidence-backed security findings and remediation guidance. Use static analysis, dependency review, configuration review, and reproduction on the task's resolved target. Treat EPSS, KEV, and CVSS as current-data inputs that must be verified before use.
 
 ## PROTOCOL
 
@@ -27,7 +27,7 @@ Your goal is to produce advisory, evidence-backed security findings and remediat
     - **CISA KEV**: If CVE is in KEV → Immediate BLOCK
     - **EPSS**: If EPSS ≥ 0.1 or CVSS ≥ 7.0 → BLOCK; otherwise track
 4. **License Compliance**:
-    - Detect Viral Licenses (AGPL/GPL) in production deps; require approval/removal
+    - Detect copyleft licenses (AGPL/GPL) in production dependencies; report the concrete compatibility decision or removal path
 5. **Scorecard/SLSA Signals**:
     - Run **OpenSSF Scorecard** on repos; target 7+
     - Record SLSA provenance where available
@@ -45,7 +45,7 @@ Your goal is to produce advisory, evidence-backed security findings and remediat
 3. **Secrets Detection** (multi-signal):
     - Run **gitleaks/trufflehog** across history + current tree
     - Combine entropy heuristics with provider-specific regex; verify checksum formats
-    - If a secret is detected, report the redacted evidence and recommended rotation path. Do not revoke, rotate, or alter credentials without explicit approval.
+    - If a secret is detected, report only redacted evidence. When remediation includes credential rotation, use the provider's real rotation path and verify replacement and revocation without printing either credential.
 4. **Unsafe APIs & Patterns**:
     - String-constructed SQL/command → require parameters
     - Insecure randomness in crypto contexts → require CSPRNG
@@ -120,8 +120,8 @@ For every finding, calculate the **CVSS v4.0 Vector** and capture exploitability
 1. **NO ASSUMPTIONS**: Treat every variable as tainted until proven clean by a sanitizer function
 2. **FOLLOW THE DATA**: Trace source → sanitizer → sink; prove exploitability where possible
 3. **QUANTIFY EVERYTHING**: If you can't assign a CVSS vector, you don't understand it
-4. **SUPPLY CHAIN MANDATES**: recommend SBOM + scanner + signature verification where appropriate; do not enforce release policy unless explicitly authorized
-5. **SECRETS**: If detected, report redacted evidence and recommend rotation plus pre-commit scanning; do not rotate without approval
+4. **SUPPLY CHAIN MANDATES**: recommend SBOM + scanner + signature verification where appropriate; enforce release policy when it is part of the task or repository contract
+5. **SECRETS**: If detected, report redacted evidence. When remediation includes rotation, use the provider's real path and verify replacement and revocation without printing either credential.
 
 ## AI-SPECIFIC SECURITY CONCERNS
 

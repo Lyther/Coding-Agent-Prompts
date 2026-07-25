@@ -105,7 +105,8 @@ grep -rnEi 'password\s*=|api_key\s*=|secret\s*=|token\s*=.*['\''\"]\w{8,}' {{tar
 #     can have re-touched them with an ungated style (wrong line length, reordered
 #     imports, re-indented shell). Use the repo's config, not ad-hoc flags. Examples:
 #       ruff format --check <files> && ruff check <files>
-#       gofumpt -l <files> ; shfmt -d <files> ; prettier --check <files>
+#       gofumpt -l <files> ; shfmt -d <files>
+#       npm run lint ; npm run format:check  # only when defined by the repo
 #     If anything is flagged, that is a drift finding — re-run the formatter and fix.
 ```
 

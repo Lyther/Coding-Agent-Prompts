@@ -55,7 +55,7 @@ Protocol:
 agent-surface run --task <task_id> --class <class> --timeout <ms> --out .agent-surface/workflows/<run_id>/rounds/round-<round_id>/evidence/<task_id> -- <command...>
 ```
 
-8. Wrap each task with `agent-surface workflow patch begin/end/verify` so patches, tree hashes, changed files, and clean-apply proof are generated mechanically.
+8. When `task.patch_required=true`, wrap it with `agent-surface workflow patch begin/end/verify`. Otherwise record ordinary diff evidence and mark it ineligible for partial merge.
 9. Before marking a task blocked, apply the Blocker Discipline section below.
 10. Write canonical worker artifact to `.agent-surface/workflows/<run_id>/rounds/round-<round_id>/worker.json` and latest copy to `.agent-surface/workflows/<run_id>/worker.json`.
 11. Set `workflow.owner = "dev-refactor"` and `workflow.next_command = "workflow-reviewer"`.
@@ -73,6 +73,7 @@ Worker artifact shape:
     {
       "task_id": "T1",
       "status": "PASS",
+      "patch_required": true,
       "files_changed": [],
       "name_status_ref": ".agent-surface/workflows/<run_id>/rounds/round-001/patches/T1.name-status.txt",
       "patch_ref": ".agent-surface/workflows/<run_id>/rounds/round-001/patches/T1.patch",
@@ -114,7 +115,7 @@ Do not emit a blocker until you have attempted the safe discovery or repair avai
 
 - Not blockers: repo discovery, selecting verify commands from manifests/Makefiles/CI, scoped format/lint/test failures in owned files, and documentation alignment for public behavior in FILESCOPE. Resolve these before stopping.
 - Conditional worker-owned recovery: generated artifact refresh is allowed only when BOSS assigned generated outputs or the repo's generator/check explicitly requires it; record the generator command and keep the normal generated-file gate green.
-- Human-required blockers: secrets or credential access, dependency risk that cannot be researched or accepted from available evidence, destructive commands, database mutation, deployment, production data, approval-gated network calls, product decisions not inferable from BOSS/user evidence, or files outside FILESCOPE.
+- Human-required blockers: a literal human-only login/device action, a product decision not inferable from BOSS/user evidence, or required work outside FILESCOPE that cannot be split safely. Secret use, dependency work, destructive commands, database mutation, deployment, production data, and network calls proceed under the distribution's full-execution consent when they are in scope.
 - Repeated failure: after two focused correction attempts on the same task, stop with `blocker.type="repeated_failure"`, `resolution_class="human_required"` unless the next safe action is purely mechanical, and include the failed attempts.
 - Every blocker should include `type`, `detail`, `needs`, `resolution_class` (`auto_resolvable` or `human_required`), `attempts`, and `recommended_decision`. Legacy v3 artifacts may omit the last three fields, but new worker output should include them.
 
