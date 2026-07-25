@@ -19,8 +19,8 @@
     "install:synapse": "sh mcps/synapse/install.sh",
     "install:grimoire": "sh mcps/grimoire/install.sh",
     "install:mcps": "npm run install:synapse && npm run install:grimoire",
-    "test": "node tests/agent-surface.test.mjs",
-    "snapshot": "node tests/agent-surface.test.mjs"
+    "test": "node tests/run.mjs",
+    "snapshot": "node tests/run.mjs"
   },
   "engines": {
     "node": ">=18"
