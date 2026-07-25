@@ -22,9 +22,9 @@ alwaysApply: true
 
 ## Formatting and linters (single source of truth)
 
-- The repo's own config is authoritative for style: `pyproject.toml`/`ruff.toml`, `.editorconfig`, `.golangci.yml`, `rustfmt.toml`, `.prettierrc`, `.shellcheckrc`. Editor, pre-commit, and CI all read these same files — never a personal editor default. Keep each setting (e.g. line length) in ONE place.
+- The repo's own config is authoritative for style: `pyproject.toml`/`ruff.toml`, `.editorconfig`, `.golangci.yml`, `rustfmt.toml`, `eslint.config.*`, `.shellcheckrc`, or the stack's equivalent. Editor, pre-commit, and CI all read these same files — never a personal editor default. Keep each setting (e.g. line length) in ONE place.
 - Make pre-commit the enforcement spine: `pre-commit install` so the formatters/linters that gate CI also run on every commit against the staged snapshot. Never `--no-verify`.
-- Keep format-on-save ON, but each language must format with the SAME tool and config the gate uses (e.g. ruff reading the repo's `pyproject.toml`, shfmt reading `.editorconfig`). Point each language's default formatter at its gate tool reading the repo config; never run a second formatter or generic "organize imports" alongside it — they fight and churn. If the editor formats a file type with no gated formatter yet, add that formatter to pre-commit rather than disabling save-formatting.
+- Keep format-on-save ON only where the repository gate defines the formatter and config (e.g. ruff reading the repo's `pyproject.toml`, shfmt reading `.editorconfig`). Point each language's default formatter at its gate tool reading the repo config; never run a second formatter or generic "organize imports" alongside it — they fight and churn. If a file type has no gated formatter, disable format-on-save for that file type until the project deliberately selects and gates one.
 - Editor auto-format resolves config from the window's root: open each repo as its own root (or a multi-root workspace) so the tool finds THAT repo's config, not a parent or built-in default. Symptom of a bad root: editor wraps at 88 while the repo pins 100, or strips an import blank line the linter keeps.
 - Pin the SAME tool version across the editor extension, the pre-commit rev, and CI so none disagree.
 - Never lint or reformat generated code or test fixtures — `extend-exclude` them; modernizing an intentionally-old fixture defeats its purpose.
@@ -33,10 +33,10 @@ alwaysApply: true
 ## Git
 
 - Commit atomically with imperative messages.
-- Do not push, create PRs, delete branches, reset hard, or rewrite history without explicit user approval.
-- Do not commit to a protected/default branch unless explicitly requested or that is the repo's established workflow.
+- Complete the Git workflow implied by the task, including push, PR creation, branch cleanup, or history repair when needed. Verify the remote, branch, and content before publication.
+- Preserve protected/default-branch policy unless the task or established repository workflow selects that branch.
 
 ## Databases and Environments
 
-- Never run destructive migrations or mutate production data without explicit approval.
+- Resolve the real environment and target before migrations or data mutation. Use the narrowest operation and capture a rollback point when the system supports one.
 - Prefer local, disposable, or staging environments for proof.
