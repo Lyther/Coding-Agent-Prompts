@@ -1,16 +1,16 @@
 // S-01 live proof: spawn the BUILT bridge as a subprocess (stdio), drive it as an MCP
 // host, and confirm (a) tool calls proxy to the sidecar and (b) a sidecar
 // resources/updated push is forwarded back over the bridge's stdio to the host.
-import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ResourceUpdatedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { createSidecar } from "../src/sidecar.js";
 
 const TOKEN = "bridge-token-xyz";
@@ -58,7 +58,31 @@ test("bridge: proxies tools/list + tools/call AND forwards realtime resources/up
     assert.equal(recalled.results.length, 1, "pull via bridge returns the record");
 
     await writer.close();
-  } finally { await host.close().catch(() => {}); await sc.close(); rmSync(dir, { recursive: true, force: true }); }
+  } finally { await host.close().catch(() => { }); await sc.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("bridge: reconnects upstream and retries after a sidecar restart", async () => {
+  // install.sh redistribution kills and restarts the sidecar; the restarted sidecar has
+  // an empty session map. Existing bridges must re-initialize their upstream session
+  // instead of failing every subsequent call with "no valid session".
+  const dir = mkdtempSync(join(tmpdir(), "synapse-restart-"));
+  let sc = await createSidecar({ token: TOKEN, port: 0, dbDir: dir });
+  const port = sc.port;
+  const host = new Client({ name: "host-restart", version: "0.0.1" });
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [bridgeJs],
+    env: { ...(process.env as Record<string, string>), SYNAPSE_URL: sc.url, SYNAPSE_TOKEN: TOKEN, SYNAPSE_AGENT_ID: "restart-agent", SYNAPSE_PROJECT: PROJECT },
+  });
+  try {
+    await host.connect(transport);
+    assert.equal((await host.listTools()).tools.length, 7, "before restart: 7 tools");
+
+    await sc.close();
+    sc = await createSidecar({ token: TOKEN, port, dbDir: dir });
+
+    assert.equal((await host.listTools()).tools.length, 7, "after restart: bridge re-initializes upstream and still serves 7 tools");
+  } finally { await host.close().catch(() => { }); await sc.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("bridge: zero-config autostart boots the sidecar (no URL/token)", async () => {
@@ -80,7 +104,7 @@ test("bridge: zero-config autostart boots the sidecar (no URL/token)", async () 
     sidecarPid = d.pid;
     assert.ok(sidecarPid > 0 && d.url.startsWith("http://127.0.0.1:"), "discovery file written by autostarted sidecar");
   } finally {
-    await host.close().catch(() => {});
+    await host.close().catch(() => { });
     if (sidecarPid) { try { process.kill(sidecarPid, "SIGTERM"); } catch { /* already gone */ } }
     await delay(300);
     rmSync(dir, { recursive: true, force: true });

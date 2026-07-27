@@ -74,6 +74,24 @@ test("P4.3: bridge routes to the host's first root (file://) regardless of bridg
   } finally { await sc.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("P4.3: host root emitted as a raw absolute path (deprecated compat) routes correctly", async () => {
+  // Cline and Cursor answer roots/list with a raw absolute path instead of a file://
+  // URI. The bridge must normalize it instead of dying on strict schema validation.
+  const dir = mkdtempSync(join(tmpdir(), "synapse-roots-raw-"));
+  const sc: SidecarHandle = await createSidecar({ token: TOKEN, port: 0, dbDir: dir });
+  try {
+    const workspace = join(dir, "raw-root-project");
+    const expectedDb = join(dir, `${hashKey(projectKey(workspace))}.sqlite`);
+    const { client: host, serverTransport, ready } = hostWithRoots([workspace]);
+    const { close } = await startBridge({ url: sc.url, token: TOKEN, downstream: serverTransport });
+    await ready;
+    try {
+      parse<RememberOut>(await host.callTool({ name: "memory_remember", arguments: { content: "raw path root" } }));
+      assert.ok(fileExists(expectedDb), "raw absolute path root routes to its project DB");
+    } finally { await close(); await host.close(); }
+  } finally { await sc.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("P4.3: SYNAPSE_PROJECT override wins over roots and cwd", async () => {
   const dir = mkdtempSync(join(tmpdir(), "synapse-roots-ov-"));
   const sc = await createSidecar({ token: TOKEN, port: 0, dbDir: dir });

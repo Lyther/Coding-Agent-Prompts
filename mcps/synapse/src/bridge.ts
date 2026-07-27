@@ -15,9 +15,18 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { ensureSidecar } from "./bootstrap.js";
 import { CONTRACT_VERSION, SERVER_INSTRUCTIONS } from "./contract.js";
 import { projectKey } from "./namespace.js";
+
+// Deprecated compatibility: Cline and Cursor answer roots/list with raw absolute paths
+// instead of file:// URIs. The SDK's typed listRoots() validates the strict result
+// schema and throws before a conversion can run, so parse loosely here and normalize
+// below. New hosts should emit file:// URIs; raw paths are accepted, not encouraged.
+const CompatListRootsResultSchema = z.object({
+  roots: z.array(z.object({ uri: z.string() }).passthrough()).optional(),
+}).passthrough();
 
 export interface BridgeOptions {
   url: string;
@@ -51,7 +60,7 @@ async function resolveProjectKey(server: Server, fallbackCwd: string, timeoutMs:
   // The request remains bounded so a roots-capable host cannot wedge bridge startup.
   // A failed request cannot safely fall back: cwd may belong to a different project.
   if (!server.getClientCapabilities()?.roots) return projectKey(fallbackCwd);
-  const res = await withTimeout(server.listRoots(), timeoutMs, "roots/list");
+  const res = await withTimeout(server.request({ method: "roots/list" }, CompatListRootsResultSchema), timeoutMs, "roots/list");
   const first = res.roots?.[0]?.uri;
   if (first) {
     const local = first.startsWith("file:") ? fileURLToPath(first) : first;
@@ -97,7 +106,32 @@ export async function startBridge(opts: BridgeOptions): Promise<{ server: Server
   // not surface as an unhandled rejection. The thrown error from startBridge is the real
   // signal; this just prevents a stray process warning in embedded/test callers.
   upstreamReady.catch(() => { });
-  const whenUpstream = <T>(fn: () => Promise<T>): Promise<T> => upstreamReady.then(() => fn());
+  // Sidecar restarts (install.sh redistribution) empty the session map; the first call
+  // after a restart then fails HTTP 400 "no valid session". Policy: re-initialize the
+  // upstream session once and retry the request once. Concurrent callers share one
+  // reconnect; a second failure propagates (sidecar down or token changed).
+  let reconnecting: Promise<void> | undefined;
+  const isInvalidSession = (e: unknown): boolean =>
+    e instanceof Error && (e as { code?: unknown }).code === 400 && e.message.includes("no valid session");
+  const reconnectUpstream = (): Promise<void> => {
+    if (!reconnecting) {
+      reconnecting = (async () => {
+        await client.close().catch(() => { });
+        await connectUpstream();
+      })().finally(() => { reconnecting = undefined; });
+    }
+    return reconnecting;
+  };
+  const whenUpstream = <T>(fn: () => Promise<T>): Promise<T> =>
+    upstreamReady.then(async () => {
+      try {
+        return await fn();
+      } catch (err) {
+        if (!isInvalidSession(err)) throw err;
+        await reconnectUpstream();
+        return fn();
+      }
+    });
   server.setRequestHandler(ListToolsRequestSchema, () => whenUpstream(() => client.listTools()));
   server.setRequestHandler(CallToolRequestSchema, (req) => whenUpstream(() => client.callTool(req.params)));
   server.setRequestHandler(ListResourcesRequestSchema, () => whenUpstream(() => client.listResources()));
@@ -126,11 +160,15 @@ export async function startBridge(opts: BridgeOptions): Promise<{ server: Server
     "x-synapse-agent": opts.agentId ?? `agent-${process.pid}`,
   };
 
-  try {
+  const connectUpstream = async (): Promise<void> => {
     client = new Client({ name: "synapse-bridge", version: CONTRACT_VERSION });
     await client.connect(new StreamableHTTPClientTransport(new URL(opts.url), { requestInit: { headers } }));
     client.setNotificationHandler(ResourceUpdatedNotificationSchema, (n) => { void server.sendResourceUpdated(n.params); });
     client.setNotificationHandler(ResourceListChangedNotificationSchema, () => { void server.sendResourceListChanged(); });
+  };
+
+  try {
+    await connectUpstream();
     settleUpstream();
   } catch (err) {
     settleUpstream(err);
