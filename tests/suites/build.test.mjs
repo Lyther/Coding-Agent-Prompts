@@ -41,6 +41,11 @@ const mustExist = [
   ["cline", path.join("Documents", "Cline", "Rules", "agent-surface.md")],
   ["cline", path.join(".cline", "agents", "boss.yaml")],
   ["kilo", path.join(".config", "kilo", "kilo.jsonc")],
+  ["kimi-code", path.join("skills", "workflow-runtime", "SKILL.md")],
+  ["kimi-code", "AGENTS.md"],
+  ["kimi-code", path.join("agents", "boss.md")],
+  ["kimi-code", "config.toml"],
+  ["kimi-code", "mcp.json"],
   ["openhands", path.join(".openhands", "mcp.json")],
   ["goose", path.join(".config", "goose", "config.yaml")],
 ];
@@ -97,6 +102,12 @@ const bossWorker = [
     bossOk: (t) => /^ {2}"\*": deny$/m.test(t) && /^ {2}"read": allow$/m.test(t),
     workerOk: (t) => /^ {2}"\*": allow$/m.test(t),
   },
+  {
+    boss: path.join(root, "dist", "kimi-code", "agents", "boss.md"),
+    worker: path.join(root, "dist", "kimi-code", "agents", "worker.md"),
+    bossOk: (t) => /^ {2}- "Read"$/m.test(t) && !/^ {2}- "Bash"$/m.test(t),
+    workerOk: (t) => /^ {2}- "\*"$/m.test(t),
+  },
 ];
 for (const row of bossWorker) {
   assert.equal(row.bossOk(readFileSync(row.boss, "utf8")), true, `boss contract: ${row.boss}`);
@@ -112,6 +123,7 @@ const jsonMcpHosts = [
   [path.join(root, "dist", "droid", ".factory", "mcp.json"), "mcpServers"],
   [path.join(root, "dist", "claude-code", ".claude.json"), "mcpServers"],
   [path.join(root, "dist", "cline", ".cline", "data", "settings", "cline_mcp_settings.json"), "mcpServers"],
+  [path.join(root, "dist", "kimi-code", "mcp.json"), "mcpServers"],
   [path.join(root, "dist", "cursor", ".cursor", "mcp.json"), "mcpServers"],
   [path.join(root, "dist", "openhands", ".openhands", "mcp.json"), "mcpServers"],
   [path.join(root, "dist", "vscode", "mcp.json"), "servers"],
@@ -124,6 +136,16 @@ for (const [file, rootKey] of jsonMcpHosts) {
   assert.equal(servers.grimoire.command, mcpAbs.grimoire, file);
   assert.equal(Object.hasOwn(servers, "agentmemory"), false, file);
 }
+const kimiMcp = JSON.parse(readFileSync(path.join(root, "dist", "kimi-code", "mcp.json"), "utf8"));
+assert.equal(Object.hasOwn(kimiMcp.mcpServers.synapse, "type"), false);
+assert.match(
+  readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-flow", "SKILL.md"), "utf8"),
+  /^disableModelInvocation: true$/m,
+);
+assert.match(
+  readFileSync(path.join(root, "dist", "kimi-code", "config.toml"), "utf8"),
+  /^default_permission_mode = "auto"$/m,
+);
 const kiloMcp = JSON.parse(readFileSync(path.join(root, "dist", "kilo", ".config", "kilo", "kilo.jsonc"), "utf8"));
 assert.deepEqual(kiloMcp.mcp.synapse.command, [mcpAbs.synapse]);
 assert.deepEqual(kiloMcp.mcp.grimoire.command, [mcpAbs.grimoire]);

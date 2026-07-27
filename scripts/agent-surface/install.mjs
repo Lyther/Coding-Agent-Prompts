@@ -575,7 +575,9 @@ function configEntryKey(relativeOutput, format) {
 function isEmptyConfigNoop(merge) {
   if (!merge || merge.action === "blocked") return false;
   if (merge.kind === "mcp") {
-    return merge.entries.length === 0 && (merge.removeIds ?? []).length === 0;
+    return merge.entries.length === 0
+      && (merge.removeIds ?? []).length === 0
+      && Object.keys(merge.rootProperties ?? {}).length === 0;
   }
   if (merge.kind === "kilo") {
     return merge.instructions.length === 0
@@ -723,7 +725,9 @@ async function applyInstallPlan(plan) {
 }
 
 async function mcpConfigMerge(mcpConfig, installRoot, scope, context) {
-  const entries = await selectedMcpServiceEntries(mcpConfig.defaultEnabled, context);
+  const entries = mcpConfig.includeServices === false
+    ? []
+    : await selectedMcpServiceEntries(mcpConfig.defaultEnabled, context);
   const relativeOutput = outputRootFor(mcpConfig.relativeOutput, { ...context, scope });
   const absoluteOutput = path.isAbsolute(relativeOutput);
   const safetyRoot = configRouteSafetyRoot(relativeOutput, mcpConfig.allowAbsoluteOutput === true, installRoot);
@@ -753,7 +757,7 @@ async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneConfigEn
   const addMcpServers = currentIds;
   const removeMcpServers = removeIds;
   if (existing === null) {
-    if (merge.entries.length === 0) {
+    if (merge.entries.length === 0 && Object.keys(merge.rootProperties ?? {}).length === 0) {
       return { ...merge, action: "skip", addMcpServers: [], removeMcpServers, removeIds, content: "" };
     }
     return {

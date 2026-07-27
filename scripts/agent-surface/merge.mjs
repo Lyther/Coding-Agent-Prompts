@@ -9,6 +9,7 @@ import { fail } from "./util.mjs";
 
 export function renderMcpConfig(format, entries, rootProperties = {}) {
   if (YAML_MCP_FORMATS.has(format)) return renderYamlMcpConfig(format, entries);
+  if (format === "json-settings") return `${JSON.stringify(rootProperties, null, 2)}\n`;
   const servers = optionalServiceMcpServers(entries, format);
   if (format === "codex-toml") {
     const settings = renderCodexRootStringProperties(rootProperties);
@@ -37,6 +38,12 @@ function optionalServiceMcpServer(service, format = "mcpServers") {
       type: "local",
       command: [server.command, ...(server.args ?? [])],
       enabled: true,
+    };
+  }
+  if (format === "kimi-mcp") {
+    return {
+      command: server.command,
+      args: server.args ?? [],
     };
   }
   return {
@@ -72,7 +79,7 @@ export function mergeJsonMcpConfig(text, format, entries, removeIds = [], rootPr
   }
   const key = mcpConfigRootKey(format);
   let content = text;
-  if (Object.hasOwn(parsed.value, key) || entries.length > 0 || removeIds.length > 0) {
+  if (key !== null && (Object.hasOwn(parsed.value, key) || entries.length > 0 || removeIds.length > 0)) {
     const current = parsed.value[key] ?? {};
     if (current === null || typeof current !== "object" || Array.isArray(current)) {
       throw new Error(`${key} must be an object`);
@@ -89,6 +96,7 @@ export function mergeJsonMcpConfig(text, format, entries, removeIds = [], rootPr
 }
 
 function mcpConfigRootKey(format) {
+  if (format === "json-settings") return null;
   if (format === "vscode-servers") return "servers";
   if (format === "zed-context-servers") return "context_servers";
   if (format === "local-command-map") return "mcp";

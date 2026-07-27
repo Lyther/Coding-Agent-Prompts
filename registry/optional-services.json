@@ -21,6 +21,7 @@
         "Droid MCP: ~/.factory/mcp.json mcpServers.synapse (auto-generated/merged)",
         "Cline MCP: ~/.cline/data/settings/cline_mcp_settings.json mcpServers.synapse (auto-generated/merged, user-scope)",
         "Kilo MCP: ~/.config/kilo/kilo.jsonc mcp.synapse (auto-generated/merged)",
+        "Kimi Code MCP: $KIMI_CODE_HOME/mcp.json mcpServers.synapse (auto-generated/merged)",
         "OpenCode MCP: ~/.config/opencode/opencode.json mcp.synapse (auto-generated/merged)",
         "OpenHands MCP: ~/.openhands/mcp.json mcpServers.synapse (auto-generated/merged, user-scope)",
         "VS Code MCP: mcp.json servers.synapse in the VS Code user data root (auto-generated/merged)",
@@ -62,6 +63,7 @@
         "Droid MCP: ~/.factory/mcp.json mcpServers.grimoire (auto-generated/merged)",
         "Cline MCP: ~/.cline/data/settings/cline_mcp_settings.json mcpServers.grimoire (auto-generated/merged, user-scope)",
         "Kilo MCP: ~/.config/kilo/kilo.jsonc mcp.grimoire (auto-generated/merged)",
+        "Kimi Code MCP: $KIMI_CODE_HOME/mcp.json mcpServers.grimoire (auto-generated/merged)",
         "OpenCode MCP: ~/.config/opencode/opencode.json mcp.grimoire (auto-generated/merged)",
         "OpenHands MCP: ~/.openhands/mcp.json mcpServers.grimoire (auto-generated/merged, user-scope)",
         "VS Code MCP: mcp.json servers.grimoire in the VS Code user data root (auto-generated/merged)",
@@ -95,7 +97,7 @@
       "local_wiring": [
         "Codex/agent skills: ~/.agents/skills/{book-study,code-review-expert,sigma,skill-forge,skill-review,wiki-ingest}",
         "Claude skills: ~/.claude/skills mirrors those ~/.agents/skills entries",
-        "Cline/Kilo/Antigravity/OpenCode skills: mirrored into each target's native skill directory",
+        "Cline/Kimi Code/Antigravity CLI/OpenCode skills: mirrored into each target's native skill directory",
         "Droid skills: ~/.factory/skills/{book-study,code-review-expert,sigma,skill-forge,skill-review,wiki-ingest}"
       ],
       "notes": [
@@ -115,7 +117,7 @@
       "local_wiring": [
         "Codex/agent skill: ~/.agents/skills/karpathy-guidelines",
         "Claude skill: ~/.claude/skills/karpathy-guidelines",
-        "Cline/Kilo/Antigravity/OpenCode skill: mirrored into each target's native skill directory",
+        "Cline/Kimi Code/Antigravity CLI/OpenCode skill: mirrored into each target's native skill directory",
         "Droid skill: ~/.factory/skills/karpathy-guidelines"
       ],
       "notes": [
@@ -135,7 +137,7 @@
       "local_wiring": [
         "Codex/agent skills: ~/.agents/skills/ctf-* plus solve-challenge",
         "Claude skills: ~/.claude/skills/ctf-* plus solve-challenge",
-        "Cline/Kilo/Antigravity/OpenCode skills: mirrored into each target's native skill directory",
+        "Cline/Kimi Code/Antigravity CLI/OpenCode skills: mirrored into each target's native skill directory",
         "Droid skills: ~/.factory/skills/ctf-* plus ~/.factory/skills/solve-challenge"
       ],
       "notes": [

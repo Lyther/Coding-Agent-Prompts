@@ -1,5 +1,5 @@
 {
-  "reviewed_at": "2026-07-25",
+  "reviewed_at": "2026-07-27",
   "targets": {
     "claude-code": {
       "summary": "Claude Code supports native slash commands, subagents, MCP, and skills; agent-surface generates commands, subagents, first-party MCP wiring (Synapse + Grimoire), and external skills.",
@@ -830,6 +830,166 @@
             "kilo.jsonc"
           ],
           "notes": "First-party secretless MCP services are merged into the existing mcp map; external or secret-bearing MCPs remain opt-in. Full installs apply the declared full-access/share-disabled host policy, while category-only MCP installs preserve existing host-wide policy."
+        }
+      }
+    },
+    "kimi-code": {
+      "summary": "Kimi Code supports native Agent Skills, AGENTS.md instructions, custom agents and sub-agents, MCP, plugins, hooks, and shared CLI/extension state; agent-surface generates the shared file-backed surfaces and separately configures terminal Auto and editor YOLO permission modes.",
+      "generated_render_tokens": [
+        "skills",
+        "rules",
+        "subagents",
+        "external",
+        "mcps"
+      ],
+      "evidence": [
+        {
+          "label": "Kimi Code Agent Skills",
+          "url": "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html"
+        },
+        {
+          "label": "Kimi Code agents and sub-agents",
+          "url": "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/agents.html"
+        },
+        {
+          "label": "Kimi Code MCP",
+          "url": "https://moonshotai.github.io/kimi-code/en/customization/mcp.html"
+        },
+        {
+          "label": "Kimi Code configuration files",
+          "url": "https://www.kimi.com/code/docs/en/kimi-code-cli/configuration/config-files.html"
+        },
+        {
+          "label": "Kimi Code VS Code extension shared configuration",
+          "url": "https://github.com/MoonshotAI/kimi-code/blob/77618e38c35a81e26134b3f83eb7f2b460c0ee05/apps/vscode/README.md"
+        }
+      ],
+      "surfaces": {
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "$KIMI_CODE_HOME/skills/<name>/SKILL.md",
+            ".kimi-code/skills/<name>/SKILL.md"
+          ],
+          "notes": "Command sources render as directory-form prompt skills with explicit /skill:<name> invocation and automatic model invocation disabled."
+        },
+        "rules": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "$KIMI_CODE_HOME/AGENTS.md",
+            "$KIMI_CODE_HOME/references/rules/<rule>.md",
+            ".kimi-code/AGENTS.md",
+            ".kimi-code/references/rules/<rule>.md"
+          ],
+          "notes": "Always-on rules render into Kimi's instruction file; scoped language rules remain reference files until a matching workflow attaches them."
+        },
+        "subagents": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "$KIMI_CODE_HOME/agents/<name>.md",
+            ".kimi-code/agents/<name>.md"
+          ],
+          "notes": "Custom agent Markdown maps normalized access to Kimi tool allowlists. The generated profiles are available to native delegation; selecting one as the main agent is currently limited to experimental print mode."
+        },
+        "mcp": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "$KIMI_CODE_HOME/mcp.json",
+            ".kimi-code/mcp.json"
+          ],
+          "notes": "First-party secretless MCP services are merged as native command-plus-args stdio entries. External or secret-bearing services remain opt-in."
+        },
+        "settings": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "$KIMI_CODE_HOME/config.toml",
+            ".kimi-code/config.toml",
+            "<VS Code user data>/User/settings.json",
+            "<Cursor user data>/User/settings.json"
+          ],
+          "notes": "Full installs set terminal default_permission_mode to auto and editor kimi.yoloMode to true without replacing sibling settings. The extension exposes YOLO, not persistent Auto; category-only MCP installs preserve host-wide policy."
+        },
+        "runtime-subagents": {
+          "support": "native",
+          "generation": "not-applicable",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [],
+          "notes": "Kimi's built-in coder, explore, and plan sub-agents are runtime behavior; generated custom profiles supplement them."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "$KIMI_CODE_HOME/skills/<external-skill>/",
+            ".kimi-code/skills/<external-skill>/"
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native Kimi skill roots."
+        },
+        "plugins": {
+          "support": "native",
+          "generation": "not-generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [],
+          "notes": "Kimi plugins can package skills, commands, agents, hooks, and MCP, but agent-surface emits the corresponding native file surfaces directly."
+        },
+        "hooks": {
+          "support": "native",
+          "generation": "not-generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "$KIMI_CODE_HOME/config.toml",
+            ".kimi-code/config.toml"
+          ],
+          "notes": "Executable hooks have no matching agent-surface source primitive and are not synthesized."
+        },
+        "provider-settings": {
+          "support": "native",
+          "generation": "not-generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "$KIMI_CODE_HOME/config.toml"
+          ],
+          "notes": "Provider, model, credential, and login state remain user-owned. The installer merges only the declared permission property."
         }
       }
     },

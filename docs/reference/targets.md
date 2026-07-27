@@ -1,6 +1,6 @@
 # Target matrix (reference)
 
-Every host `agent-surface` renders into, and how much of the source model each represents. Compatibility is 1–5: how much of the source model maps to native or close-native surfaces. Build-file counts are from the default user-scope `npm run build -- --target all` on the committed command set; ignored local commands add target-specific outputs. Project-only or install-only surfaces are noted. First-party MCP services (Synapse, Grimoire) auto-wire (non-destructive merge) into all 18 MCP-capable hosts — JSON, TOML, and YAML config families alike.
+Every host `agent-surface` renders into, and how much of the source model each represents. Compatibility is 1–5: how much of the source model maps to native or close-native surfaces. Build-file counts are from the default user-scope `npm run build -- --target all` on the committed command set; ignored local commands add target-specific outputs. Project-only or install-only surfaces are noted. First-party MCP services (Synapse, Grimoire) auto-wire (non-destructive merge) into all 19 MCP-capable hosts — JSON, TOML, and YAML config families alike.
 
 | Target | Build files | Commands / workflows | Rules / instructions | Agents / subagents | Skills / external packs | Config / MCP / ignores | Compat |
 |---|---:|---|---|---|---|---|---:|
@@ -11,6 +11,7 @@ Every host `agent-surface` renders into, and how much of the source model each r
 | Droid | 291 | 67 native `.factory/commands/*.md` | `.factory/AGENTS.md` + 6 scoped refs | 6 `.factory/droids/*.md` | External `.factory/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.factory/mcp.json` | 5 |
 | Cline | 292 | 67 workflows in `~/Documents/Cline/Workflows/*.md` | `~/Documents/Cline/Rules/agent-surface.md` + 6 scoped refs | 6 `.cline/agents/*.yaml` | External `.cline/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in CLI settings and VS Code/Cursor/Windsurf extension global storage; `.clineignore` | 5 |
 | Kilo | 87 | 67 workflows in `.config/kilo/commands/*.md` | 6 always-on `.config/kilo/rules/*.md` + 6 scoped refs | 6 `.config/kilo/agents/*.md` | None | Synapse + Grimoire MCP, full access, and auto-share disabled in `kilo.jsonc`; `.kilocodeignore` | 5 |
+| Kimi Code | 292 | 67 explicit prompt skills in `$KIMI_CODE_HOME/skills/*` | `$KIMI_CODE_HOME/AGENTS.md` + 6 scoped refs | 6 `$KIMI_CODE_HOME/agents/*.md` custom agents | External `$KIMI_CODE_HOME/skills/*` (Anthropic excluded) | Synapse + Grimoire in `mcp.json`; terminal Auto in `config.toml`; VS Code/Cursor extension YOLO on install | 5 |
 | Antigravity CLI | 298 | 67 plugin skills in `config/plugins/agent-surface/skills/*.md` | 6 always-on rules + 6 scoped refs | 6 `config/plugins/agent-surface/agents/*.md` | External plugin skills (Anthropic excluded) | `plugin.json`; Synapse + Grimoire MCP in `config/plugins/agent-surface/mcp_config.json` | 5 |
 | Antigravity (legacy workflows) | 67 | 67 `global_workflows/*.md` | None | None | None | None | 2 |
 | GitHub Copilot | 7 | None | `instructions/agent-surface-copilot.instructions.md` + 6 scoped refs | None | None | None | 2 |
@@ -41,6 +42,16 @@ Live Cline CLI `3.0.46` probes on 2026-07-25 used its OpenRouter provider with a
 Current headless Cline resolves a generated workflow by stem, such as `/workflow-runtime`; `/workflow-runtime.md` falls through as ordinary prompt text. A loaded runtime-audit workflow also cannot safely launch `cline` from inside its own active Cline daemon: the nested process collides with inherited hub state and can produce a false `UNREACHABLE` verdict. `workflow-runtime` now requires bounded inputs, honors inspect-only requests, and blocks same-family self-probes pending an external driver.
 
 Cline's built-in `spawn_agent` delegation is runtime behavior and needs no generated file, so it is neither a missing mapping nor the meaning of the `subagents` render token. Hooks, plugins, scheduling/cron specs, connectors, provider settings, and persistent agent-team state are real Cline configuration or state surfaces but are not generated; agent-surface has no matching source primitive for those surfaces, and several are executable, credential-bearing, or runtime-owned.
+
+## Kimi Code Notes
+
+Kimi Code's TUI, web runtime, and official VS Code-compatible extension share `config.toml`, `mcp.json`, login state, skills, custom agents, and sessions when they resolve the same `KIMI_CODE_HOME` (default `~/.kimi-code`). The extension has no separate home-path setting. Remote extension hosts use the remote machine's home, and the same session must not be opened concurrently because the session store has no cross-process lock.
+
+The target uses Kimi-specific roots rather than generic `.agents` roots so user and project installs remain isolated from other hosts. Command sources become directory-form `type: prompt` skills with `disableModelInvocation: true`, invoked explicitly as `/skill:<name>`. Subagent sources become native custom-agent Markdown with access-specific tool allowlists.
+
+Permission configuration is deliberately split. Full installs merge `default_permission_mode = "auto"` into Kimi's TOML config for unattended terminal/web execution. The official extension exposes only the persistent `kimi.yoloMode` toggle, so user installs set that to `true` in VS Code and Cursor settings while preserving sibling settings. YOLO approves regular tool calls but is not mislabeled as Auto; category-only MCP installs leave both host-wide permission controls untouched.
+
+Live Kimi CLI `0.29.1` probes on 2026-07-27 started the generated project target in the TUI, connected both first-party MCP servers, activated `/skill:ops-flow`, returned its IRON LAW, and called `mcp__synapse__lock_list` through the generated project `mcp.json`. Cursor extension `0.6.4` was inventoried and its shared-home contract was verified from installed code and official documentation, but no extension-originated task or MCP call was run.
 
 ## OpenHands Notes
 

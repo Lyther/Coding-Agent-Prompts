@@ -55,6 +55,11 @@ export function installRootKilo(scope) {
   return scope === "user" ? os.homedir() : process.cwd();
 }
 
+export function installRootKimiCode(scope) {
+  if (scope === "project") return process.cwd();
+  return path.resolve(process.env.KIMI_CODE_HOME ?? path.join(os.homedir(), ".kimi-code"));
+}
+
 export function installRootDroid(scope) {
   return scope === "user" ? os.homedir() : process.cwd();
 }
@@ -271,6 +276,44 @@ export function kiloRuleReferenceRoot(context) {
 
 export function kiloAgentRoot(context) {
   return context.scope === "user" ? path.join(".config", "kilo", "agents") : path.join(".kilo", "agents");
+}
+
+export function kimiCodeConfigRoot(context) {
+  return context.scope === "user" ? "" : ".kimi-code";
+}
+
+export function kimiCodeSkillRoot(context) {
+  return path.join(kimiCodeConfigRoot(context), "skills");
+}
+
+export function kimiCodeAgentRoot(context) {
+  return path.join(kimiCodeConfigRoot(context), "agents");
+}
+
+export function kimiCodeInstructionPath(context) {
+  return path.join(kimiCodeConfigRoot(context), "AGENTS.md");
+}
+
+export function kimiCodeConfigPath(context) {
+  return path.join(kimiCodeConfigRoot(context), "config.toml");
+}
+
+export function kimiCodeMcpPath(context) {
+  return path.join(kimiCodeConfigRoot(context), "mcp.json");
+}
+
+export function kimiCodeVsCodeSettingsPath(context) {
+  return kimiCodeIdeSettingsPath("Code", context);
+}
+
+export function kimiCodeCursorSettingsPath(context) {
+  return kimiCodeIdeSettingsPath("Cursor", context);
+}
+
+function kimiCodeIdeSettingsPath(product, context = {}) {
+  const route = path.join(ideUserDataRoot(product, context), "User", "settings.json");
+  if (context.relocateExternalRoutes || path.isAbsolute(route)) return route;
+  return path.join(os.homedir(), route);
 }
 
 export function opencodeCommandRoot(context) {

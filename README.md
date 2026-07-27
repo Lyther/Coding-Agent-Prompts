@@ -2,7 +2,7 @@
 
 Write your coding-agent setup **once**, render it into **every** agent host.
 
-Commands, rules, subagents, external skill packs, ignore files, and first-party MCP services live once in this repo's source tree. `agent-surface` compiles them into the native formats of twenty-one host targets — Claude Code, Codex, Cursor, Droid, Kilo, Zed, OpenCode, OpenHands, and more — so you maintain one source instead of twenty-one bespoke configs.
+Commands, rules, subagents, external skill packs, ignore files, and first-party MCP services live once in this repo's source tree. `agent-surface` compiles them into the native formats of twenty-two host targets — Claude Code, Codex, Cursor, Droid, Kilo, Kimi Code, Zed, OpenCode, OpenHands, and more — so you maintain one source instead of twenty-two bespoke configs.
 
 It is a **source compiler**, not an app: there is no `src/`. Typed source primitives in → host-native surfaces out, validated by `check` and tracked by per-target manifests.
 
@@ -29,12 +29,12 @@ The `install` step wires each host's MCP *config* to point at `~/.local/bin/syna
 
 - **Compiles source primitives** — `commands/`, `rules/`, `subagents/`, external packs, `ignores/` → per-target outputs via explicit producers.
 - **Speaks each host natively** — each target gets the surfaces it understands: commands, workflows, skills, instructions, plugins, rules, subagents, MCP config, or ignore files.
-- **Wires first-party MCP** — Synapse (shared memory) and Grimoire (just-in-time skill retrieval) auto-merge, secretlessly and non-destructively, into all 18 MCP-capable hosts (JSON, TOML, and YAML config families).
+- **Wires first-party MCP** — Synapse (shared memory) and Grimoire (just-in-time skill retrieval) auto-merge, secretlessly and non-destructively, into all 19 MCP-capable hosts (JSON, TOML, and YAML config families).
 - **Installs deterministically** — dry-run previews, project-scope gating, manifest tracking, generated-file strict-sync, and non-destructive config merges that preserve unknown sibling entries.
 
 ## Supported targets
 
-Twenty-one targets, ranked 1–5 by how much of the source model maps to native surfaces. Six score 5/5 (Codex, Cursor, Droid, Kilo, Antigravity CLI, OpenCode); instruction-only hosts (Copilot, VS Code, Trae) score 2/5.
+Twenty-two targets, ranked 1–5 by how much of the source model maps to native surfaces. Seven score 5/5 (Codex, Cursor, Droid, Kilo, Kimi Code, Antigravity CLI, OpenCode); instruction-only hosts (Copilot, VS Code, Trae) score 2/5.
 
 **Full matrix — per-target surfaces, file counts, and MCP wiring: [docs/reference/targets.md](docs/reference/targets.md).**
 
@@ -81,7 +81,7 @@ node scripts/agent-surface.mjs install --target <t> --scope user --dry-run
 
 ## First-party MCP services
 
-Built from `mcps/`, installed once, then auto-wired (non-destructive merge) into all 18 MCP-capable hosts across JSON/TOML/YAML config families — see [docs/reference/targets.md](docs/reference/targets.md):
+Built from `mcps/`, installed once, then auto-wired (non-destructive merge) into all 19 MCP-capable hosts across JSON/TOML/YAML config families — see [docs/reference/targets.md](docs/reference/targets.md):
 
 - **Synapse** — shared multi-agent memory + file-lock coordination.
 - **Grimoire** — read-only, just-in-time retrieval over large Agent-Skill packs (serves the 754-skill `anthropic-cybersecurity-skills` pack so the model searches for a skill instead of loading a 750-entry catalog).
@@ -92,7 +92,7 @@ Built from `mcps/`, installed once, then auto-wired (non-destructive merge) into
 
 `ops-flow` chooses the lightest safe profile: direct, standard single-owner development, writer-plus-reviewer, formal orchestration, or release proof. Only orchestrated/release profiles use the durable ledger under `.agent-surface/workflows/<run_id>/`; `workflow-runtime` qualifies external/native runtimes, `workflow-doctor` rejects schema, task-state, and liveness drift, and `verify-readiness` gates production-ready claims on real evidence.
 
-`workflow-runtime` treats generated artifacts, command discovery, provider authentication, permission mode, tool execution, world-state materialization, output shape, and MCP calls as separate gates. This user distribution launches writable workers with each host's full-access equivalent while preserving read-only tool profiles for reviewer and analysis roles. Kilo and OpenCode config explicitly disables automatic session sharing. Codex source commands compile to explicit `$name` Agent Skills; they are not advertised as a separate native workflow surface.
+`workflow-runtime` treats generated artifacts, command discovery, provider authentication, permission mode, tool execution, world-state materialization, output shape, and MCP calls as separate gates. This user distribution launches writable workers with each host's full-access equivalent while preserving read-only tool profiles for reviewer and analysis roles. Kilo and OpenCode config explicitly disables automatic session sharing. Kimi Code uses terminal Auto mode and the extension's highest persistent mode, YOLO. Codex source commands compile to explicit `$name` Agent Skills; they are not advertised as a separate native workflow surface.
 
 ## More
 

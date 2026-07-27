@@ -11,6 +11,7 @@ targets:
   cursor: true
   droid: true
   kilo: true
+  kimi-code: true
   antigravity-cli: true
   antigravity: false
   opencode: true

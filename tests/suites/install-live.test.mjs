@@ -14,6 +14,7 @@ for (const target of [
   "opencode",
   "trae",
   "kilo",
+  "kimi-code",
   "droid",
   "deepagents",
   "goose",
@@ -49,6 +50,14 @@ for (const target of [
       const openCodeConfig = JSON.parse(readFileSync(path.join(targetDest, ".opencode", "opencode.json"), "utf8"));
       assert.deepEqual(openCodeConfig.permission, { "*": "allow" });
       assert.equal(openCodeConfig.share, "disabled");
+    }
+    if (target === "kimi-code") {
+      assert.match(
+        readFileSync(path.join(targetDest, ".kimi-code", "config.toml"), "utf8"),
+        /^default_permission_mode = "auto"$/m,
+      );
+      const kimiMcp = JSON.parse(readFileSync(path.join(targetDest, ".kimi-code", "mcp.json"), "utf8"));
+      assert.equal(Object.hasOwn(kimiMcp.mcpServers.synapse, "type"), false);
     }
   } finally {
     rmSync(targetDest, { recursive: true, force: true });

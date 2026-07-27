@@ -32,6 +32,7 @@ const targetMatrixLabels = {
   pool: "Poolside",
   cline: "Cline",
   kilo: "Kilo",
+  "kimi-code": "Kimi Code",
   antigravity: "Antigravity (legacy workflows)",
   "antigravity-cli": "Antigravity CLI",
   cursor: "Cursor",

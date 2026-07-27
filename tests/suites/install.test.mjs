@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { kimiCodeCursorSettingsPath, kimiCodeVsCodeSettingsPath } from "../../scripts/agent-surface/roots.mjs";
 import {
   clineUserMcpRoutes,
   hasLocalOpsServerCommand,
@@ -56,6 +57,14 @@ planHas(kiloPlan, [
   /kilo\.jsonc instructions \+= \.kilo\/rules\/00-precedence-and-safety\.md/,
 ], "kilo");
 planLacks(kiloPlan, [/^  AGENTS\.md <- rules\/\*\.mdc$/m, /kilo\.jsonc instructions \+= .*14-shell/], "kilo");
+
+const kimiCodePlan = dryRun("kimi-code");
+planHas(kimiCodePlan, [
+  /\.kimi-code\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/,
+  /\.kimi-code\/agents\/boss\.md <- subagents\/boss\.md/,
+  /\.kimi-code\/config\.toml default_permission_mode := "auto"/,
+  /\.kimi-code\/mcp\.json MCP \+= grimoire, synapse/,
+], "kimi-code");
 
 const geminiPlan = status(["install", "--target", "gemini-cli", "--dest", "/tmp/agent-surface-gemini", "--dry-run"]);
 assert.notEqual(geminiPlan.status, 0);
@@ -128,6 +137,57 @@ assert.equal(Number(clineWrote[1]), liveManifest.managed.length);
 assert.equal(Object.hasOwn(liveManifest.managed[0], "managed_by"), false);
 assert.equal(Object.hasOwn(liveManifest.managed[0], "sha256"), false);
 rmSync(liveDest, { recursive: true, force: true });
+
+const kimiCodeDest = "/tmp/agent-surface-kimi-code-live";
+rmSync(kimiCodeDest, { recursive: true, force: true });
+const kimiCodeVsCodeSettings = path.join(
+  kimiCodeDest,
+  kimiCodeVsCodeSettingsPath({ scope: "user", relocateExternalRoutes: true }),
+);
+const kimiCodeCursorSettings = path.join(
+  kimiCodeDest,
+  kimiCodeCursorSettingsPath({ scope: "user", relocateExternalRoutes: true }),
+);
+mkdirSync(path.dirname(kimiCodeVsCodeSettings), { recursive: true });
+mkdirSync(path.dirname(kimiCodeCursorSettings), { recursive: true });
+writeFileSync(
+  path.join(kimiCodeDest, "config.toml"),
+  'default_permission_mode = "manual"\ntelemetry = false\n\n[providers.local]\nmodel = "keep-me"\n',
+);
+writeFileSync(
+  path.join(kimiCodeDest, "mcp.json"),
+  `${JSON.stringify({ mcpServers: { existing: { command: "keep-existing", args: ["--ok"] } } }, null, 2)}\n`,
+);
+writeFileSync(kimiCodeVsCodeSettings, `${JSON.stringify({ "workbench.colorTheme": "Keep Me" }, null, 2)}\n`);
+writeFileSync(kimiCodeCursorSettings, `${JSON.stringify({ "editor.fontSize": 15 }, null, 2)}\n`);
+run(["install", "--target", "kimi-code", "--scope", "user", "--dest", kimiCodeDest]);
+const kimiCodeConfig = readFileSync(path.join(kimiCodeDest, "config.toml"), "utf8");
+assert.match(kimiCodeConfig, /^default_permission_mode = "auto"$/m);
+assert.match(kimiCodeConfig, /^telemetry = false$/m);
+assert.match(kimiCodeConfig, /^\[providers\.local\]$/m);
+assert.match(kimiCodeConfig, /^model = "keep-me"$/m);
+const kimiCodeMcp = JSON.parse(readFileSync(path.join(kimiCodeDest, "mcp.json"), "utf8"));
+assert.equal(kimiCodeMcp.mcpServers.existing.command, "keep-existing");
+assert.equal(kimiCodeMcp.mcpServers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
+assert.equal(Object.hasOwn(kimiCodeMcp.mcpServers.synapse, "type"), false);
+assert.deepEqual(JSON.parse(readFileSync(kimiCodeVsCodeSettings, "utf8")), {
+  "workbench.colorTheme": "Keep Me",
+  "kimi.yoloMode": true,
+});
+assert.deepEqual(JSON.parse(readFileSync(kimiCodeCursorSettings, "utf8")), {
+  "editor.fontSize": 15,
+  "kimi.yoloMode": true,
+});
+assert.match(
+  readFileSync(path.join(kimiCodeDest, "skills", "workflow-boss", "SKILL.md"), "utf8"),
+  /^disableModelInvocation: true$/m,
+);
+const kimiCodeMcpOnlyPlan = run([
+  "install", "--target", "kimi-code", "--scope", "user", "--dest", kimiCodeDest, "--category", "mcps", "--dry-run",
+]);
+assert.doesNotMatch(kimiCodeMcpOnlyPlan, /default_permission_mode :=/);
+assert.doesNotMatch(kimiCodeMcpOnlyPlan, /kimi\.yoloMode :=/);
+rmSync(kimiCodeDest, { recursive: true, force: true });
 
 // Install now overwrites existing files by default.
 const unmanagedDest = "/tmp/agent-surface-unmanaged";
@@ -226,6 +286,18 @@ assert.match(kiloUserScope.stdout, /kilo\.jsonc permission := \{"\*":"allow"\}/)
 assert.match(kiloUserScope.stdout, /kilo\.jsonc share := "disabled"/);
 assert.match(kiloUserScope.stdout, /\.kilocodeignore \(project-scope only\)/);
 assert.doesNotMatch(kiloUserScope.stdout, /\.kilocodeignore <- ignores/);
+
+const kimiCodeHome = path.join(userScopeHome, "custom-kimi-home");
+const kimiCodeUserScope = status(["install", "--target", "kimi-code", "--scope", "user", "--dry-run"], {
+  env: { ...userScopeEnv, KIMI_CODE_HOME: kimiCodeHome },
+});
+assert.equal(kimiCodeUserScope.status, 0, `${kimiCodeUserScope.stdout}${kimiCodeUserScope.stderr}`);
+assert.match(kimiCodeUserScope.stdout, new RegExp(`^root: ${kimiCodeHome.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"));
+assert.match(kimiCodeUserScope.stdout, /skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/);
+assert.match(kimiCodeUserScope.stdout, /^  config\.toml default_permission_mode := "auto"$/m);
+assert.match(kimiCodeUserScope.stdout, /^  mcp\.json MCP \+= grimoire, synapse$/m);
+assert.match(kimiCodeUserScope.stdout, /Code\/User\/settings\.json kimi\.yoloMode := true/);
+assert.match(kimiCodeUserScope.stdout, /Cursor\/User\/settings\.json kimi\.yoloMode := true/);
 
 const claudeUserScope = status(["install", "--target", "claude-code", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(claudeUserScope.status, 0, `${claudeUserScope.stdout}${claudeUserScope.stderr}`);

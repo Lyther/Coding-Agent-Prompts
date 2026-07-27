@@ -101,6 +101,18 @@
         "mcps"
       ]
     },
+    "kimi-code": {
+      "status": "implemented",
+      "build_supported": true,
+      "install_supported": true,
+      "renders": [
+        "skills",
+        "rules",
+        "subagents",
+        "external",
+        "mcps"
+      ]
+    },
     "antigravity": {
       "status": "implemented",
       "build_supported": true,

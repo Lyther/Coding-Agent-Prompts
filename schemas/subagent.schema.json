@@ -39,6 +39,7 @@
         "cursor",
         "droid",
         "kilo",
+        "kimi-code",
         "antigravity-cli",
         "antigravity",
         "opencode"
@@ -63,6 +64,9 @@
           "type": "boolean"
         },
         "kilo": {
+          "type": "boolean"
+        },
+        "kimi-code": {
           "type": "boolean"
         },
         "antigravity-cli": {

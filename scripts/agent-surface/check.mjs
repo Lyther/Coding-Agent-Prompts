@@ -75,6 +75,7 @@ export const workflowRuntimeNames = new Set([
   "cursor-agent",
   "kilo-cli",
   "kilo-ide",
+  "kimi-code",
   "opencode",
   "trae",
   "vscode",
@@ -758,6 +759,23 @@ export function validateGeneratedTarget(target, outputs) {
       errors.push("Kilo must not emit AGENTS.md when kilo.jsonc instruction rules are generated");
     }
     requireContains(".kilocodeignore", /agent-surface canonical AI-tool ignore baseline/);
+  } else if (target === "kimi-code") {
+    requireContains(path.join("skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\ndescription: "[^"]+"\ntype: prompt\ndisableModelInvocation: true\n---\n/);
+    requireContains("AGENTS.md", /agent-surface Kimi Code rules/);
+    requireContains(path.join("agents", "boss.md"), /^---\nname: boss\n/);
+    requireContains(path.join("agents", "boss.md"), /^ {2}- "Read"$/m);
+    requireContains(path.join("agents", "worker.md"), /^ {2}- "\*"$/m);
+    requireContains("config.toml", /^default_permission_mode = "auto"$/m);
+    const mcp = requireJson("mcp.json");
+    if (mcp && mcp.mcpServers?.synapse?.command !== "~/.local/bin/synapse-bridge") {
+      errors.push("Kimi Code synapse MCP must use the first-party local bridge binary");
+    }
+    if (mcp?.mcpServers?.synapse && Object.hasOwn(mcp.mcpServers.synapse, "type")) {
+      errors.push("Kimi Code MCP entries must let the runtime infer stdio transport");
+    }
+    if (byPath.has(path.join("skills", "karpathy-guidelines", "SKILL.md"))) {
+      requireContains(path.join("skills", "karpathy-guidelines", "SKILL.md"), skillFrontmatter);
+    }
   } else if (target === "antigravity") {
     requireContains(path.join("global_workflows", "ops-flow.md"), /^---\ndescription: "/);
   } else if (target === "antigravity-cli") {

@@ -8,8 +8,8 @@ import { directDirectories, filesUnder } from "./fs-tree.mjs";
 import { optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { normalizeExternalSkillFile } from "./postprocess.mjs";
 import { readOptionalServices, relative, root } from "./registry.mjs";
-import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityCliSkill, renderAntigravityWorkflow, renderClaudeCommand, renderClaudeSubagent, renderClineSubagent, renderClineWorkflow, renderCodexSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSkill, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGeminiSubagent, renderGooseRecipe, renderGrokBuildSkill, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderOpenCodeCommand, renderOpenCodeSubagent, renderPiSkill, renderPoolSkill, renderScopedRuleReferenceDocument, renderSharedAgentSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
-import { antigravityCliSkillOutputName, claudeMcpPath, clineAgentRoot, clineCursorExtensionMcpPath, clineMcpPath, clineRuleRoot, clineSkillRoot, clineVsCodeExtensionMcpPath, clineWindsurfExtensionMcpPath, clineWorkflowRoot, codexSkillOutputName, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, flatMarkdownCommandOutputName, gooseRecipeOutputName, grokBuildSkillRoot, groupedMarkdownCommandOutputName, installRootAntigravity, installRootAntigravityCli, installRootClaude, installRootCline, installRootCodex, installRootDeepagents, installRootDroid, installRootGoose, installRootGrokBuild, installRootHomeOnly, installRootKilo, installRootOpencode, installRootOpenHands, installRootPi, installRootPool, installRootVsCode, installRootVscodium, installRootWindsurf, installRootZed, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloWorkflowRoot, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
+import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityCliSkill, renderAntigravityWorkflow, renderClaudeCommand, renderClaudeSubagent, renderClineSubagent, renderClineWorkflow, renderCodexSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSkill, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGeminiSubagent, renderGooseRecipe, renderGrokBuildSkill, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderKimiCodeSkill, renderKimiCodeSubagent, renderOpenCodeCommand, renderOpenCodeSubagent, renderPiSkill, renderPoolSkill, renderScopedRuleReferenceDocument, renderSharedAgentSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
+import { antigravityCliSkillOutputName, claudeMcpPath, clineAgentRoot, clineCursorExtensionMcpPath, clineMcpPath, clineRuleRoot, clineSkillRoot, clineVsCodeExtensionMcpPath, clineWindsurfExtensionMcpPath, clineWorkflowRoot, codexSkillOutputName, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, flatMarkdownCommandOutputName, gooseRecipeOutputName, grokBuildSkillRoot, groupedMarkdownCommandOutputName, installRootAntigravity, installRootAntigravityCli, installRootClaude, installRootCline, installRootCodex, installRootDeepagents, installRootDroid, installRootGoose, installRootGrokBuild, installRootHomeOnly, installRootKilo, installRootKimiCode, installRootOpencode, installRootOpenHands, installRootPi, installRootPool, installRootVsCode, installRootVscodium, installRootWindsurf, installRootZed, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloWorkflowRoot, kimiCodeAgentRoot, kimiCodeConfigPath, kimiCodeConfigRoot, kimiCodeCursorSettingsPath, kimiCodeInstructionPath, kimiCodeMcpPath, kimiCodeSkillRoot, kimiCodeVsCodeSettingsPath, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
 import { ignoreOutputs, subagentOutputs } from "./source-primitives.mjs";
 import { exists, fail, isSafeRelativePath } from "./util.mjs";
@@ -216,6 +216,61 @@ export const targets = {
       },
     },
   },
+  "kimi-code": {
+    label: "Kimi Code skills, instructions, custom agents, and MCP",
+    commandRenders: ["skills"],
+    subagentRenders: ["subagents"],
+    subagentTarget: "kimi-code",
+    subagentOutputRoot: kimiCodeAgentRoot,
+    externalSkillOutputRoot: kimiCodeSkillRoot,
+    staticRenders: ["rules"],
+    commandOutputRoot: kimiCodeSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderKimiCodeSkill,
+    renderSubagent: renderKimiCodeSubagent,
+    installRoot: installRootKimiCode,
+    staticOutputs: kimiCodeStaticOutputs,
+    mcpConfigs: [
+      {
+        relativeOutput: kimiCodeConfigPath,
+        format: "codex-toml",
+        defaultEnabled: false,
+        includeServices: false,
+        rootProperties: {
+          default_permission_mode: "auto",
+        },
+      },
+      {
+        relativeOutput: kimiCodeMcpPath,
+        format: "kimi-mcp",
+        defaultEnabled: true,
+      },
+      {
+        relativeOutput: kimiCodeVsCodeSettingsPath,
+        format: "json-settings",
+        defaultEnabled: false,
+        includeServices: false,
+        emitOutput: false,
+        allowAbsoluteOutput: true,
+        scopes: ["user"],
+        rootProperties: {
+          "kimi.yoloMode": true,
+        },
+      },
+      {
+        relativeOutput: kimiCodeCursorSettingsPath,
+        format: "json-settings",
+        defaultEnabled: false,
+        includeServices: false,
+        emitOutput: false,
+        allowAbsoluteOutput: true,
+        scopes: ["user"],
+        rootProperties: {
+          "kimi.yoloMode": true,
+        },
+      },
+    ],
+  },
   antigravity: {
     label: "Antigravity workflows",
     commandRenders: ["commands-as-workflows"],
@@ -403,6 +458,7 @@ export const generatedOutputMinimums = new Map([
   ["pool", 250],
   ["cline", 50],
   ["kilo", 60],
+  ["kimi-code", 250],
   ["antigravity", 50],
   ["antigravity-cli", 250],
   ["cursor", 60],
@@ -567,14 +623,17 @@ export async function optionalMcpOutputs(adapter, context) {
     if (context.mode === "install" && mcpConfig.installMode !== "write") continue;
     if (!mcpConfigScopeAllows(mcpConfig, context.scope)) continue;
 
-    const entries = await selectedMcpServiceEntries(mcpConfig.defaultEnabled, context);
-    if (entries.length === 0) continue;
+    const entries = mcpConfig.includeServices === false
+      ? []
+      : await selectedMcpServiceEntries(mcpConfig.defaultEnabled, context);
+    const rootProperties = mcpConfig.rootProperties ?? {};
+    if (entries.length === 0 && Object.keys(rootProperties).length === 0) continue;
     outputs.push({
       sourceKind: "external",
       renderKind: "mcps",
       source: "registry/optional-services.json",
       relativeOutput: outputRootFor(mcpConfig.relativeOutput, context),
-      content: renderMcpConfig(mcpConfig.format, entries, mcpConfig.rootProperties),
+      content: renderMcpConfig(mcpConfig.format, entries, rootProperties),
     });
   }
   return outputs;
@@ -890,6 +949,18 @@ export async function kiloStaticOutputs(_commands, context) {
     content: renderScopedRuleReferenceDocument(rule),
   })));
   return outputs;
+}
+
+export async function kimiCodeStaticOutputs(_commands, context) {
+  return [
+    {
+      source: "rules/*.mdc",
+      renderKind: "rules",
+      relativeOutput: kimiCodeInstructionPath(context),
+      content: await renderInstructionDocument("AGENTS.md - agent-surface Kimi Code rules", "Kimi Code instructions"),
+    },
+    ...await scopedRuleReferenceOutputs(context, path.join(kimiCodeConfigRoot(context), "references", "rules")),
+  ];
 }
 
 export async function opencodeStaticOutputs(_commands, context) {

@@ -316,6 +316,28 @@ function jsoncTokens(text) {
       continue;
     }
 
+    if (char === "-" || (char >= "0" && char <= "9")) {
+      const match = text.slice(index).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/);
+      if (match) {
+        tokens.push({ type: "number", value: Number(match[0]), start: index, end: index + match[0].length, depth });
+        index += match[0].length - 1;
+        continue;
+      }
+    }
+
+    const literal = ["true", "false", "null"].find((value) => text.startsWith(value, index));
+    if (literal) {
+      tokens.push({
+        type: "literal",
+        value: literal === "null" ? null : literal === "true",
+        start: index,
+        end: index + literal.length,
+        depth,
+      });
+      index += literal.length - 1;
+      continue;
+    }
+
     if (char === "{" || char === "[") {
       tokens.push({ type: char, start: index, end: index + 1, depth });
       depth += 1;
