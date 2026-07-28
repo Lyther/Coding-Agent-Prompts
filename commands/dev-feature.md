@@ -314,7 +314,8 @@ Before outputting, verify:
   - Do not force a commit before reviewer handoff unless the user explicitly requests it.
   - Do not dump the `worker.json` contents in chat; summarize: `Round done: M/N tasks completed; stop_reason=<reason>; next: workflow-reviewer`.
 - **Workflow mode OFF**:
-  - Hand off to `ship-commit` for the actual commit. It detects repo mode (kernel vs Conventional Commits vs internal-trunk) and chooses the right subject form, sign-off style (`-s` DCO vs `-S` GPG), and review/trace gates.
+  - Hand off to `ship-commit` for the actual commit. Include the changed paths, risk signals, and review state: name the current review evidence, or state `review missing`. `ship-commit` reuses evidence for the unchanged diff or runs one bounded `qa-review`/risk-triggered `qa-trace` pass without entering a remediation loop.
+  - `ship-commit` also detects repo mode (kernel vs Conventional Commits vs internal-trunk) and chooses the right subject form and sign-off style (`-s` DCO vs `-S` GPG).
   - Do not auto-commit here. Stage changes by file or hunk, then invoke `ship-commit`.
   - Include links to mission/spec and any contracts touched in the eventual commit body.
 

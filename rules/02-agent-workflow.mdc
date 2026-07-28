@@ -46,6 +46,14 @@ An operating loop, not a persona:
 - Generated files, lockfiles, migrations, snapshots, and vendored code need explicit reason or repo precedent.
 - If a requested change conflicts with project config, follow the config and report the conflict unless the user explicitly requests migration.
 
+## Publication and Commit Boundaries
+
+- A workflow is commit-only only when its command or the user explicitly says it packages an accepted change set, as `ship-commit` does. The words `ship`, `publish`, `release`, `deploy`, or `distribute` do not make every workflow commit-only; release, artifact, deployment, and distribution commands may edit the files their own contracts require.
+- An explicit commit-only workflow may reuse review evidence for the unchanged diff or run one bounded, read-only pre-publication review when that evidence is missing. It must not automatically patch review findings, start a review-fix loop, or repeatedly re-review.
+- Resolve only commit mechanics that preserve the accepted diff, such as staging selection, repository-required formatting, commit metadata, signing, branch setup, or remote verification.
+- Report newly noticed product issues directly in chat; do not create a report, note, or temporary handoff file unless the user explicitly requests one. Findings do not become publication blockers unless the user or repository policy defines the review as a blocking gate.
+- Stop when a real commit/publication blocker or a configured blocking gate prevents the operation. Do not bypass the blocker or silently turn the commit-only workflow into a product fix; report the exact unblock path instead.
+
 ## Resolve Uncertainty and Risk
 
 - Low-stakes choice: decide and note it. Architectural choice: propose 2-3 options, recommend one, say why. Requirements unclear or action irreversible: stop and ask; do not guess forward.
