@@ -20,15 +20,16 @@ This is the **checkpoint** in the iteration loop:
 spec → feature → test → REVIEW → COMMIT → next iteration
 ```
 
-Commit accepted work frequently. Atomic commits enable easy rollback and bisection. Review is a separate workflow unless the user or repository policy explicitly includes it in this task.
+Commit accepted work frequently. Atomic commits enable easy rollback and bisection. Reuse a current review for the exact diff; when direct development hands off without one, run one bounded review before publication.
 
 ## COMMIT-ONLY BOUNDARY
 
 `ship-commit` packages and publishes already-accepted work. It is not a development or remediation loop.
 
 - Commit-time edits are limited to mechanical blockers required to represent the accepted change correctly, such as repository-formatter output, staged-snapshot hygiene, or commit metadata.
-- If review discovers a behavioral defect, design issue, missing test, or improvement, do not patch it in this workflow. Report it directly in chat and continue the authorized commit/publication flow.
-- Only a real commit or publication blocker under Phase 1.5 stops the workflow; a newly noticed product finding does not.
+- Use current review evidence for the unchanged diff, or run exactly one read-only review pass when evidence is missing. Do not automatically fix findings or start another review round.
+- Report behavioral defects, design issues, missing tests, and improvements directly in chat. Continue publication unless the user or repository policy defines the review as a blocking gate.
+- Only a real commit/publication blocker or configured blocking gate under Phase 1.5 stops the workflow.
 - Do not create a findings document, scratch report, or temporary repository file unless the user explicitly requests an artifact.
 
 ## PROTOCOL
@@ -74,15 +75,17 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
     - Run focused tests for touched areas; ensure green.
     - `kernel`: build the affected subsystem with `make` and resolve new warnings. If the patch touches concurrency, locking, or hot paths, treat the next phase's `/qa:trace` step as **non-optional**.
 
-### Phase 1.5: Commit-Scope Sanity Check
+### Phase 1.5: Bounded Review and Commit-Scope Gate
 
-*A commit prompt publishes accepted work. It is not authorization to start another development or review-fix loop.*
+*Review once when needed. Report findings. Do not turn publication into remediation.*
 
 1. Inspect the staged and unstaged diff for commit hygiene only: intended scope, accidental files, secrets, conflict markers, malformed generated output, and whether the atomic buckets are internally coherent.
-2. Do not invoke `/qa:review`, `/qa:trace`, or another deep review solely because `ship-commit` was invoked. Use the accepted review state already provided by the user or workflow. Run those commands only when the user explicitly requests review or trace in the same task, or repository policy literally requires them.
-3. Do not patch production code, tests, or documentation in response to a newly noticed product finding. Report it directly in chat and continue the requested commit/publication flow. Do not create a note file, review artifact, backlog document, or temporary repository file for it.
-4. Resolve only commit-mechanics blockers: accidental secret inclusion, merge/conflict state, formatter or generated-file drift required by the configured commit hook, staging mistakes, invalid commit metadata, signing failure, or publication failure. If a hook physically blocks the commit because of a product defect, report the blocker; do not bypass the hook and do not silently turn `ship-commit` into `dev-fix`.
-5. A product concern discovered during this sanity check does not by itself defer an otherwise authorized commit. The user can invoke `dev-fix` or `qa-review` as a separate task.
+2. Determine whether review evidence covers the exact current diff. Current evidence includes an explicit user acceptance after the latest edit, a completed `qa-review`/`qa-trace` pass over the same diff, a `workflow-reviewer` PASS, or a repository approval tied to the same commit. Tests and author self-audit are verification inputs, not independent review.
+3. If current review evidence exists and the diff has not changed, reuse it. Do not duplicate the review.
+4. If review evidence is missing, run one read-only `qa-review` pass over the changed paths. Also run one `qa-trace` pass when the diff touches kernel concurrency/hot paths; authentication, authorization, session, cryptography, payment, privacy, IPC, ABI, or cross-trust-zone serialization; or an unproven race/root cause. Treat the result as final for this invocation: do not patch findings and do not start round two.
+5. Report review and trace findings directly in chat. A finding does not by itself defer an authorized commit; a severity label emitted by the review command is not repository policy. Stop only when the user or repository explicitly requires a clean review verdict, or when the finding is itself a commit-safety blocker such as accidental secret inclusion, unintended destructive content, or scope substitution.
+6. Resolve only commit-mechanics blockers: merge/conflict state, formatter or generated-file drift required by the configured commit hook, staging mistakes, invalid commit metadata, signing failure, or publication failure. If a hook physically blocks the commit because of a product defect, report the blocker; do not bypass the hook and do not silently turn `ship-commit` into `dev-fix`.
+7. If remediation is wanted, hand the findings to `dev-fix` as a separate task. Do not create a note file, review artifact, backlog document, or temporary repository file unless the user explicitly requests one.
 
 ### Phase 2: Classification
 
@@ -223,7 +226,7 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
 #### 4D. PR / MR Hygiene
 
 - Small PRs (≤ 400 LOC of meaningful change). Clear description. Link mission/spec/issue.
-- Do not reopen accepted work as a review-fix loop during publication. Report newly noticed product findings directly in chat; block only for a real commit/publication blocker under Phase 1.5.
+- Preserve the Phase 1.5 result without reopening it as a review-fix loop. Report findings directly in chat and honor only the blocking gates defined there.
 - Do not claim `stable`, `production-ready`, `release-ready`, `deployment-ready`, `E2E passed`, `100% implemented`, or `all features supported` in the commit body, PR/MR text, release notes, or reviewer handoff unless a scoped `verify-readiness` PASS artifact or explicitly equivalent real-run proof artifact exists. Otherwise use the narrower claim that was actually proven, such as `tests passed`, `local smoke passed`, or `install dry-run passed`.
 - After opening or updating a PR/MR, read back the actual title/body/comments from the hosting service or CLI output and verify no AI/vendor attribution or advertising was inserted by templates, integrations, or assistants. Fix it before handing the PR/MR to the user.
 
@@ -235,7 +238,8 @@ State the detected mode in one line before proceeding (e.g., `Mode: kernel — c
 # 📦 COMMIT PLAN
 
 **Mode**: oss-pr (feature branch `feat/jwt-refresh`)
-**Acceptance**: user-approved change set
+**Review**: reused user acceptance for the unchanged diff, or one `qa-review` pass completed
+**Trace**: reused / completed / not triggered
 
 ## 1. Chore (Config)
 - **Files**: `package.json`, `package-lock.json`
@@ -274,7 +278,7 @@ For **kernel mode**, replace the push/PR block with the validated `git format-pa
 ## EXECUTION RULES
 
 1. **ATOMICITY**: Unrelated changes = separate commits. Always.
-2. **COMMIT IS NOT DEV-FIX**: perform only the commit-scope sanity check. Newly noticed product findings go directly to chat and do not trigger edits or defer publication; deep review or trace requires an explicit request or literal repository policy.
+2. **REVIEW ONCE, DO NOT LOOP**: reuse current review evidence or run one missing review/trace pass. Report findings in chat; do not patch or re-review them inside `ship-commit`.
 3. **NO WIP**: Not done? Use `git stash` (or a throwaway branch). Don't commit "WIP".
 4. **EXPLAIN WHY**: Complex diff → body is mandatory. The subject is for the *what*, the body is for the *why*.
 5. **PRE-COMMIT RESPECT**: Hook complains → fix the underlying issue, never `--no-verify`.
@@ -286,7 +290,7 @@ For **kernel mode**, replace the push/PR block with the validated `git format-pa
 11. **NO READINESS OVERCLAIMS**: Broad readiness claims require `verify-readiness` PASS or equivalent real-run proof; otherwise state the narrower checks that passed.
 12. **READ BACK PUBLISHED TEXT**: Before push, patch export, PR/MR handoff, or release handoff, re-check the actual commit messages and submitted PR/MR/release text for AI/vendor attribution or advertising.
 13. **HEURISTICS OVER HARD-CODES**: Treat the example commands as illustrations, not scripts. Pick the right tool for the detected stack (uv, cargo, go, kbuild). When the heuristic is ambiguous, ask.
-14. **COMMIT IS NOT FIX**: Resolve only mechanical commit blockers. Report behavioral findings in chat and continue publication; never start an automatic remediation loop or create a findings artifact.
+14. **SEPARATE REMEDIATION**: Resolve only mechanical commit blockers. Product remediation requires a separate task; never create a findings artifact unless requested.
 
 ## AI GUARDRAILS
 
