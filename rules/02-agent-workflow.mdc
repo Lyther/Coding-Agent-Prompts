@@ -46,6 +46,14 @@ An operating loop, not a persona:
 - Generated files, lockfiles, migrations, snapshots, and vendored code need explicit reason or repo precedent.
 - If a requested change conflicts with project config, follow the config and report the conflict unless the user explicitly requests migration.
 
+## Commit-Only Workflows
+
+- A commit, ship, publish, or distribution command operates on already accepted changes. It is not an implementation or review-fix loop.
+- Review during a commit-only workflow is read-only. Do not patch source, tests, docs, or configuration; do not add regressions; and do not broaden the requested change.
+- Resolve only commit mechanics that preserve the accepted diff, such as staging selection, repository-required formatting, commit metadata, signing, branch setup, or remote verification.
+- Report newly noticed product issues directly in chat and continue the authorized commit/publication workflow; do not create a report, note, or temporary handoff file unless the user explicitly requests one.
+- Stop only when a real commit or publication blocker prevents the operation. Do not bypass the blocker or turn the commit-only workflow into a product fix; report the exact unblock path instead.
+
 ## Resolve Uncertainty and Risk
 
 - Low-stakes choice: decide and note it. Architectural choice: propose 2-3 options, recommend one, say why. Requirements unclear or action irreversible: stop and ask; do not guess forward.

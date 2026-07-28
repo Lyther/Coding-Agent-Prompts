@@ -33,6 +33,9 @@ alwaysApply: true
 ## Git
 
 - Commit atomically with imperative messages.
+- A commit/publish task packages already-accepted work; it is not authorization for a review-fix loop. Limit commit-time edits to mechanical staging, formatter, hook, metadata, signing, or publication blockers.
+- Report behavioral defects, design issues, and missing tests directly in chat, then continue the requested commit/publication flow. Do not patch them, defer an otherwise authorized commit because of them, or create a findings file unless explicitly requested.
+- If a configured hook physically blocks the commit because of a product defect, report the exact blocker without bypassing the hook or silently switching to development work. Product remediation requires a separate explicit fix request.
 - Complete the Git workflow implied by the task, including push, PR creation, branch cleanup, or history repair when needed. Verify the remote, branch, and content before publication.
 - Preserve protected/default-branch policy unless the task or established repository workflow selects that branch.
 
