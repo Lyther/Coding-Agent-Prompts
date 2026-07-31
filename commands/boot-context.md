@@ -118,11 +118,11 @@ Session memory is brittle. Durable memory lives in `AGENTS.md`; tactical memory 
 *What CAN'T we change?*
 
 1. **API Contracts**:
-    - Read `arch-api` or OpenAPI spec.
+    - Read `arch-contract` or the canonical interface specification.
     - **Note**: External interfaces are frozen unless explicitly changing them.
 
 2. **Data Models**:
-    - Read `arch-model` or schema files.
+    - Read `arch-contract` or the canonical schema/model files.
     - **Note**: Breaking changes require migration plan.
 
 ## OUTPUT FORMAT

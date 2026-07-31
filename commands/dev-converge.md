@@ -55,7 +55,7 @@ When AI tries multiple approaches in parallel:
 ### Phase 2: Select Primary Implementation
 
 1. Compare surviving candidates by:
-    - Alignment with `arch-api`
+    - Alignment with `arch-contract`
     - Test coverage & negative-path handling
     - Simplicity (lower complexity, fewer deps)
     - Behavior preservation

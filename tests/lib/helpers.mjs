@@ -8,7 +8,7 @@ export const cli = path.join(root, "scripts", "agent-surface.mjs");
 export const stripAiAttributionHook = path.join(root, "hooks", "strip-ai-attribution.sh");
 export const opsServerCommandPath = path.join(root, "commands", "ops-server.md");
 export const hasLocalOpsServerCommand = existsSync(opsServerCommandPath);
-export const expectedCommandCount = hasLocalOpsServerCommand ? 67 : 66;
+export const expectedCommandCount = hasLocalOpsServerCommand ? 66 : 65;
 
 export function clineIdeUserDataRoot(product) {
   if (process.platform === "darwin") return path.join("Library", "Application Support", product);

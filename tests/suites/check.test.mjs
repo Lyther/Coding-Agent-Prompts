@@ -130,6 +130,12 @@ const archDiagramCommand = registry.commands.find((command) => command.name === 
 assert.ok(archDiagramCommand);
 assert.equal(archDiagramCommand.phase, "decide");
 assert.match(archDiagramCommand.description, /evidence-backed architecture atlas/);
+const archContractCommand = registry.commands.find((command) => command.name === "arch-contract");
+assert.ok(archContractCommand);
+assert.equal(archContractCommand.phase, "decide");
+assert.equal(archContractCommand.model_invocation, false);
+assert.equal(registry.commands.find((command) => command.name === "arch-api"), undefined);
+assert.equal(registry.commands.find((command) => command.name === "arch-model"), undefined);
 const opsFlowCommand = registry.commands.find((command) => command.name === "ops-flow");
 assert.ok(opsFlowCommand);
 assert.equal(opsFlowCommand.phase, "decide");

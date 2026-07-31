@@ -204,7 +204,7 @@ In workflow mode, helper command output is evidence, not the final format. Keep 
     - Check manifests before importing
     - If missing, research maintenance, license, advisories, install scripts/native code, transitive footprint, compatibility, and lockfile impact before adding or updating a dependency. Record the research in the task evidence.
 2. **Use Domain Types**:
-    - Import from `arch-model` definitions
+    - Import from `arch-contract` definitions
     - Don't invent new types on the fly
 
 ### Phase 3a: Blocker Discipline
@@ -229,7 +229,7 @@ Apply this when the task touches UI, components, or async user-facing state:
     - `game-mod`: Game/mod UI belongs to domain commands, not web frontend work.
 1. **Boundary Discipline**:
     - Fetch through API/resource boundaries. Never pull DB drivers or backend-only logic into the view layer.
-    - Reuse shared data shapes from `arch-model` or equivalent.
+    - Reuse shared data shapes from `arch-contract` or equivalent.
 2. **State Topology**:
     - URL state: filters, pagination, sort, tabs, selected IDs, and shareable view state.
     - Local state: input drafts, open/closed drawers, focused row, and other UI transients.

@@ -14,7 +14,7 @@ const publishableCommandPaths = new Set(
   }).split(/\r?\n/).filter(Boolean),
 );
 const publishableCommands = (await readCommands()).filter((command) => publishableCommandPaths.has(command.relativePath));
-assert.equal(publishableCommands.length, 66, "committed target matrix command count must match publishable Git inputs");
+assert.equal(publishableCommands.length, 65, "committed target matrix command count must match publishable Git inputs");
 const targetMatrixRows = new Map(
   readFileSync(path.join(root, "docs", "reference", "targets.md"), "utf8")
     .split(/\r?\n/)

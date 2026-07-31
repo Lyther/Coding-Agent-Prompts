@@ -25,7 +25,7 @@ Require an `ops-flow` routing object or an explicit user request for formal work
 Use existing commands as helper functions when they improve the BOSS spec:
 
 - `boot-context`: missing or stale repository context.
-- `arch-roadmap`, `arch-model`, `arch-api`: architecture, domain model, or API shape needed before task decomposition.
+- `arch-roadmap`, `arch-contract`: architecture, domain/data, or interface shape needed before task decomposition.
 - `ops-flow`: route classification when the request is ambiguous.
 - `ops-deps`: dependency risk evidence before assigning dependency work.
 - `qa-review`, `qa-audit`, `qa-trace`: risk scoping for broad audit, focused review, or trace-heavy work before choosing AC and verify gates.

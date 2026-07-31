@@ -36,7 +36,9 @@ assertCodexAgentTomlParses();
 const mustExist = [
   ["claude-code", path.join(".claude", "skills", "workflow-runtime", "SKILL.md")],
   ["claude-code", path.join(".claude", "skills", "dev-spec", "SKILL.md")],
+  ["claude-code", path.join(".claude", "skills", "arch-contract", "SKILL.md")],
   ["codex", path.join(".agents", "skills", "workflow-runtime", "SKILL.md")],
+  ["codex", path.join(".agents", "skills", "arch-contract", "SKILL.md")],
   ["codex", path.join(".codex", "AGENTS.md")],
   ["cline", path.join("Documents", "Cline", "Workflows", "verify-readiness.md")],
   ["cline", path.join("Documents", "Cline", "Rules", "agent-surface.md")],
@@ -60,6 +62,8 @@ for (const [target, rel] of mustExist) {
 assert.equal(generated.some((file) => file.includes(`${path.sep}gemini-cli${path.sep}`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}qa-sec${path.sep}`) || file.endsWith(`${path.sep}qa-sec.md`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}verify-spec${path.sep}`) || file.endsWith(`${path.sep}verify-spec.md`)), false);
+assert.equal(generated.some((file) => file.includes(`${path.sep}arch-api${path.sep}`) || file.endsWith(`${path.sep}arch-api.md`)), false);
+assert.equal(generated.some((file) => file.includes(`${path.sep}arch-model${path.sep}`) || file.endsWith(`${path.sep}arch-model.md`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}.claude${path.sep}commands${path.sep}`)), false);
 
 const claudeOpsAsk = readFileSync(path.join(root, "dist", "claude-code", ".claude", "skills", "ops-ask", "SKILL.md"), "utf8");
