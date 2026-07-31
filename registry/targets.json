@@ -5,7 +5,7 @@
       "build_supported": true,
       "install_supported": true,
       "renders": [
-        "commands",
+        "skills",
         "subagents",
         "external",
         "mcps"

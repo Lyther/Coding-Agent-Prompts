@@ -18,7 +18,7 @@ import { subagentValidationErrors } from "./source-primitives.mjs";
 import { generatedOutputMinimums, producerEmitsFor, sourceKindPolicy, targetOutputs, targetProducers, targets } from "./targets.mjs";
 import { argValue, exists, fail, globMatches, isPathInside, isSafeTargetName, sha256 } from "./util.mjs";
 
-export const commandMetadataFields = new Set(["name", "aliases", "phase", "description"]);
+export const commandMetadataFields = new Set(["name", "aliases", "phase", "description", "model_invocation"]);
 
 export const commandPrefixes = new Set(["arch", "boot", "dev", "lint", "ops", "qa", "ship", "stellaris", "verify", "workflow"]);
 
@@ -292,6 +292,9 @@ export function checkCommandMetadata(commands, errors) {
     if (!commandPhases.has(command.metadata.phase)) errors.push(`${command.relativePath}: unsupported phase: ${command.metadata.phase}`);
     if (command.metadata.description !== null && typeof command.metadata.description !== "string") {
       errors.push(`${command.relativePath}: description must be a string`);
+    }
+    if (typeof command.metadata.model_invocation !== "boolean") {
+      errors.push(`${command.relativePath}: model_invocation must be a boolean`);
     }
     for (const alias of command.metadata.aliases ?? []) {
       if (!isSafeTargetName(alias)) errors.push(`${command.relativePath}: unsafe alias: ${alias}`);
@@ -709,10 +712,12 @@ export function validateGeneratedTarget(target, outputs) {
   if (outputs.length === 0) errors.push("no outputs generated");
 
   if (target === "claude-code") {
-    requirePath(path.join(".claude", "commands", "ops", "flow.md"));
+    requireContains(path.join(".claude", "skills", "ops-flow", "SKILL.md"), /disable-model-invocation: true/);
+    requireContains(path.join(".claude", "skills", "ops-ask", "SKILL.md"), /^---\nname: ops-ask\ndescription: "[^"]+"\n---\n/);
   } else if (target === "codex") {
     requireContains(path.join(".agents", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".agents", "skills", "ops-flow", "agents", "openai.yaml"), /allow_implicit_invocation: false/);
+    requireContains(path.join(".agents", "skills", "ops-ask", "agents", "openai.yaml"), /allow_implicit_invocation: true/);
     requireContains(path.join(".codex", "agents", "boss.toml"), /^name = "boss"\n/);
     requireContains(path.join(".codex", "AGENTS.md"), /agent-surface global Codex rules/);
   } else if (target === "deepagents") {
@@ -761,6 +766,7 @@ export function validateGeneratedTarget(target, outputs) {
     requireContains(".kilocodeignore", /agent-surface canonical AI-tool ignore baseline/);
   } else if (target === "kimi-code") {
     requireContains(path.join("skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\ndescription: "[^"]+"\ntype: prompt\ndisableModelInvocation: true\n---\n/);
+    requireContains(path.join("skills", "ops-ask", "SKILL.md"), /^---\nname: ops-ask\ndescription: "[^"]+"\ntype: prompt\ndisableModelInvocation: false\n---\n/);
     requireContains("AGENTS.md", /agent-surface Kimi Code rules/);
     requireContains(path.join("agents", "boss.md"), /^---\nname: boss\n/);
     requireContains(path.join("agents", "boss.md"), /^ {2}- "Read"$/m);

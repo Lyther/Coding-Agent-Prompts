@@ -2,6 +2,7 @@
 name: ops-report
 phase: improve
 description: "Produce an evidence-backed project report for engineering, research, executive, or full-audience discussion."
+model_invocation: true
 ---
 ## OBJECTIVE
 

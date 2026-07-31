@@ -2,6 +2,7 @@
 name: ops-docs
 phase: improve
 description: "Aggressively align, restructure, and rewrite project docs to a clean, right-sized, single-source-of-truth set — including file/folder moves, merges, deletions, and the missing docs. Concise by default; comprehensive only where earned; heavyweight/old-school types only on request."
+model_invocation: true
 ---
 ## OBJECTIVE
 
@@ -139,7 +140,7 @@ Reconcile changed claims to code. Links resolve (scan the whole set). Every comm
 
 These prevent re-deriving decisions; keep them complete, every section leded, scannable. Hand *authoring* to the specialist commands; this command is the **curator/editor** — and curating still means aggressive de-staling, deduping, splitting, and restructuring. "Curate" is not "leave alone."
 
-- **architecture** (arc42/C4) · **roadmap** · **data-model** / **api-contract** · **ADRs** (MADR). Author/refresh via arch-roadmap / arch-model / arch-api / arch-diagram; reconcile and integrate here.
+- **architecture** (arc42/C4) · **roadmap** · **domain/data and interface contracts** · **ADRs** (MADR). Author/refresh via arch-roadmap / arch-contract / arch-diagram; reconcile and integrate here.
 
 ## EXECUTION RULES
 
@@ -178,7 +179,7 @@ These prevent re-deriving decisions; keep them complete, every section leded, sc
 
 ## RELATED
 
-- arch-roadmap · arch-api · arch-model · arch-diagram — author the comprehensive set this command curates.
+- arch-roadmap · arch-contract · arch-diagram — author the comprehensive set this command curates.
 - ops-clean — repo-wide hygiene beyond docs. · ops-doctor — source/registry/generated health. · boot-concept — when the *concept* is missing, not just the docs.
 
 ## NON-GOALS

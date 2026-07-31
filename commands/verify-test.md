@@ -2,6 +2,7 @@
 name: verify-test
 phase: verify
 description: "Run the suite and detect whether it was weakened, faked, or bypassed to go green."
+model_invocation: true
 ---
 ## OBJECTIVE
 

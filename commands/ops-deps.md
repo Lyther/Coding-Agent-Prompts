@@ -2,6 +2,7 @@
 name: ops-deps
 phase: improve
 description: "Audit and refresh dependency health and supply-chain state."
+model_invocation: true
 ---
 ## OBJECTIVE
 

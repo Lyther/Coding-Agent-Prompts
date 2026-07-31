@@ -1,166 +1,119 @@
 ---
 name: qa-audit
 phase: review
-description: "Audit structural, metadata, and non-code repository quality."
+description: "Audit a project or system across code, architecture, security, dependencies, tests, operations, and repository integrity."
+model_invocation: true
 ---
 ## OBJECTIVE
 
-**ENTROPY REDUCTION & TOTAL STERILIZATION.**
-Codebases rot. Files accumulate like dust.
-**REVIEW** checks the logic. **SEC** checks the locks. **AUDIT** takes out the trash.
-**Your Goal**: Eliminate **Non-Code Garbage**, **Structural Rot**, and **Metadata Decay**.
-**The Standard**: If a file cannot justify its existence, it is deleted. If a link is dead, it is flagged.
+Perform an evidence-backed audit at the depth justified by the project's maturity, exposed risks, and requested claim. Security is one audit domain, not a separate mandatory ceremony.
 
-## CONTEXT STRATEGY (TOKEN ECONOMICS)
+`qa-audit` is broad and read-only. Use `qa-review` for a focused review of a current diff and `qa-trace` for deep root-cause, dataflow, race, or exploitability tracing. Route accepted remediation through the appropriate development or operations workflow.
 
-*Don't list every file. Summarize the rot.*
+## SYNTAX
 
-1. **Summary Only**:
-    - **Prompt**: "Scan `src/` for unused files. Return count and top 5 offenders, not the whole list."
-2. **Focus Areas**:
-    - "Audit `assets/` for unused images." (Targeted)
-
-## VIBE CODING INTEGRATION
-
-AI-assisted development generates unique garbage:
-
-- Orphaned files from abandoned experiments
-- Outdated configs from stack decisions that changed
-- Dead imports and unused dependencies
-- Stale documentation that doesn't match code
-- "Chat residue" (verbose comments, overly defensive code)
-
-## PROTOCOL
-
-### Phase 1: The Filesystem Forensics (OS & Editor Artifacts)
-
-*The ghosts of developers past. Kill them.*
-
-1. **OS Garbage Collection**:
-    - **Target**: `.DS_Store` (Mac), `Thumbs.db` (Windows), `desktop.ini`, `__pycache__` (if not ignored)
-    - **Action**: **DELETE**. Then verify `.gitignore` prevents their return
-    - *Note*: `.DS_Store` leaks directory structure. This is hygiene AND security
-2. **Editor Detritus**:
-    - **Target**: `.idea/`, `.vscode/` (unless strictly shared), `*.swp` (Vim), `*~` (Backup), `*.log`
-    - **Action**: **DELETE**. These belong in your global gitignore, not the repo
-3. **Empty Shells**:
-    - **Scan**: Recursively find empty directories
-    - **Action**: **DELETE**. Git doesn't track them; they are noise
-4. **Permission Audit (The Executable Bit)**:
-    - **Scan**: Find files with `chmod +x` (755)
-    - **Rule**: If it is NOT a shell script (`.sh`, `.py`, `.pl`) or binary, **STRIP IT** (`chmod -x`)
-    - *Constraint*: Markdown, JSON, and source code files should NEVER be executable
-
-### Phase 2: The Script Hygiene (Shell Rot)
-
-*Scripts are the duct tape of the repo. Inspect the tape.*
-
-1. **Shebang & Mode Check**:
-    - **Target**: All `*.sh` files
-    - **Rule**: Must have `set -e` (Exit on error) and `set -o pipefail`
-    - **Verdict**: Missing safety flags = **[UNSAFE]**. Flag it
-2. **Path Hardcoding**:
-    - **Grep**: `/home/`, `/Users/`, `/C:/`
-    - **Verdict**: **[FRAGILE]**. Scripts must use relative paths (`$(dirname "$0")`) or env vars
-3. **Interpreter Hygiene**:
-    - **Check**: direct calls to `python` or `node`
-    - **Action**: Suggest `python3` or `node` (version pinned) or `/usr/bin/env`
-4. **One-off Scripts Ban**:
-    - **Policy**: If a script is intended to run once, it should not live in repo (move to runbook/gist)
-
-### Phase 3: The Documentation Rot (Link & Asset Sync)
-
-*Docs that lie are worse than no docs.*
-
-1. **Link Rot Analysis**:
-    - **Scan**: Parse `README.md` and `docs/*.md`
-    - **Action**: HTTP HEAD check on external links; file existence check on internal links
-    - **Verdict**: 404 = **[DEAD LINK]**. Flag for removal
-2. **Asset Integrity (The Orphanage)**:
-    - **Scan A**: Find images (`![]()`) referenced in Markdown. Do they exist?
-    - **Scan B**: Find files in `assets/` or `images/`. Are they referenced anywhere in the code/docs?
-    - **Action**: Unreferenced assets = **[BLOAT]**. DELETE
-3. **Docs Naming & Scope**:
-    - **Rule**: kebab-case for docs (exceptions: `README.md`, `LICENSE`, `CHANGELOG.md`)
-    - **Rule**: Avoid over-documentation; keep short, living docs tied to code
-
-### Phase 4: The Configuration Orphanage (Project Bloat)
-
-*Tools we stopped using 3 years ago but forgot to bury.*
-
-1. **Orphaned Config Detection**:
-    - **Scan**: `babel.config.js`, `tsconfig.json`, `.eslintrc`, `jest.config.js`, `.dockerignore`
-    - **Cross-Check**: Is the corresponding tool (`babel`, `typescript`, `eslint`, `jest`, `docker`) in `package.json` or active?
-    - **Action**: Config exists but tool is missing -> **DELETE**. It is a ghost
-2. **Lockfile Sync**:
-    - **Check**: Is `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml` / `go.sum` older than `package.json` / `go.mod`?
-    - **Verdict**: **[OUT OF SYNC]**. Recommend regeneration
-3. **Build Artifact Exorcism**:
-    - **Rule**: Never commit build artifacts (`dist/`, `build/`, `target/`); ensure `.gitignore` covers them
-
-### Phase 5: The Git Hygiene (History & Branches)
-
-1. **Large File Hunt**:
-    - **Scan**: Files > 1MB committed to history (not LFS)
-    - **Action**: **FLAG**. Recommend `git-filter-repo`
-2. **Ignored-but-Tracked**:
-    - **Cmd**: `git ls-files -i --exclude-standard`
-    - **Meaning**: You ignored it, but you committed it anyway
-    - **Action**: `git rm --cached`
-
-### Phase 6: The Repository Vital Signs (Stats)
-
-*Numbers don't lie. Patterns do.*
-
-1. **Debt Counter**:
-    - **Grep**: `TODO`, `FIXME`, `HACK`, `XXX`, `BUG`
-    - **Action**: Count occurrences. High density = **[DEBT RISK]**
-2. **File Naming Convention**:
-    - **Scan**: Are filenames consistent? (e.g., all `kebab-case` or all `snake_case` per dir)
-    - **Verdict**: Mixed casing = **[SLOPPY]**. Flag for rename
-3. **Symlink Sanity**:
-    - **Scan**: Find all symlinks (`find . -type l`)
-    - **Check**: Do they point to valid targets?
-    - **Action**: Broken link = **[DEAD LINK]**. DELETE
-
-## OUTPUT FORMAT
-
-**The Forensic Report**
-
-```markdown
-# 🧹 AUDIT REPORT: DIRTY
-
-## 1. 🗑️ GARBAGE COLLECTION
-- **[OS]** Deleted 4 `.DS_Store` files.
-- **[Empty]** Removed `src/utils/legacy/` (empty dir).
-- **[Perms]** Stripped +x from `README.md`, `src/utils.ts`.
-
-## 2. 🧟 ZOMBIE FILES
-- **[Orphan Config]** `.travis.yml` exists, but GitHub Actions is used. DELETE.
-- **[Dead Asset]** `docs/img/old_architecture.png` is never referenced. DELETE.
-
-## 3. 🕸️ DOC ROT
-- **[404]** `README.md`: Link to "Demo" (http://demo.app) is dead.
-- **[Broken Ref]** `CONTRIBUTING.md`: References `./scripts/setup.sh` which does not exist.
-
-## 4. 🐚 SCRIPT HYGIENE
-- **[Unsafe]** `scripts/deploy.sh` missing `set -e`.
-- **[Hardcoded]** `scripts/init.sh` references `/Users/catherine/projects`.
-
-## 5. 📉 VITAL SIGNS
-- **[Debt]** Found 42 `TODO`s, 12 `FIXME`s. High debt in `src/auth/`.
-- **[Naming]** Mixed casing in `src/components/`: `Button.tsx` vs `user_card.tsx`.
-
-## VERDICT
-**CLEANUP REQUIRED.**
-Run `audit --fix` to auto-delete garbage and strip permissions.
-Run `nuke` to perform deep cleaning of entire directories.
+```text
+/qa-audit [target]
+  [--domain architecture|code|security|dependencies|tests|operations|repository|all]
+  [--depth quick|standard|deep]
+  [--maturity prototype|mvp|core|usable|production|business|auto]
 ```
 
-## EXECUTION RULES
+Defaults: `--domain all --depth standard --maturity auto`.
 
-1. **AUTO-FIX SAFE**: For OS artifacts (`.DS_Store`), Empty Dirs, and Permissions, you may auto-fix immediately
-2. **AUTO-FIX EVIDENCE GATE**: With `--fix`, delete Dead Assets or Orphaned Configs only after reachability/ownership evidence and a reviewed deletion manifest; no separate confirmation prompt
-3. **BINARY EXCLUSION**: Do not scan `node_modules`, `target`, `vendor`, or `.git` internal directories
-4. **NO LOGIC CHECKS**: Do not critique the code style. That is for `REVIEW`. Do not check for keys. That is for `SEC`. Only check for **existence validity**
-5. **ALIGN RULES**: Enforce `.cursorrules` (no one-off scripts in repo; kebab-case docs; no raw web assets)
+## SCOPE GATE
+
+Before running tools, resolve:
+
+- the target tree, artifact, service, or deployment;
+- the maturity and claim being assessed;
+- the user-visible and externally reachable surfaces;
+- applicable repository policy, threat boundaries, and acceptance evidence;
+- exclusions and unavailable real dependencies.
+
+Do not apply production, enterprise, compliance, or supply-chain requirements to a prototype or MVP unless its actual data, exposure, or contract requires them. Do not lower the bar for auth, secrets, destructive effects, money, or sensitive data merely because the project is early.
+
+## AUDIT DOMAINS
+
+### Architecture
+
+- Does the design serve the current outcome, or preserve a disproven premise?
+- Are ownership, state, dataflow, and failure boundaries clear?
+- Are abstractions, services, compatibility layers, and configuration axes earned?
+- Is there one source of truth, or duplicated authority and synchronization?
+
+### Code
+
+- Trace primary behavior and failure paths through real entry points.
+- Find correctness defects, swallowed errors, unsafe state transitions, races, leaks, and user-visible regressions.
+- Flag duplicate implementations, dead paths, speculative frameworks, and hand-built substitutes for proven local or standard capabilities.
+
+### Security
+
+- Build a threat model from real assets, actors, trust boundaries, and reachable inputs.
+- Review authentication, authorization, secrets, injection, data exposure, unsafe defaults, destructive actions, and dependency risk where applicable.
+- Reproduce findings safely when possible. Severity must reflect reachability, prerequisites, impact, and confidence.
+- SBOMs, provenance, SAST suites, KEV/EPSS correlation, signing, and compliance controls are required only when the release, deployment, customer, or regulatory contract calls for them.
+
+### Dependencies
+
+- Identify unused, duplicated, vulnerable, abandoned, unpinned, or unjustifiably heavy dependencies.
+- Verify current advisories and maintenance from authoritative sources before making time-sensitive claims.
+- Compare a proposed dependency with the existing stack and a small local implementation; include license, install scripts, native code, transitive footprint, compatibility, and lockfile impact.
+
+### Tests
+
+- Check whether tests discriminate real faults and use independent oracles.
+- Reject unjustified substitutes, tautological assertions, skip/xfail drift, mock-only boundary proof, and tests that pass on the pre-fix tree.
+- Separate diagnostic test results from real integration, E2E, acceptance, and readiness evidence.
+
+### Operations
+
+- Review configuration, observability, deployment, migration, rollback, recovery, idempotency, resource limits, and failure visibility at the maturity actually claimed.
+- Treat unavailable real environments as `BLOCKED`, not passed.
+
+### Repository
+
+- Find dead files, temporary artifacts, stale scripts, generated debris, broken references, misleading docs, obsolete configs, duplicate assets, and ownership ambiguity.
+- Distinguish tracked product artifacts from ignored local state and generated outputs.
+
+## METHOD
+
+1. Inventory the target at low resolution.
+2. Select only applicable domains and tools.
+3. Trace the highest-impact surfaces first.
+4. Confirm each finding against source, runtime evidence, or an authoritative external source.
+5. Remove duplicates and non-findings; do not inflate severity.
+6. Report proof gaps separately from defects.
+
+Read-only probes may run in parallel. Keep one synthesis owner. Do not mutate the target, install remediations, weaken gates, or create a findings file unless the user requests it.
+
+## VERDICT
+
+- `FAIL`: at least one confirmed Critical or High issue in the audited claim, or evidence shows the claim is false.
+- `PASS`: no open Critical or High issue in the completed scope and the required real evidence exists.
+- `BLOCKED`: required target access, dependency, environment, or evidence is unavailable.
+- `ADVISORY`: no pass/fail claim was requested; report severity-ranked findings and gaps.
+
+## OUTPUT
+
+```markdown
+## Audit Scope
+- Target:
+- Maturity and claim:
+- Domains:
+- Evidence run:
+- Not run / blocked:
+
+## Findings
+### [Critical|High|Medium|Low] Title
+- Evidence:
+- Impact:
+- Recommendation:
+
+## Proof Gaps
+- ...
+
+## Verdict
+PASS | FAIL | BLOCKED | ADVISORY
+```

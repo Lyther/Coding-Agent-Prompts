@@ -2,6 +2,7 @@
 name: ops-learn
 phase: improve
 description: "Extract durable patterns and persist them to the right memory sink."
+model_invocation: true
 ---
 ## OBJECTIVE
 

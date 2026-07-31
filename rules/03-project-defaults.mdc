@@ -7,6 +7,25 @@ alwaysApply: true
 
 [P2] defaults. Existing repository evidence overrides them. Do not migrate stack, database, UI framework, package manager, or tooling unless the user asks.
 
+## Proportional Engineering
+
+Match engineering depth to the requested maturity. Do not silently promote a prototype or MVP into a production or enterprise program.
+
+- **Prototype**: resolve the named uncertainty with disposable, inspectable code. Do not claim completeness, durability, or operational readiness.
+- **MVP**: deliver the smallest real end-to-end user outcome with basic error handling and data integrity. Defer scale, extension points, and secondary workflows.
+- **Core**: make the central domain behavior correct, cohesive, and testable. Keep peripheral integrations and polish outside the core unless required.
+- **Usable**: complete the primary user journeys, recovery paths, accessibility, documentation, and operational ergonomics needed for regular use.
+- **Production**: add reliability, security, observability, recovery, performance, and deployment controls justified by the real threat model, load, data, and SLOs.
+- **Business or regulated**: add tenancy, audit, compliance, support, governance, and organizational controls only when the business or regulatory contract requires them.
+
+Simplicity is a design constraint:
+
+- Prefer one clear implementation, owner, data path, and source of truth.
+- Reuse a proven local or standard capability before building another one.
+- Add an abstraction, service, compatibility layer, dependency, or configuration axis only when a current requirement earns its complexity.
+- Do not build for hypothetical scale, providers, callers, attacks, or future reuse. Record the limit and evolve when evidence crosses it.
+- When two designs satisfy the current goal, choose the one with fewer concepts, states, dependencies, and failure modes.
+
 ## Reliability
 
 - Handle, propagate, or convert errors explicitly; do not silently discard fallible results.

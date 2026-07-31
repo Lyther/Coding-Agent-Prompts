@@ -11,7 +11,7 @@ Implemented target paths:
 - user: `~/.codex/references/rules/<rule>.md` for scoped language references
 - user/project merge: `.codex/config.toml` `[mcp_servers.{synapse,grimoire}]`
 
-The `openai.yaml` sidecar keeps generated command skills explicit-only in Codex. Custom agents render as standalone TOML files with `name`, `description`, `developer_instructions`, and `sandbox_mode`.
+The `openai.yaml` sidecar maps each source's `model_invocation` policy: the small allowlist may be selected implicitly, while all other generated command skills remain explicit-only. Custom agents render as standalone TOML files with `name`, `description`, `developer_instructions`, and `sandbox_mode`.
 
 External skill packs render only when the optional-service entry declares `skill_roots`. `anthropic-cybersecurity-skills` is kept as a pinned source asset but is not emitted into Codex skill roots by default.
 

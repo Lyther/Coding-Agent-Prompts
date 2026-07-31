@@ -33,7 +33,7 @@ Use helper commands as diagnostic tools before choosing RESPEC, CONTEXT, PATCH, 
 - `boot-context`: missing repository context.
 - `qa-review`: disputed patch quality or regression risk.
 - `qa-trace`: repeated root-cause failure, dataflow, race, or security-path uncertainty.
-- `qa-sec`: dependency, supply-chain, secrets, auth, crypto, payment, or install-risk uncertainty.
+- `qa-audit`: architecture, dependency, security, test, operations, or install-risk uncertainty.
 
 Helper output does not become a rescue artifact by itself. In workflow mode, fold useful findings into `rescue.json` and keep the rescue output format and existing next-command choices.
 

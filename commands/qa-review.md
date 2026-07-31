@@ -405,8 +405,8 @@ If a check requires tool access you don't have, **skip it silently.** Do not pre
 
 | Platform | Location |
 |----------|----------|
-| Claude Code | `.claude/commands/review.md` |
-| Cursor | `.cursor/rules/review.mdc` or `.cursorrules` |
+| Claude Code | `.claude/skills/qa-review/SKILL.md` |
+| Cursor | `.cursor/commands/qa-review.md` |
 | Other | System prompt / custom instructions |
 
 ## EXAMPLES

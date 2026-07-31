@@ -1,153 +1,189 @@
 ---
 name: ops-nuke
 phase: improve
-description: "Plan repository cleanup with explicit deletion approval."
+description: "Respawn an unmaintainable project from its first commit in an isolated worktree while preserving the current implementation as rollback."
 ---
 ## OBJECTIVE
 
-**SAFE REPOSITORY CLEANUP.**
-Produce a resumable cleanup plan for dead files, duplicates, generated artifacts, and stale dependencies. Default mode is dry-run only; deletion requires an explicit user-approved deletion manifest.
+Rebuild the same project from a clean foundation when correcting the current implementation costs more than replacing it.
 
-## CONTEXT STRATEGY (TOKEN ECONOMICS)
+This is not file cleanup and not an aggressive refactor. It inventories the existing product, freezes clear requirements, redesigns the system, creates a new branch from the repository's first commit in a separate worktree, removes that branch's old tracked tree, rebuilds the product, proves required feature parity, and pauses for final human review.
 
-1. **Iterative Review**:
-    - **Do not** list 1000 files in one prompt.
-    - Process one directory depth at a time.
-    - **Prompt**: "Listing contents of `src/components`. What looks dead?"
-2. **State Persistence**:
-    - Write the plan to `.agent-surface/nuke/<run_id>.json` if workflow state is available, otherwise present it inline.
-3. **Low-Resolution Scanning**:
-    - Use `ls -R` or tree summaries initially.
-    - Only read file *content* if the filename is ambiguous (e.g., `utils.ts` vs `old_utils.ts`).
+The original branch and worktree remain untouched as the executable reference and rollback path.
 
-## VIBE CODING INTEGRATION
+## WHEN IT IS JUSTIFIED
 
-AI generates cruft over time:
+Use `ops-nuke` only when evidence supports most of these:
 
-- Abandoned experiments that were never deleted
-- Duplicate implementations from parallel attempts
-- Dead code from refactoring that AI forgot to clean
-- Phantom imports to packages never installed
+- the foundation or ownership model is wrong, not merely untidy;
+- normal changes repeatedly multiply code, states, adapters, and regressions;
+- duplicate implementation and compatibility layers prevent a reliable source of truth;
+- tests cannot be trusted without rebuilding the contract;
+- bounded cleanup or refactoring would retain the same failed design;
+- the required product is sufficiently understood to rebuild;
+- estimated rebuild and parity cost is lower than repair plus continuing maintenance.
 
-## PROTOCOL
+If those conditions are not met, use `ops-clean`, `dev-refactor`, or `dev-fix`.
 
-### Phase 0: Safeguards (Before You Delete)
+## STAGES
 
-1. **Dry-Run First**: Plan-only mode prints intended deletions and reasons; no writes.
-2. **Protected Paths**: Never touch `.git/`, `node_modules/`, `target/`, `dist/`, build artifacts, or `.*` control dirs beyond logs.
-3. **Branch Guard**: Refuse on `main`/`master` unless `--confirm`; recommend feature branch.
-4. **Checkpoint**: Run `checkpoint` (tests green) before first destructive step.
-5. **Symlink Safety**: Do not follow symlinks outside repo root.
-6. **Approval Gate**: Do not delete, move, or uninstall anything until the user approves the deletion manifest after reviewing the dry-run.
-7. **Dependency Gate**: Never uninstall dependencies automatically; propose manifest and lockfile changes with evidence.
-
-### Phase 1: The Census (Initialize State)
-
-1. **Check State**: Read `.agent-surface/nuke/<run_id>.json` if it exists.
-      - *If Missing*: Generate a plan and present it before writing.
-      - **Action**: Scan the entire repo (ignoring `node_modules`, `.git`, `dist`, `target`).
-      - **Format**: Create a hierarchical checklist of EVERY folder.
-      - **Mark**: All folders as `[PENDING]`.
-
-### Phase 2: The Tribunal (Logic Extension)
-
-*Add these sub-routines to the "Audit" step.*
-
-**2.1 The Doppelgänger Protocol (Redundancy Detection)**
-*Assume guilt until provenance is proven.*
-
-1. **The Content Hash Check (Low Hanging Fruit)**:
-    - **Action**: Calculate MD5/SHA checksums for all files in the current folder + children.
-    - **Verdict**: If `Hash(A) == Hash(B)`:
-        - **PROPOSE** one deletion with a per-file reason. Filename length or generic folder names are hints, not sufficient evidence.
-2. **The Logic Clone Check (Semantic Redundancy)**:
-    - **Scan**: Identify files with overlapping purposes (e.g., `dateUtils.ts` vs `timeHelper.ts`).
-    - **Analyze**: Do they both export a function `formatDate`?
-    - **Action**:
-        - **MERGE**: Move unique functions from the "Helper" to the "Utils".
-        - **REFACTOR**: Update all imports to point to the survivor.
-        - **PROPOSE DELETE**: The empty shell of the loser, with import/use evidence.
-
-**2.2 The Naming Hall of Shame (Heuristic Purge)**
-*If the filename sounds like an apology, delete it.*
-
-1. **Regex Execution**:
-    - Target filenames matching: `/(copy|backup|old|new|temp|tmp|draft|v\d+|_v\d+)/i`.
-    - **Example**: `userController_new.ts`, `api_v2_backup.js`.
-    - **Action**: Mark as suspect in the manifest; never delete by filename heuristic alone.
-    - **Exception**: Unless strictly required by routing (e.g., `/api/v1/user`).
-
-### Phase 3: The Code Hygiene (Interior Decorating)
-
-**3.1 The Commented-Out Graveyard**
-*Code is for execution. Git is for history.*
-
-1. **Scan**: Look for blocks of commented-out code > 3 lines.
-2. **Verdict**:
-    - Is it documentation? **KEEP**.
-    - Is it dead logic? Propose deletion with proof that no live path imports or executes it.
-
-**3.2 The "Barrel File" Trap**
-*Stop creating mazes.*
-
-1. **Scan**: `index.ts` / `index.js` files.
-2. **Analyze**:
-    - Does it contain *logic*? Or just `export * from './xyz'`?
-    - If it just exports **ONE** file (e.g., `export * from './Button'`), it is a useless wrapper.
-3. **Action**:
-    - Propose deleting the `index.ts` only after imports and package exports are updated and verified.
-    - **RENAME** `Button/Button.tsx` to `Button.tsx` (Flatten).
-    - **UPDATE IMPORTS** accordingly.
-
-### Phase 4: The Hallucination Check (Import Validation)
-
-*Coding Agents often import libraries that don't exist or that you didn't install.*
-
-1. **Ghost Dependency Scan**:
-    - **Read**: `package.json` (dependencies & devDependencies).
-    - **Scan**: All `import ... from 'package'` statements in `src/`.
-    - **Verdict**:
-        - If code imports `'moment'` but `moment` is not in `package.json`:
-        - **CRITICAL ALERT**: "You are importing a ghost."
-        - **Action**: **FAIL THE BUILD**. Do not auto-install. Force human decision.
-2. **Unused Dependency purge**:
-    - **Reverse Check**: If `lodash` is in `package.json` but **zero** files import it.
-    - **Action**: **UNINSTALL**.
-
-### Phase 5: The Smoke Test (Survival)
-
-1. **Run**: `npm test` or `docker build . --target builder`.
-2. **Failure?**:
-      - If build fails, **RESTORE** the last batch from Git.
-      - Mark folder as `[MANUAL_INTERVENTION]` in the log.
-
-## OUTPUT FORMAT (The State File)
-
-**File: `.agent-surface/nuke/<run_id>.json` or inline dry-run manifest**
-
-```markdown
-# ☢️ NUKE STATE LOG
-> Status: IN PROGRESS
-> Current Target: `src/components/auth/`
-
-## 📂 Directory Audit Queue
-- [x] `src/utils/` (Cleared)
-    - 💀 Deleted: `date_formatter_old.ts` (Unused)
-    - 💀 Deleted: `temp_test.js` (Trash)
-- [ ] `src/components/auth/` <--- **CURRENT POINTER**
-- [ ] `src/components/dashboard/`
-- [ ] `scripts/`
-- [ ] `ROOT`
-
-## 🪦 The Graveyard (Summary)
-- Total Files Deleted: 14
-- Bytes Reclaimed: 240KB
-- Dry-Run: true/false
+```text
+assess -> inventory -> redesign -> arm -> rebuild -> compare -> final-review
 ```
 
-## EXECUTION RULES
+A bare invocation starts at `assess`. It never implies that `arm` has passed.
 
-1. **NEVER IMPROVISE**: Read the log. Do the next step. Update the log. Stop.
-2. **ONE STEP PER PROMPT**: Clean ONE folder per turn.
-3. **GIT IS THE UNDO BUTTON**: Delete aggressively; revert if breakage.
-4. **DRY-RUN BY DEFAULT**: Require explicit confirm flag to delete.
+## 1. ASSESS
+
+Ground on the live repository:
+
+- current branch, HEAD, remotes, worktrees, status, staged, unstaged, ignored, and untracked state;
+- root commit or roots, tags, releases, deployed artifacts, and supported versions;
+- build, test, package, install, deployment, and runtime entry points;
+- architecture, dependency graph, storage, migrations, external integrations, and operating constraints;
+- measured change amplification and recurring failure patterns.
+
+Compare three routes:
+
+```text
+bounded repair | staged replacement | full respawn
+```
+
+Recommend respawn only when it wins on expected delivery cost, retained complexity, proof difficulty, and future change cost. Sunk cost is not a reason to preserve a failed design.
+
+## 2. INVENTORY THE PRODUCT
+
+Treat the current implementation as evidence, not authority. Build a concise feature and contract matrix:
+
+| Surface | Current behavior | Required in respawn | Deliberate change | Acceptance proof |
+| --- | --- | --- | --- | --- |
+| User journeys | | keep/drop/change | | |
+| API/CLI/UI | | keep/drop/change | | |
+| Data and migrations | | keep/drop/change | | |
+| Integrations/config | | keep/drop/change | | |
+| Packaging/operations | | keep/drop/change | | |
+| Reliability/security/performance | | keep/drop/change | | |
+
+Use real execution and released artifacts where possible. Separate required behavior from accidental behavior, obsolete compatibility, and known bugs. No feature silently disappears.
+
+## 3. REDESIGN
+
+Research the domain, current standards, proven libraries, and the repository's real operating environment before selecting the new design.
+
+- Match the architecture to the requested maturity.
+- Prefer one process, one datastore, one owner, and one path until evidence requires more.
+- Reuse old code only after it independently passes the new design's ownership, simplicity, and quality tests.
+- Prefer proven libraries for established domain logic, but add no dependency without maintenance, license, advisory, footprint, and compatibility review.
+- Define vertical slices that produce observable product behavior.
+- Define data migration, compatibility, cutover, and rollback only where the product contract requires them.
+
+Use `boot-concept`, `arch-*`, `boot-new`, `dev-*`, `qa-*`, and `verify-*` as needed. Do not run every workflow mechanically.
+
+## 4. ARM GATE
+
+Before creating or clearing the respawn worktree, present:
+
+```text
+Current reference branch and commit:
+First commit:
+Respawn branch:
+Respawn worktree path:
+Dirty-state preservation:
+Required feature matrix:
+Deliberate removals or changes:
+New architecture:
+Data migration:
+Acceptance checks:
+Rollback path:
+Estimated rebuild boundary:
+```
+
+Then ask:
+
+> This will create an isolated branch from the first commit and delete that branch's tracked project tree before rebuilding it. The current worktree, branch, dirty files, and history remain unchanged. Do you understand the respawn boundary, and is this the project and requirement set you want rebuilt?
+
+Do not arm on a vague yes given before the inventory and design exist. One informed confirmation arms the run; do not ask for repeated per-file approval afterward.
+
+## 5. CREATE THE ISOLATED RESPAWN
+
+After the arm gate:
+
+1. Re-read status and worktree state. If the original worktree changed, update the reference commit and inventory before proceeding.
+2. Resolve exactly one first commit. If history has multiple roots, stop and ask which lineage defines the project.
+3. Create a new linked worktree and branch from that commit:
+
+```bash
+git worktree add -b respawn/<name> <separate-path> <first-commit>
+```
+
+4. Verify the new worktree's branch, HEAD, path, and clean status.
+5. Remove tracked project files only inside the respawn worktree. Never run reset, clean, checkout-overwrite, or deletion in the original worktree.
+6. Run `boot-new` against the approved design and maturity, then build the first end-to-end slice.
+
+The original worktree keeps all staged, unstaged, ignored, and untracked state. Nothing is copied into the respawn merely because it was dirty or recent.
+
+## 6. REBUILD
+
+For each vertical slice:
+
+1. Implement the smallest complete user outcome.
+2. Add discriminating tests through `dev-spec` when a behavior needs a new executable contract.
+3. Exercise the real entry point and dependencies available for that slice.
+4. Compare against the feature matrix.
+5. Remove scaffolding and duplicated paths before starting the next slice.
+
+Do not recreate the old module map, abstractions, compatibility layers, or test harness by default. Copy a previous component only when it is simpler than replacement, matches the new ownership model, and has real proof.
+
+## 7. COMPARE AND LOOP
+
+Run an independent `qa-audit` and the applicable verification workflows against the respawn candidate.
+
+For every required matrix row, record:
+
+```text
+implemented | real proof passed | blocked | intentionally changed | missing
+```
+
+Green unit tests do not establish parity. Compare observable behavior, data effects, packaging, configuration, and primary user journeys. Loop `rebuild -> compare` while required rows are missing or incorrect.
+
+## 8. FINAL HUMAN REVIEW
+
+Pause when:
+
+- every required feature is implemented or explicitly blocked;
+- deliberate removals and behavior changes are visible;
+- the candidate's architecture and remaining limits are documented;
+- relevant checks and real journeys have run;
+- the exact diff and branch are ready for review.
+
+Do not replace the default branch, merge, force-push, delete the original branch, or remove the original worktree as part of `ops-nuke`. Those are separate user-authorized publication and cleanup decisions after final review.
+
+## ABORT AND ROLLBACK
+
+At any point before publication, stop using the respawn worktree. The original implementation remains unchanged. Keep or remove the respawn branch/worktree only as the user directs; never destroy it merely to make the attempt look clean.
+
+## OUTPUT
+
+```markdown
+## Respawn State
+- Stage:
+- Original reference:
+- Respawn branch/worktree:
+- Arm confirmation:
+
+## Feature Matrix
+- Required / passed / blocked / missing:
+
+## Architecture
+- Chosen shape:
+- Reused old code:
+- Rejected old complexity:
+
+## Evidence
+- Checks:
+- Real journeys:
+- Audit findings:
+
+## Next Gate
+- Required action or final-review question:
+```

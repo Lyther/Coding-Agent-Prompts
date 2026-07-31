@@ -7,7 +7,7 @@ description: "Judge whether tests discriminate real faults — not whether lines
 
 Measure whether the suite would catch lies, stubs, and real faults — not whether code was merely executed.
 
-Use this when someone asks “are the tests good enough?”, after `verify-spec` / `verify-test`, or before `verify-prove` / `verify-readiness` when acceptance depends on the suite.
+Use this when someone asks “are the tests good enough?”, after `dev-spec` / `verify-test`, or before `verify-prove` / `verify-readiness` when acceptance depends on the suite.
 
 Branch or line coverage is an input signal only. A green suite with high coverage can still be circular (AI wrote code and tests), weak-oracled, or blind to production-kill paths.
 

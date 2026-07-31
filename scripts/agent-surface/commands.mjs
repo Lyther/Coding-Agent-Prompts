@@ -25,6 +25,7 @@ export function parseCommand(file, text) {
     aliases: [],
     phase: commandPhaseFromName(name),
     description: null,
+    model_invocation: false,
   };
   const frontmatterErrors = [];
   let body = text;

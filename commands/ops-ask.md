@@ -1,112 +1,52 @@
 ---
 name: ops-ask
 phase: improve
-description: "Surface specific questions that unblock progress."
+description: "Clarify a material requirement, evidence conflict, architectural choice, or risky assumption before implementation proceeds."
+model_invocation: true
 ---
 ## OBJECTIVE
 
-**THE BRAKE PEDAL.**
-Vibe coding means flow, not blindness.
-When requirements are unclear, STOP. Do not hallucinate. Do not guess.
-**Your Goal**: Surface specific questions that unblock progress.
-**The Anti-Goal**: Vague "what do you want?" that wastes cycles.
+Resolve one material uncertainty without turning normal engineering judgment into repeated human approval.
 
-## CONTEXT STRATEGY (TOKEN ECONOMICS)
+Use `ops-ask` when the answer can change product behavior, architecture, data, authority, irreversible work, or substantial implementation cost. Do not use it for naming, style, reversible implementation details, or facts that can be discovered from the repository or a live authoritative source.
 
-1. **Check First**:
-    - Before asking, read `docs/context/` and `docs/architecture.md`.
-    - If the answer is there, **DO NOT ASK**.
-2. **Specifics**:
-    - Do not paste code in the question unless critical. Use line references.
+## TRIGGERS
 
-## WHEN TO INVOKE
-
-| Trigger | Example |
-|---------|---------|
-| **Ambiguous requirement** | "Make it better" (better how?) |
-| **Missing context** | References to files/systems not loaded |
-| **Conflicting signals** | User says X, code does Y |
-| **Architectural decision** | Multiple valid approaches exist |
-| **External dependency** | Needs info about API/service not documented |
+- The requirement permits materially different outcomes.
+- The requested approach conflicts with the stated goal or current evidence.
+- The current design is known to be incorrect, but the request assumes it should be extended.
+- A better route removes meaningful complexity, cost, risk, or user harm.
+- An architectural choice changes a public contract, persistent data, dependencies, deployment shape, or long-term ownership.
+- A destructive or irreversible workflow lacks a clear target, preservation boundary, or rollback point.
 
 ## PROTOCOL
 
-### Phase 1: State What You Know
+1. **Investigate first.** Read the relevant code, config, tests, history, and authoritative documentation. Do not ask the user for discoverable facts.
+2. **State the shared goal.** Separate the desired outcome from the proposed means.
+3. **Name the conflict.** Cite the concrete evidence and the likely impact of continuing.
+4. **Recommend one route.** Give the smallest approach that satisfies the goal. Include at most two alternatives when the trade-off is genuinely material.
+5. **Ask one focused question.** The answer must unblock the next action.
+6. **Pause only the affected mutation.** Continue independent read-only investigation when useful. Do not implement both alternatives or guess through an irreversible choice.
 
-*Demonstrate you've been paying attention.*
+If the user confirms the original route, proceed unless it violates P0 or cannot achieve the stated outcome.
 
-1. **Summarize Understanding**:
-    - "Based on context, I understand you want [X]."
-    - "The current code does [Y]."
-    - "The relevant files are [Z]."
-2. **Identify the Gap**:
-    - "However, I'm unclear on [specific thing]."
-
-### Phase 2: Ask Specific Questions
-
-*Not "what do you want?" but "which of these options?"*
-
-**Question Types**:
-
-| Type | Template |
-|------|----------|
-| **Binary** | "Should [A] or [B]?" |
-| **Constraint** | "Is [X] a hard requirement or flexible?" |
-| **Scope** | "Should this include [Y] or is that separate?" |
-| **Priority** | "If we can only have one, [A] or [B]?" |
-| **Validation** | "Is my understanding correct: [statement]?" |
-
-### Phase 3: Propose Default + Deadline (Optional)
-
-*If you have a reasonable guess, offer it and timebox it for flow.*
-
-```text
-"If no preference by <time/window>, I'll go with [Option A] because [reason]."
-```
-
-This lets user just say "yes" or reply later without blocking iteration.
-
-## OUTPUT FORMAT
-
-**The Clarification Request**
+## OUTPUT
 
 ```markdown
-# ⏸️ CLARIFICATION NEEDED
+**Decision Needed**
 
-## My Understanding
-- Goal: Add user authentication
-- Stack: Express + PostgreSQL
-- Constraint: Must use JWT
-
-## The Question
-**How should session invalidation work?**
-
-| Option | Tradeoff |
-|--------|----------|
-| A) Stateless JWT only | Simple, but can't revoke tokens |
-| B) JWT + Redis blacklist | Revocable, but adds Redis dependency |
-| C) Short-lived JWT + refresh token | Balanced, but more complex |
-
-## Default
-If no preference by EOD today, I'll implement **Option C** (industry standard).
-
-## Awaiting
-Your choice, then I continue.
+Goal: <shared outcome>
+Conflict: <evidence and impact>
+Recommendation: <smallest better route and reason>
+Alternative: <optional material alternative and trade-off>
+Question: <one answerable question>
 ```
-
-## EXECUTION RULES
-
-1. **ONE QUESTION SET AT A TIME**: Ask the most blocking items first.
-2. **ACTIONABLE ANSWERS**: Each question should have clear options or yes/no.
-3. **NO IMPLEMENTATION WHILE WAITING**: Don't guess and build.
-4. **BOUNDED WAITING**: If partial answer arrives, proceed and follow-up only if still blocked.
-5. **FALLBACK DEFAULT**: If deadline passes with no response, proceed with proposed default and note it.
 
 ## ANTI-PATTERNS
 
-| ⛔ Bad | ✅ Good |
-|--------|---------|
-| "What do you want me to do?" | "Should X use approach A or B?" |
-| "Can you clarify?" | "Is [specific thing] correct?" |
-| "I need more information" | "I need to know: [specific question]" |
-| Asking about things you can decide | Asking about things only user knows |
+- Asking for permission to run an operation already authorized by the task.
+- Asking broad questions such as "What do you want?"
+- Presenting several cosmetic variants as architecture choices.
+- Continuing a known-wrong design because the user named an implementation.
+- Treating disagreement as refusal instead of proposing a workable route.
+- Stopping the whole task when only one branch of work is uncertain.
