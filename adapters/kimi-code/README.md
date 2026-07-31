@@ -8,7 +8,7 @@ Last local inventory: Kimi Code CLI `0.29.1` and Moonshot's Cursor extension `0.
 
 User scope, rooted at `$KIMI_CODE_HOME` or `~/.kimi-code`:
 
-- commands as explicit prompt skills: `skills/<command>/SKILL.md`
+- commands as prompt skills: `skills/<command>/SKILL.md`
 - external Agent Skills: `skills/<skill>/...`
 - always-on instructions: `AGENTS.md`
 - scoped rule references: `references/rules/<rule>.md`
@@ -19,7 +19,7 @@ User scope, rooted at `$KIMI_CODE_HOME` or `~/.kimi-code`:
 
 Project scope:
 
-- commands as explicit prompt skills: `.kimi-code/skills/<command>/SKILL.md`
+- commands as prompt skills: `.kimi-code/skills/<command>/SKILL.md`
 - external Agent Skills: `.kimi-code/skills/<skill>/...`
 - always-on instructions: `.kimi-code/AGENTS.md`
 - scoped rule references: `.kimi-code/references/rules/<rule>.md`
@@ -31,7 +31,7 @@ An explicit `--dest` relocates the selected scope, including conventional VS Cod
 
 ## Runtime contracts
 
-Kimi Code discovers directory-form skills from the Kimi-specific user and project roots. Generated command skills declare `type: prompt` and `disableModelInvocation: true`, so they remain explicit operations invoked as `/skill:<name>` rather than being selected implicitly by the model.
+Kimi Code discovers directory-form skills from the Kimi-specific user and project roots. Generated command skills declare `type: prompt`; sources with `model_invocation: true` render `disableModelInvocation: false`, while all other workflows remain explicit operations invoked as `/skill:<name>`.
 
 Custom agent files contain Kimi's `name`, `description`, and `tools` frontmatter plus the source prompt. Read-only roles allow Kimi's inspection, search, web, todo, question, and skill tools; read-write roles add file editing; shell workers allow the full tool surface. The files are intended for Kimi's native sub-agent delegation. Current main-agent selection through `--agent` or `--agent-file` is limited to experimental print mode and is not claimed by this adapter.
 

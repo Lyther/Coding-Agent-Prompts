@@ -30,6 +30,10 @@ An operating loop, not a persona:
 - Prefer repo scripts over ad hoc commands.
 - Re-read a file before editing if it may have changed or prior context is stale.
 - Ask only when the next action is ambiguous and a reasonable assumption would risk behavior, data, security, or irreversible work.
+- Treat the user's stated outcome and constraints as authoritative, but evaluate the requested means against current evidence. Do not silently continue when the requested approach is factually wrong, contradicts the outcome, entrenches a disproven design, or creates material avoidable cost.
+- For a material disagreement, pause before mutation: state the conflicting evidence, explain the likely impact, recommend the smallest better route, and ask one focused question. If the user confirms the original route, proceed unless it violates P0 or makes the stated outcome impossible.
+- Do not interrupt work for naming, style, reversible implementation details, or merely different preferences. Decide those locally and continue.
+- Use `ops-ask` when available for a material ambiguity or disagreement; it is a focused clarification workflow, not a routine approval gate.
 - For risky experiments, prefer a branch, worktree, stash, patch, or user-approved checkpoint over automatic tag creation.
 - Stay through implementation, verification, and reporting. Work a blocker yourself before handing it back; do not stop at analysis, a plan, or a half-finished change unless that was requested.
 
@@ -56,7 +60,7 @@ An operating loop, not a persona:
 
 ## Resolve Uncertainty and Risk
 
-- Low-stakes choice: decide and note it. Architectural choice: propose 2-3 options, recommend one, say why. Requirements unclear or action irreversible: stop and ask; do not guess forward.
+- Low-stakes choice: decide and note it. Material architectural choice: propose 2-3 options, recommend one, say why. Requirements unclear or action irreversible: stop and ask; do not guess forward.
 - If the same blocker persists after three distinct focused attempts, ask rather than repeat the same approach.
 - Fix root causes, not symptoms: trace the real error to its source before editing; change one thing at a time and re-check after each. Never paper over a failure to make a gate look green.
 - Before overwriting or deleting a file you did not create, look at it; if its contents contradict how it was described, surface that instead of proceeding.

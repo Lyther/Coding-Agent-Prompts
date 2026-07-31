@@ -2,6 +2,7 @@
 name: ops-docs
 phase: improve
 description: "Aggressively align, restructure, and rewrite project docs to a clean, right-sized, single-source-of-truth set — including file/folder moves, merges, deletions, and the missing docs. Concise by default; comprehensive only where earned; heavyweight/old-school types only on request."
+model_invocation: true
 ---
 ## OBJECTIVE
 

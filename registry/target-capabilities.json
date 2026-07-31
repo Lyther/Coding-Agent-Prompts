@@ -1,18 +1,18 @@
 {
-  "reviewed_at": "2026-07-27",
+  "reviewed_at": "2026-07-30",
   "targets": {
     "claude-code": {
-      "summary": "Claude Code supports native slash commands, subagents, MCP, and skills; agent-surface generates commands, subagents, first-party MCP wiring (Synapse + Grimoire), and external skills.",
+      "summary": "Claude Code supports Agent Skills, subagents, and MCP; agent-surface generates first-party workflow skills with per-workflow invocation policy, subagents, first-party MCP wiring (Synapse + Grimoire), and external skills.",
       "generated_render_tokens": [
-        "commands",
+        "skills",
         "subagents",
         "external",
         "mcps"
       ],
       "evidence": [
         {
-          "label": "Claude Code slash commands",
-          "url": "https://docs.anthropic.com/en/docs/claude-code/slash-commands"
+          "label": "Claude Code skills",
+          "url": "https://code.claude.com/docs/en/slash-commands"
         },
         {
           "label": "Claude Code subagents",
@@ -24,7 +24,7 @@
         }
       ],
       "surfaces": {
-        "commands": {
+        "skills": {
           "support": "native",
           "generation": "generated",
           "scope": [
@@ -32,10 +32,10 @@
             "project"
           ],
           "paths": [
-            "~/.claude/commands/<group>/<name>.md",
-            ".claude/commands/<group>/<name>.md"
+            "~/.claude/skills/<name>/SKILL.md",
+            ".claude/skills/<name>/SKILL.md"
           ],
-          "notes": "Commands remain first-class command files rather than skills."
+          "notes": "First-party command sources compile to Agent Skills. model_invocation controls whether Claude may select each skill automatically; every skill remains available through /<name>."
         },
         "subagents": {
           "support": "native",
@@ -79,7 +79,7 @@
       }
     },
     "codex": {
-      "summary": "Codex supports skills, custom agent TOML files, AGENTS.md instructions, and MCP config; agent-surface generates explicit-invocation skills, custom agents, global instructions, first-party MCP wiring (Synapse + Grimoire), and external skills.",
+      "summary": "Codex supports skills, custom agent TOML files, AGENTS.md instructions, and MCP config; agent-surface generates skills with per-workflow invocation policy, custom agents, global instructions, first-party MCP wiring (Synapse + Grimoire), and external skills.",
       "generated_render_tokens": [
         "skills",
         "subagents",
@@ -113,7 +113,7 @@
             "~/.agents/skills/<command>/SKILL.md",
             ".agents/skills/<command>/SKILL.md"
           ],
-          "notes": "Source commands compile to explicit-invocation Agent Skills with openai.yaml sidecars that disable implicit invocation. Codex does not receive a separate native workflow or slash-command surface."
+          "notes": "Source commands compile to Agent Skills with openai.yaml sidecars. model_invocation enables implicit selection for a small allowlist; other workflows remain explicit-only. Codex does not receive a separate native workflow or slash-command surface."
         },
         "subagents": {
           "support": "native",
@@ -876,7 +876,7 @@
             "$KIMI_CODE_HOME/skills/<name>/SKILL.md",
             ".kimi-code/skills/<name>/SKILL.md"
           ],
-          "notes": "Command sources render as directory-form prompt skills with explicit /skill:<name> invocation and automatic model invocation disabled."
+          "notes": "Command sources render as directory-form prompt skills with explicit /skill:<name> invocation. model_invocation enables automatic selection for a small allowlist; other workflows disable it."
         },
         "rules": {
           "support": "native",

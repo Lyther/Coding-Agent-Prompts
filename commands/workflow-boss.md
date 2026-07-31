@@ -28,7 +28,7 @@ Use existing commands as helper functions when they improve the BOSS spec:
 - `arch-roadmap`, `arch-model`, `arch-api`: architecture, domain model, or API shape needed before task decomposition.
 - `ops-flow`: route classification when the request is ambiguous.
 - `ops-deps`: dependency risk evidence before assigning dependency work.
-- `qa-review`, `qa-sec`, `qa-trace`: risk scoping for audit/security/trace-heavy work before choosing AC and verify gates.
+- `qa-review`, `qa-audit`, `qa-trace`: risk scoping for broad audit, focused review, or trace-heavy work before choosing AC and verify gates.
 
 Helper command output is evidence for `boss.context_capsule`, task AC, risk notes, and verify gates. It does not change the workflow graph or output contract: in workflow mode, always write `boss.json` in the BOSS format and set the normal `workflow.next_command`.
 

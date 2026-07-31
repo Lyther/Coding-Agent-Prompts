@@ -34,7 +34,7 @@ Use helper commands to sharpen arbitration when evidence is thin or risk is high
 
 - `qa-review`: independent code-review pass over disputed patches.
 - `qa-trace`: root-cause, dataflow, race, or exploitability tracing for the stuck task.
-- `qa-sec`: security, dependency, supply-chain, secrets, auth, crypto, or payment evidence.
+- `qa-audit`: architecture, security, dependency, test, operations, or repository evidence at the depth justified by the disputed claim.
 - `workflow-doctor`: structural validation of workflow artifacts before deciding.
 
 Helper output is advisory evidence. It must be summarized into `judger.json`; do not switch to the helper command's output format or alter the workflow graph.

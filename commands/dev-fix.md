@@ -25,7 +25,7 @@ Use existing commands as helper functions when they improve fix quality:
 - `dev-chore`: trigger-based direction, reuse, single-ownership, proportional-complexity/risk, and user-outcome checkpoint when a fix starts accumulating workarounds. In workflow mode, `dev-fix` retains worker-artifact ownership and applies the checkpoint findings itself.
 - `qa-trace`: prove root cause, dataflow, race, or exploitability before patching when diagnosis is weak.
 - `lint-python`, `lint-rust`, `lint-go`, `lint-typescript`, `lint-shell`, `lint-kernel`: language-specific checks for touched files.
-- `verify-test`, `verify-spec`, `verify-edge`, `verify-prove`: focused regression and AC proof.
+- `dev-spec`, `verify-test`, `verify-edge`, `verify-prove`: focused regression and AC proof.
 - `qa-self-critique`: bounded self-audit before worker handoff.
 - `ops-swarm`: parallel non-blocking repro/check packets only when isolated by FILESCOPE and state.
 

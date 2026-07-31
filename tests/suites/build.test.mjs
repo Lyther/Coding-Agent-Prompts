@@ -34,7 +34,8 @@ assert.match(run(["check", "generated"]), /generated check: ok/);
 assertCodexAgentTomlParses();
 
 const mustExist = [
-  ["claude-code", path.join(".claude", "commands", "workflow", "runtime.md")],
+  ["claude-code", path.join(".claude", "skills", "workflow-runtime", "SKILL.md")],
+  ["claude-code", path.join(".claude", "skills", "dev-spec", "SKILL.md")],
   ["codex", path.join(".agents", "skills", "workflow-runtime", "SKILL.md")],
   ["codex", path.join(".codex", "AGENTS.md")],
   ["cline", path.join("Documents", "Cline", "Workflows", "verify-readiness.md")],
@@ -57,6 +58,18 @@ for (const [target, rel] of mustExist) {
   );
 }
 assert.equal(generated.some((file) => file.includes(`${path.sep}gemini-cli${path.sep}`)), false);
+assert.equal(generated.some((file) => file.includes(`${path.sep}qa-sec${path.sep}`) || file.endsWith(`${path.sep}qa-sec.md`)), false);
+assert.equal(generated.some((file) => file.includes(`${path.sep}verify-spec${path.sep}`) || file.endsWith(`${path.sep}verify-spec.md`)), false);
+assert.equal(generated.some((file) => file.includes(`${path.sep}.claude${path.sep}commands${path.sep}`)), false);
+
+const claudeOpsAsk = readFileSync(path.join(root, "dist", "claude-code", ".claude", "skills", "ops-ask", "SKILL.md"), "utf8");
+const claudeOpsNuke = readFileSync(path.join(root, "dist", "claude-code", ".claude", "skills", "ops-nuke", "SKILL.md"), "utf8");
+assert.doesNotMatch(claudeOpsAsk, /^disable-model-invocation:/m);
+assert.match(claudeOpsNuke, /^disable-model-invocation: true$/m);
+const codexOpsAskPolicy = readFileSync(path.join(root, "dist", "codex", ".agents", "skills", "ops-ask", "agents", "openai.yaml"), "utf8");
+const codexOpsNukePolicy = readFileSync(path.join(root, "dist", "codex", ".agents", "skills", "ops-nuke", "agents", "openai.yaml"), "utf8");
+assert.match(codexOpsAskPolicy, /^  allow_implicit_invocation: true$/m);
+assert.match(codexOpsNukePolicy, /^  allow_implicit_invocation: false$/m);
 
 // Substitute-policy contract lands in always-on Codex instructions + verify-test skill.
 const codexInstructions = readFileSync(path.join(root, "dist", "codex", ".codex", "AGENTS.md"), "utf8");
@@ -141,6 +154,10 @@ assert.equal(Object.hasOwn(kimiMcp.mcpServers.synapse, "type"), false);
 assert.match(
   readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-flow", "SKILL.md"), "utf8"),
   /^disableModelInvocation: true$/m,
+);
+assert.match(
+  readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-ask", "SKILL.md"), "utf8"),
+  /^disableModelInvocation: false$/m,
 );
 assert.match(
   readFileSync(path.join(root, "dist", "kimi-code", "config.toml"), "utf8"),

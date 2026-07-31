@@ -2,6 +2,7 @@
 name: dev-chore
 phase: build
 description: "Maintain development quality by correcting local design, reuse, complexity, risk, and UX drift before it compounds."
+model_invocation: true
 ---
 ## OBJECTIVE
 
@@ -158,7 +159,7 @@ Use existing commands as focused helpers:
 - `ops-doctor`: repository and tooling health.
 - `qa-trace`: verify a suspected wrong premise, root cause, ownership path, race, or trust boundary before changing it.
 - `lint-python`, `lint-rust`, `lint-go`, `lint-typescript`, `lint-shell`, `lint-kernel`: touched-file language checks.
-- `verify-test`, `verify-spec`, `verify-coverage`, `verify-edge`, `verify-performance`, `verify-prove`: focused proof for the accepted behavior and real user path.
+- `dev-spec`, `verify-test`, `verify-coverage`, `verify-edge`, `verify-performance`, `verify-prove`: focused specification and proof for the accepted behavior and real user path.
 - `qa-review`: independent broad review after implementation, not a substitute for this in-development loop.
 - `ops-swarm`: parallel read-only discovery when scopes are independent and synthesis remains with the current owner.
 

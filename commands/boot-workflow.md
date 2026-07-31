@@ -37,7 +37,7 @@ understand -> choose the lightest safe profile -> execute -> verify -> review wh
 Supporting paths:
 
 ```text
-audit    -> qa-review | qa-sec | qa-trace | ops-report
+audit    -> qa-review | qa-audit | qa-trace | ops-report
 parallel -> ops-swarm for independent read-only or isolated probes
 ship     -> ship-commit | ship-artifact | ship-cicd | ship-release | ship-deploy
 ```

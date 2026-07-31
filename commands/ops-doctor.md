@@ -2,6 +2,7 @@
 name: ops-doctor
 phase: improve
 description: "Run a health check on the agent-surface repository and local generated surfaces."
+model_invocation: true
 ---
 ## OBJECTIVE
 

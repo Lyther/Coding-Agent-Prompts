@@ -25,9 +25,14 @@ assert.doesNotMatch(alwaysOnRuleText, /without explicit (?:user )?approval/i);
 assert.doesNotMatch(alwaysOnRuleText, /explicit approval is required/i);
 assert.doesNotMatch(alwaysOnRuleText, /pending user approval|awaiting explicit user authorization|green light/i);
 
-// ops-nuke: dry-run + explicit deletion approval before destructive work.
-assert.match(opsNukeCommand, /Dry-Run First|dry-run/i);
-assert.match(opsNukeCommand, /Approval Gate|user approves the deletion manifest/i);
+// ops-nuke: isolated first-commit respawn with one informed arm gate and untouched rollback tree.
+assert.match(opsNukeCommand, /branch from the repository's first commit/i);
+assert.match(opsNukeCommand, /separate worktree/i);
+assert.match(opsNukeCommand, /original branch and worktree remain untouched/i);
+assert.match(opsNukeCommand, /## 4\. ARM GATE/);
+assert.match(opsNukeCommand, /One informed confirmation arms the run/i);
+assert.match(opsNukeCommand, /git worktree add -b respawn/);
+assert.match(opsNukeCommand, /Never run reset, clean, checkout-overwrite, or deletion in the original worktree/i);
 
 assert.match(workflowRuntime, /^## PHASE GATE - EVALUATE FIRST$/m);
 assert.match(workflowRuntime, /Do not call any tool, including shell, file-read, MCP, search, or `echo`/);

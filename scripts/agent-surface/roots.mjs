@@ -108,11 +108,6 @@ export function droidConfigRoot(_context) {
   return ".factory";
 }
 
-export function groupedMarkdownCommandOutputName(source) {
-  const [category, ...rest] = source.name.split("-");
-  return path.join(category, `${rest.join("-") || category}.md`);
-}
-
 export function flatMarkdownCommandOutputName(source) {
   return `${source.name}.md`;
 }

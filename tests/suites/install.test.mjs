@@ -71,7 +71,7 @@ assert.notEqual(geminiPlan.status, 0);
 assert.match(`${geminiPlan.stdout}${geminiPlan.stderr}`, /unsupported install target: gemini-cli/);
 
 for (const [target, patterns] of [
-  ["claude-code", [/\.claude\/commands\/workflow\/boss\.md <- commands\/workflow-boss\.md/, /\.claude\/agents\/boss\.md <- subagents\/boss\.md/]],
+  ["claude-code", [/\.claude\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/, /\.claude\/agents\/boss\.md <- subagents\/boss\.md/]],
   ["cursor", [/\.cursor\/commands\/workflow-boss\.md <- commands\/workflow-boss\.md/, /\.cursor\/agents\/boss\.md <- subagents\/boss\.md/]],
   ["droid", [/\.factory\/commands\/workflow-boss\.md <- commands\/workflow-boss\.md/, /\.factory\/mcp\.json MCP \+= grimoire, synapse/, /karpathy-guidelines\/SKILL\.md/]],
   ["codex", [/\.agents\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/]],
@@ -302,6 +302,7 @@ assert.match(kimiCodeUserScope.stdout, /Cursor\/User\/settings\.json kimi\.yoloM
 const claudeUserScope = status(["install", "--target", "claude-code", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(claudeUserScope.status, 0, `${claudeUserScope.stdout}${claudeUserScope.stderr}`);
 assert.doesNotMatch(claudeUserScope.stdout, /\.mcp\.json/);
+assert.match(claudeUserScope.stdout, /\.claude\/skills\/ops-ask\/SKILL\.md <- commands\/ops-ask\.md/);
 assert.match(claudeUserScope.stdout, /\.claude\/agents\/boss\.md <- subagents\/boss\.md/);
 
 const openhandsUserScope = status(["install", "--target", "openhands", "--scope", "user", "--dry-run"], { env: userScopeEnv });

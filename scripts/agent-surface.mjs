@@ -155,6 +155,7 @@ function commandRegistryEntry(command) {
     aliases: command.metadata.aliases,
     phase: command.metadata.phase,
     description: command.metadata.description,
+    model_invocation: command.metadata.model_invocation,
     metadata_source: command.hasFrontmatter ? "frontmatter" : "inferred",
     lazy_body: {
       type: "file",

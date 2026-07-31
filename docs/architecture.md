@@ -1,6 +1,6 @@
 # Architecture — agent-surface
 
-Status: IMPLEMENTED · Last updated: 2026-07-02 · Scope: the compiler under `scripts/` (the `agent-surface.mjs` CLI entry + the `agent-surface/` modules) and the registries/schemas that drive it. The two first-party MCP services have their own architecture docs: [../mcps/synapse/architecture.md](../mcps/synapse/architecture.md), [../mcps/grimoire/architecture.md](../mcps/grimoire/architecture.md).
+Status: IMPLEMENTED · Last updated: 2026-07-30 · Scope: the compiler under `scripts/` (the `agent-surface.mjs` CLI entry + the `agent-surface/` modules) and the registries/schemas that drive it. The two first-party MCP services have their own architecture docs: [../mcps/synapse/architecture.md](../mcps/synapse/architecture.md), [../mcps/grimoire/architecture.md](../mcps/grimoire/architecture.md).
 
 ## What it is
 
@@ -45,7 +45,7 @@ scripts/agent-surface/      - the compiler, split into focused zero-dependency E
   install.mjs               - build (→ dist/) + install (planner, config merges, strict-sync, manifest).
   check.mjs                 - the validators behind `check` (registry/schema/producer coherence, generated output, references, workflow fixtures).
   workflow.mjs · evidence.mjs · doctor.mjs - workflow-ledger transitions, semantic task-state and monitor-liveness validation; `run` evidence capture (redaction/declared execution policy); environment + MCP health.
-  commands.mjs · rules.mjs · source-primitives.mjs - source readers (commands + frontmatter, rules, subagents/ignores).
+  commands.mjs · rules.mjs · source-primitives.mjs - source readers (commands + frontmatter and invocation policy, rules, subagents/ignores).
   registry.mjs · roots.mjs · io.mjs · proc.mjs · fs-tree.mjs · util.mjs · format.mjs - foundations: registry loaders; install roots + path/naming; FS read/parse; git/proc; dir listing; primitives; token formatting.
 registry/
   targets.json              - the 22 in-scope targets + their render tokens + build/install support.
@@ -85,6 +85,7 @@ MCP services declared `first_party kind:"mcp"` in `optional-services.json` are a
 
 - **Registry-driven, schema-validated** — behaviour lives in data, not code branches; `check` makes the three registries agree with the producers.
 - **Zero-dependency ES modules** — portability and auditability with no runtime deps; the former single ~4k-line script was decomposed into cohesive modules (CLI entry + engine + emit + command domains + foundations), verified byte-identical against the pre-refactor `build` output.
+- **Native workflow projection** — one portable command source renders to each host's native workflow surface. Skill-capable hosts receive skills, and automatic model invocation is opt-in per workflow rather than enabled for every command.
 - **Merge, never clobber** — host configs are shared/secret-bearing; the compiler owns only its own keys and blocks on ambiguous shapes.
 - **Strict-sync via manifest** — de-scoped assets self-prune on the next full install without tracking deletions by hand.
 - **First-party MCP on shared rails** — synapse and grimoire ride the same generate+merge path; adding a service is a registry entry, not new plumbing.

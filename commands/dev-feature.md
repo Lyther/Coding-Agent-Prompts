@@ -44,7 +44,7 @@ Use existing commands as helper functions when they improve implementation quali
 - `boot-context`: stale or missing local context.
 - `dev-chore`: trigger-based direction, reuse, single-ownership, proportional-complexity/risk, and UX checkpoint when the current increment starts to drift. In workflow mode, `dev-feature` retains worker-artifact ownership and applies the checkpoint findings itself.
 - `lint-python`, `lint-rust`, `lint-go`, `lint-typescript`, `lint-shell`, `lint-kernel`: language-specific checks for touched files.
-- `verify-test`, `verify-spec`, `verify-coverage`, `verify-edge`, `verify-performance`, `verify-prove`: focused proof for task AC.
+- `dev-spec`, `verify-test`, `verify-coverage`, `verify-edge`, `verify-performance`, `verify-prove`: focused specification and proof for task AC.
 - `qa-self-critique`: bounded self-audit before worker handoff.
 - `qa-trace`: unproven root cause, dataflow/race/security path, or trust-boundary uncertainty.
 - `ops-swarm`: parallel non-blocking research/check packets only when FILESCOPE isolation is clear.

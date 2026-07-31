@@ -67,10 +67,10 @@ Routing defaults:
 
 ```text
 direct/standard: dev-feature | dev-fix | dev-chore | dev-refactor
-reviewed:        route-specific dev command -> qa-review|qa-sec|qa-trace
+reviewed:        route-specific dev command -> qa-review|qa-audit|qa-trace
 orchestrated:    workflow-orchestrator
 release:         verify-prove -> verify-readiness when the claim requires it
-audit:           qa-review | qa-sec | qa-trace | ops-report
+audit:           qa-review | qa-audit | qa-trace | ops-report
 parallel:        ops-swarm
 ship:            ship-commit | ship-artifact | ship-cicd | ship-release | ship-deploy
 ```
@@ -95,7 +95,7 @@ Claims such as `stable`, `production-ready`, `release-ready`, `deployment-ready`
 Use the relevant ladder, not every command mechanically:
 
 ```text
-verify-spec / verify-test
+dev-spec / verify-test
   -> verify-coverage for Critical/High discrimination
   -> verify-edge / verify-performance when relevant
   -> verify-prove against shipped bits and real dependencies

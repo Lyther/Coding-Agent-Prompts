@@ -2,7 +2,7 @@
 
 Write your coding-agent setup **once**, render it into **every** agent host.
 
-Commands, rules, subagents, external skill packs, ignore files, and first-party MCP services live once in this repo's source tree. `agent-surface` compiles them into the native formats of twenty-two host targets — Claude Code, Codex, Cursor, Droid, Kilo, Kimi Code, Zed, OpenCode, OpenHands, and more — so you maintain one source instead of twenty-two bespoke configs.
+Reusable workflows, rules, subagents, external skill packs, ignore files, and first-party MCP services live once in this repo's source tree. `agent-surface` compiles them into the native formats of twenty-two host targets — Claude Code, Codex, Cursor, Droid, Kilo, Kimi Code, Zed, OpenCode, OpenHands, and more — so you maintain one source instead of twenty-two bespoke configs.
 
 It is a **source compiler**, not an app: there is no `src/`. Typed source primitives in → host-native surfaces out, validated by `check` and tracked by per-target manifests.
 
@@ -43,7 +43,7 @@ Out of scope: Gemini CLI (EoL — use Antigravity CLI), Roo Code (EoL), Xcode.
 ## Project layout
 
 ```text
-commands/    User-invoked reusable procedures
+commands/    Reusable workflow procedures with per-workflow invocation policy
 rules/       Always-on or scoped behavior policy
 subagents/   Normalized subagent definitions
 mcps/        First-party MCP services (synapse, grimoire)
@@ -92,7 +92,7 @@ Built from `mcps/`, installed once, then auto-wired (non-destructive merge) into
 
 `ops-flow` chooses the lightest safe profile: direct, standard single-owner development, writer-plus-reviewer, formal orchestration, or release proof. Only orchestrated/release profiles use the durable ledger under `.agent-surface/workflows/<run_id>/`; `workflow-runtime` qualifies external/native runtimes, `workflow-doctor` rejects schema, task-state, and liveness drift, and `verify-readiness` gates production-ready claims on real evidence.
 
-`workflow-runtime` treats generated artifacts, command discovery, provider authentication, permission mode, tool execution, world-state materialization, output shape, and MCP calls as separate gates. This user distribution launches writable workers with each host's full-access equivalent while preserving read-only tool profiles for reviewer and analysis roles. Kilo and OpenCode config explicitly disables automatic session sharing. Kimi Code uses terminal Auto mode and the extension's highest persistent mode, YOLO. Codex source commands compile to explicit `$name` Agent Skills; they are not advertised as a separate native workflow surface.
+`workflow-runtime` treats generated artifacts, command discovery, provider authentication, permission mode, tool execution, world-state materialization, output shape, and MCP calls as separate gates. This user distribution launches writable workers with each host's full-access equivalent while preserving read-only tool profiles for reviewer and analysis roles. Kilo and OpenCode config explicitly disables automatic session sharing. Kimi Code uses terminal Auto mode and the extension's highest persistent mode, YOLO. Codex source commands compile to `$name` Agent Skills with per-workflow implicit-invocation policy; they are not advertised as a separate native workflow surface.
 
 ## More
 
