@@ -318,6 +318,8 @@ F002: Dockerfile ran as root. Added USER directive.
 
 ## OUTPUT FORMAT
 
+Write each finding as one concise progression: state what is wrong, explain its concrete impact, and finish with the specific remediation. Keep it as natural prose; do not add `Wrong`, `Impact`, or `Fix` labels.
+
 ```markdown
 ## /review Round {N} — {ACCEPTED | REJECTED}
 
@@ -326,15 +328,13 @@ F002: Dockerfile ran as root. Added USER directive.
 **Summary:** {one-line verdict}
 
 ### 🔴 REJECT-BLOCKING
-- **[F001]** [{file}:{line}] {description}
-  → Fix: {specific remediation}
+- **[F001]** [{file}:{line}] {defect, concrete impact, and specific remediation}
 
 ### 🟡 MUST-FIX
-- **[F002]** [{file}:{line}] {description}
-  → Fix: {specific remediation}
+- **[F002]** [{file}:{line}] {defect, concrete impact, and specific remediation}
 
 ### 🔵 NIT
-- **[F003]** [{file}:{line}] {description}
+- **[F003]** [{file}:{line}] {defect, concrete impact, and specific remediation}
 
 ---
 
