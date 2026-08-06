@@ -56,3 +56,14 @@ export function gitOutput(args, env = process.env) {
 export async function gitLines(args) {
   return gitOutput(args).split(/\r?\n/).filter(Boolean);
 }
+
+export function gitIgnoredPaths(paths) {
+  if (paths.length === 0) return new Set();
+  const result = spawnSync("git", ["check-ignore", "--stdin", "-z"], {
+    cwd: root,
+    encoding: "utf8",
+    input: `${paths.join("\0")}\0`,
+  });
+  if (![0, 1].includes(result.status)) return new Set();
+  return new Set(result.stdout.split("\0").filter(Boolean));
+}

@@ -3,6 +3,7 @@
 Native surfaces:
 
 - global commands: `~/.cursor/commands/*.md`
+- global canonical and reviewed external skills: `~/.cursor/skills/`
 - global subagents: `~/.cursor/agents/*.md`
 - global rules: `~/.cursor/rules/*.mdc`
 - MCP: `~/.cursor/mcp.json` / `.cursor/mcp.json` `mcpServers.{synapse,grimoire}`
@@ -12,4 +13,4 @@ First-party MCP wiring (Synapse and Grimoire) is generated and safely merged. Ex
 
 The current subagent batch emits `subagents/{boss,researcher,analyzer,adversary,reviewer,worker}.md` to `.cursor/agents/*.md` with Cursor's documented Markdown frontmatter shape (`name`, `description`, `model`, `readonly`, `is_background`). Runtime launch probes must call `cursor agent ...`; do not use a bare `agent` command because Grok Build also has an `agent`-named surface.
 
-Skill support is not currently implemented as a generated surface; Cursor receives reusable behavior through command, subagent, and rule files.
+Canonical skills remain available for Cursor's automatic skill discovery. Only the five high-impact workflows remain native commands.

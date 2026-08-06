@@ -12,7 +12,7 @@ export function renderMcpConfig(format, entries, rootProperties = {}) {
   if (format === "json-settings") return `${JSON.stringify(rootProperties, null, 2)}\n`;
   const servers = optionalServiceMcpServers(entries, format);
   if (format === "codex-toml") {
-    const settings = renderCodexRootStringProperties(rootProperties);
+    const settings = renderCodexRootProperties(rootProperties);
     const mcp = entries.map(([id, service]) => renderCodexMcpServer(id, service)).join("\n");
     return [settings, mcp].filter(Boolean).join("\n");
   }
@@ -186,30 +186,26 @@ export function mergeYamlMcpConfig(text, format, entries, removeIds = []) {
 
 export function mergeCodexMcpToml(text, entries, removeIds = [], rootProperties = {}) {
   const ids = uniqueStrings([...entries.map(([id]) => id), ...removeIds]);
-  const cleaned = mergeCodexRootStringProperties(stripCodexMcpTomlBlocks(text, ids), rootProperties);
+  const cleaned = mergeCodexRootProperties(stripCodexMcpTomlBlocks(text, ids), rootProperties);
   if (entries.length === 0) return cleaned;
   const block = entries.map(([id, service]) => renderCodexMcpServer(id, service)).join("\n").trimEnd();
   const joiner = cleaned.trim().length === 0 ? "" : "\n\n";
   return `${cleaned.trimEnd()}${joiner}${block}\n`;
 }
 
-function renderCodexRootStringProperties(properties) {
-  const lines = Object.entries(properties).map(([key, value]) => {
-    if (typeof value !== "string") fail(`Codex root property ${key} must be a string`);
-    return `${key} = "${tomlString(value)}"`;
-  });
+function renderCodexRootProperties(properties) {
+  const lines = Object.entries(properties).map(([key, value]) => `${key} = ${tomlScalar(key, value)}`);
   return lines.length > 0 ? `${lines.join("\n")}\n` : "";
 }
 
-function mergeCodexRootStringProperties(text, properties) {
+function mergeCodexRootProperties(text, properties) {
   if (Object.keys(properties).length === 0) return text;
   const lines = text.split(/\r?\n/);
   const firstSection = lines.findIndex((line) => /^\s*\[.+\]\s*$/.test(line));
   const topEnd = firstSection === -1 ? lines.length : firstSection;
   const missing = [];
   for (const [key, value] of Object.entries(properties)) {
-    if (typeof value !== "string") fail(`Codex root property ${key} must be a string`);
-    const rendered = `${key} = "${tomlString(value)}"`;
+    const rendered = `${key} = ${tomlScalar(key, value)}`;
     const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
     const index = lines.slice(0, topEnd).findIndex((line) => pattern.test(line));
     if (index === -1) missing.push(rendered);
@@ -217,6 +213,12 @@ function mergeCodexRootStringProperties(text, properties) {
   }
   if (missing.length > 0) lines.splice(topEnd, 0, ...missing, "");
   return lines.join("\n");
+}
+
+function tomlScalar(key, value) {
+  if (typeof value === "string") return `"${tomlString(value)}"`;
+  if (typeof value === "boolean") return String(value);
+  fail(`Codex root property ${key} must be a string or boolean`);
 }
 
 function uniqueStrings(values) {

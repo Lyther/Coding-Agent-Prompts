@@ -8,8 +8,8 @@ import { directDirectories, filesUnder } from "./fs-tree.mjs";
 import { optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { normalizeExternalSkillFile } from "./postprocess.mjs";
 import { readOptionalServices, relative, root } from "./registry.mjs";
-import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityCliSkill, renderAntigravityWorkflow, renderClaudeSkill, renderClaudeSubagent, renderClineSubagent, renderClineWorkflow, renderCodexSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSkill, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGeminiSubagent, renderGooseRecipe, renderGrokBuildSkill, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderKimiCodeSkill, renderKimiCodeSubagent, renderOpenCodeCommand, renderOpenCodeSubagent, renderPiSkill, renderPoolSkill, renderScopedRuleReferenceDocument, renderSharedAgentSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
-import { antigravityCliSkillOutputName, claudeMcpPath, clineAgentRoot, clineCursorExtensionMcpPath, clineMcpPath, clineRuleRoot, clineSkillRoot, clineVsCodeExtensionMcpPath, clineWindsurfExtensionMcpPath, clineWorkflowRoot, codexSkillOutputName, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, flatMarkdownCommandOutputName, gooseRecipeOutputName, grokBuildSkillRoot, installRootAntigravity, installRootAntigravityCli, installRootClaude, installRootCline, installRootCodex, installRootDeepagents, installRootDroid, installRootGoose, installRootGrokBuild, installRootHomeOnly, installRootKilo, installRootKimiCode, installRootOpencode, installRootOpenHands, installRootPi, installRootPool, installRootVsCode, installRootVscodium, installRootWindsurf, installRootZed, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloWorkflowRoot, kimiCodeAgentRoot, kimiCodeConfigPath, kimiCodeConfigRoot, kimiCodeCursorSettingsPath, kimiCodeInstructionPath, kimiCodeMcpPath, kimiCodeSkillRoot, kimiCodeVsCodeSettingsPath, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
+import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityWorkflow, renderClaudeSubagent, renderClineSubagent, renderClineWorkflow, renderCodexSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGeminiSubagent, renderGooseRecipe, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderKimiCodeSubagent, renderManualClaudeSkill, renderManualCodexSkill, renderManualKimiCodeSkill, renderOpenCodeCommand, renderOpenCodeSubagent, renderScopedRuleReferenceDocument, renderVanillaSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
+import { antigravitySkillRoot, antigravityWorkflowRoot, claudeMcpPath, clineAgentRoot, clineCursorExtensionMcpPath, clineMcpPath, clineRuleRoot, clineSkillRoot, clineVsCodeExtensionMcpPath, clineWindsurfExtensionMcpPath, clineWorkflowRoot, codexPrivateSkillRoot, codexSkillOutputName, copilotSkillRoot, cursorSkillRoot, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, droidSkillRoot, flatMarkdownCommandOutputName, gooseRecipeOutputName, gooseSkillRoot, grokBuildSkillRoot, installRootAntigravity, installRootAntigravityCli, installRootClaude, installRootCline, installRootCodex, installRootDeepagents, installRootDroid, installRootGoose, installRootGrokBuild, installRootHomeOnly, installRootKilo, installRootKimiCode, installRootOpencode, installRootOpenHands, installRootPi, installRootPool, installRootVsCode, installRootVscodium, installRootWindsurf, installRootZed, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloSkillRoot, kiloWorkflowRoot, kimiCodeAgentRoot, kimiCodeConfigPath, kimiCodeConfigRoot, kimiCodeCursorSettingsPath, kimiCodeInstructionPath, kimiCodeMcpPath, kimiCodeSkillRoot, kimiCodeVsCodeSettingsPath, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, opencodeSkillRoot, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, sharedAgentSkillRoot, traeSkillRoot, vsCodeUserRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
 import { ignoreOutputs, subagentOutputs } from "./source-primitives.mjs";
 import { exists, fail, isSafeRelativePath } from "./util.mjs";
@@ -22,11 +22,15 @@ export const targets = {
     subagentTarget: "claude-code",
     subagentOutputRoot: ".claude/agents",
     externalSkillOutputRoot: ".claude/skills",
+    skillRenders: ["skills"],
+    skillOutputRoot: ".claude/skills",
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     commandOutputRoot: ".claude/skills",
-    renderCommand: renderClaudeSkill,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualClaudeSkill,
     renderSubagent: renderClaudeSubagent,
     installRoot: installRootClaude,
-    commandOutputName: codexSkillOutputName,
     mcpConfig: {
       relativeOutput: claudeMcpPath,
       format: "mcpServers",
@@ -42,12 +46,17 @@ export const targets = {
     subagentOutputExtension: ".toml",
     externalSkillOutputRoot: path.join(".agents", "skills"),
     staticRenders: ["rules"],
-    commandOutputRoot: ".agents/skills",
-    renderCommand: renderSharedAgentSkill,
+    skillRenders: ["skills"],
+    skillOutputRoot: ".agents/skills",
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
+    additionalSkillOutputs: [codexOpenAiAgentOutput],
+    commandOutputRoot: codexPrivateSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualCodexSkill,
+    additionalCommandOutputs: [codexManualOpenAiAgentOutput],
     renderSubagent: renderCodexSubagent,
     installRoot: installRootCodex,
-    commandOutputName: codexSkillOutputName,
-    additionalCommandOutputs: [codexOpenAiAgentOutput],
     staticOutputs: codexStaticOutputs,
     mcpConfig: {
       relativeOutput: () => path.join(".codex", "config.toml"),
@@ -61,18 +70,18 @@ export const targets = {
   },
   deepagents: {
     label: "Deep Agents Code skills, instructions, subagents, and MCP",
-    commandRenders: ["skills"],
     subagentRenders: ["subagents"],
     subagentTarget: "deepagents",
     subagentOutputRoot: deepagentsAgentRoot,
     subagentOutputName: deepagentsSubagentOutputName,
     externalSkillOutputRoot: deepagentsSkillRoot,
     staticRenders: ["rules"],
-    commandOutputRoot: deepagentsSkillRoot,
-    renderCommand: renderDeepAgentsSkill,
+    skillRenders: ["skills"],
+    skillOutputRoot: deepagentsSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     renderSubagent: renderDeepAgentsSubagent,
     installRoot: installRootDeepagents,
-    commandOutputName: codexSkillOutputName,
     staticOutputs: deepagentsStaticOutputs,
     mcpConfig: {
       relativeOutput: deepagentsMcpPath,
@@ -83,6 +92,10 @@ export const targets = {
   goose: {
     label: "Goose reusable recipes and MCP",
     commandRenders: ["recipes"],
+    skillRenders: ["skills"],
+    skillOutputRoot: gooseSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     commandOutputRoot: "recipes",
     commandOutputName: gooseRecipeOutputName,
     renderCommand: renderGooseRecipe,
@@ -101,12 +114,12 @@ export const targets = {
   },
   "grok-build": {
     label: "Grok Build skills and project instructions",
-    commandRenders: ["skills"],
     staticRenders: ["rules"],
-    commandOutputRoot: grokBuildSkillRoot,
-    commandOutputName: codexSkillOutputName,
+    skillRenders: ["skills"],
+    skillOutputRoot: grokBuildSkillRoot,
+    skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: grokBuildSkillRoot,
-    renderCommand: renderGrokBuildSkill,
+    renderSkill: renderVanillaSkill,
     installRoot: installRootGrokBuild,
     staticOutputs: grokBuildStaticOutputs,
     mcpConfig: {
@@ -117,23 +130,23 @@ export const targets = {
   },
   pi: {
     label: "Pi skills and instructions",
-    commandRenders: ["skills"],
     staticRenders: ["rules"],
-    commandOutputRoot: piSkillRoot,
-    commandOutputName: codexSkillOutputName,
+    skillRenders: ["skills"],
+    skillOutputRoot: piSkillRoot,
+    skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: piSkillRoot,
-    renderCommand: renderPiSkill,
+    renderSkill: renderVanillaSkill,
     installRoot: installRootPi,
     staticOutputs: piStaticOutputs,
   },
   pool: {
     label: "Poolside skills and instructions",
-    commandRenders: ["skills"],
     staticRenders: ["rules"],
-    commandOutputRoot: poolSkillRoot,
-    commandOutputName: codexSkillOutputName,
+    skillRenders: ["skills"],
+    skillOutputRoot: poolSkillRoot,
+    skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: poolSkillRoot,
-    renderCommand: renderPoolSkill,
+    renderSkill: renderVanillaSkill,
     installRoot: installRootPool,
     staticOutputs: poolStaticOutputs,
     mcpConfig: {
@@ -152,6 +165,10 @@ export const targets = {
     subagentOutputRoot: clineAgentRoot,
     subagentOutputExtension: ".yaml",
     externalSkillOutputRoot: clineSkillRoot,
+    skillRenders: ["skills"],
+    skillOutputRoot: clineSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     staticRenders: ["rules"],
     commandOutputRoot: clineWorkflowRoot,
     renderCommand: renderClineWorkflow,
@@ -199,6 +216,10 @@ export const targets = {
     subagentTarget: "kilo",
     subagentOutputRoot: kiloAgentRoot,
     staticRenders: ["rules"],
+    skillRenders: ["skills"],
+    skillOutputRoot: kiloSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     commandOutputRoot: kiloWorkflowRoot,
     renderCommand: renderKiloWorkflow,
     renderSubagent: renderKiloSubagent,
@@ -224,9 +245,13 @@ export const targets = {
     subagentOutputRoot: kimiCodeAgentRoot,
     externalSkillOutputRoot: kimiCodeSkillRoot,
     staticRenders: ["rules"],
+    skillRenders: ["skills"],
+    skillOutputRoot: kimiCodeSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     commandOutputRoot: kimiCodeSkillRoot,
     commandOutputName: codexSkillOutputName,
-    renderCommand: renderKimiCodeSkill,
+    renderCommand: renderManualKimiCodeSkill,
     renderSubagent: renderKimiCodeSubagent,
     installRoot: installRootKimiCode,
     staticOutputs: kimiCodeStaticOutputs,
@@ -238,6 +263,7 @@ export const targets = {
         includeServices: false,
         rootProperties: {
           default_permission_mode: "auto",
+          merge_all_available_skills: true,
         },
       },
       {
@@ -272,23 +298,27 @@ export const targets = {
     ],
   },
   antigravity: {
-    label: "Antigravity workflows",
+    label: "Antigravity skills and manual workflows",
     commandRenders: ["commands-as-workflows"],
-    commandOutputRoot: "global_workflows",
+    skillRenders: ["skills"],
+    skillOutputRoot: antigravitySkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
+    commandOutputRoot: antigravityWorkflowRoot,
     renderCommand: renderAntigravityWorkflow,
     installRoot: installRootAntigravity,
   },
   "antigravity-cli": {
     label: "Antigravity CLI plugin",
-    commandRenders: ["skills"],
     subagentRenders: ["subagents"],
     subagentTarget: "antigravity-cli",
     subagentOutputRoot: path.join("config", "plugins", "agent-surface", "agents"),
     externalSkillOutputRoot: path.join("config", "plugins", "agent-surface", "skills"),
     staticRenders: ["plugins", "rules"],
-    commandOutputRoot: path.join("config", "plugins", "agent-surface", "skills"),
-    commandOutputName: antigravityCliSkillOutputName,
-    renderCommand: renderAntigravityCliSkill,
+    skillRenders: ["skills"],
+    skillOutputRoot: path.join("config", "plugins", "agent-surface", "skills"),
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     renderSubagent: renderGeminiSubagent,
     installRoot: installRootAntigravityCli,
     staticOutputs: antigravityCliStaticOutputs,
@@ -305,6 +335,10 @@ export const targets = {
     subagentTarget: "cursor",
     subagentOutputRoot: ".cursor/agents",
     staticRenders: ["rules"],
+    skillRenders: ["skills"],
+    skillOutputRoot: cursorSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     commandOutputRoot: ".cursor/commands",
     renderCommand: renderCursorCommand,
     renderSubagent: renderCursorSubagent,
@@ -324,6 +358,10 @@ export const targets = {
     subagentTarget: "droid",
     subagentOutputRoot: path.join(".factory", "droids"),
     externalSkillOutputRoot: path.join(".factory", "skills"),
+    skillRenders: ["skills"],
+    skillOutputRoot: droidSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     staticRenders: ["rules"],
     commandOutputRoot: path.join(".factory", "commands"),
     renderCommand: renderDroidCommand,
@@ -337,29 +375,49 @@ export const targets = {
     },
   },
   copilot: {
-    label: "GitHub Copilot global instructions",
+    label: "GitHub Copilot skills and global instructions",
+    skillRenders: ["skills"],
+    skillOutputRoot: copilotSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     staticRenders: ["instructions"],
     installRoot: installRootVsCode,
     staticOutputs: copilotStaticOutputs,
   },
   vscode: {
     label: "VS Code user prompt and instruction files",
+    skillRenders: ["skills"],
+    skillOutputRoot: sharedAgentSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
+    commandRenders: ["prompts"],
+    commandOutputRoot: (context) => path.join(vsCodeUserRoot("Code", context), "prompts"),
+    commandOutputName: flatMarkdownCommandOutputName,
+    renderCommand: renderVsCodePromptDocument,
     staticRenders: ["instructions", "prompts"],
     installRoot: installRootVsCode,
     staticOutputs: vscodeStaticOutputs,
     mcpConfig: {
-      relativeOutput: () => "mcp.json",
+      relativeOutput: (context) => path.join(vsCodeUserRoot("Code", context), "mcp.json"),
       format: "vscode-servers",
       defaultEnabled: true,
     },
   },
   vscodium: {
     label: "VSCodium user prompt and instruction files",
+    skillRenders: ["skills"],
+    skillOutputRoot: sharedAgentSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
+    commandRenders: ["prompts"],
+    commandOutputRoot: (context) => path.join(vsCodeUserRoot("VSCodium", context), "prompts"),
+    commandOutputName: flatMarkdownCommandOutputName,
+    renderCommand: renderVsCodePromptDocument,
     staticRenders: ["instructions", "prompts"],
     installRoot: installRootVscodium,
     staticOutputs: vscodiumStaticOutputs,
     mcpConfig: {
-      relativeOutput: () => "mcp.json",
+      relativeOutput: (context) => path.join(vsCodeUserRoot("VSCodium", context), "mcp.json"),
       format: "vscode-servers",
       defaultEnabled: true,
     },
@@ -371,6 +429,10 @@ export const targets = {
     subagentTarget: "opencode",
     subagentOutputRoot: opencodeAgentRoot,
     commandOutputRoot: opencodeCommandRoot,
+    skillRenders: ["skills"],
+    skillOutputRoot: opencodeSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     renderCommand: renderOpenCodeCommand,
     renderSubagent: renderOpenCodeSubagent,
     staticRenders: ["rules"],
@@ -388,12 +450,12 @@ export const targets = {
   },
   openhands: {
     label: "OpenHands AgentSkills, instructions, and MCP",
-    commandRenders: ["skills"],
     staticRenders: ["rules"],
-    commandOutputRoot: openhandsSkillRoot,
-    commandOutputName: codexSkillOutputName,
+    skillRenders: ["skills"],
+    skillOutputRoot: openhandsSkillRoot,
+    skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: openhandsSkillRoot,
-    renderCommand: renderSharedAgentSkill,
+    renderSkill: renderVanillaSkill,
     installRoot: installRootOpenHands,
     staticOutputs: openhandsStaticOutputs,
     mcpConfig: {
@@ -405,6 +467,10 @@ export const targets = {
   },
   trae: {
     label: "Trae global user rules",
+    skillRenders: ["skills"],
+    skillOutputRoot: traeSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     staticRenders: ["rules"],
     installRoot: installRootHomeOnly,
     staticOutputs: traeStaticOutputs,
@@ -420,6 +486,10 @@ export const targets = {
     staticRenders: ["rules"],
     commandOutputRoot: windsurfWorkflowRoot,
     commandOutputName: flatMarkdownCommandOutputName,
+    skillRenders: ["skills"],
+    skillOutputRoot: windsurfSkillRoot,
+    skillOutputName: codexSkillOutputName,
+    renderSkill: renderVanillaSkill,
     externalSkillOutputRoot: windsurfSkillRoot,
     renderCommand: renderWindsurfWorkflow,
     installRoot: installRootWindsurf,
@@ -432,12 +502,12 @@ export const targets = {
   },
   zed: {
     label: "Zed skills and instructions",
-    commandRenders: ["skills"],
     staticRenders: ["rules"],
-    commandOutputRoot: zedSkillRoot,
-    commandOutputName: codexSkillOutputName,
+    skillRenders: ["skills"],
+    skillOutputRoot: zedSkillRoot,
+    skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: zedSkillRoot,
-    renderCommand: renderSharedAgentSkill,
+    renderSkill: renderVanillaSkill,
     installRoot: installRootZed,
     staticOutputs: zedStaticOutputs,
     mcpConfig: {
@@ -481,13 +551,16 @@ export const MAX_EXTERNAL_FILES = 50_000;
 
 export function targetProducers(adapter) {
   const producers = [];
+  if (adapter.renderSkill || (adapter.additionalSkillOutputs?.length ?? 0) > 0) {
+    producers.push({ id: "skills", sourceKind: "skills", emits: adapter.skillRenders ?? ["skills"], produce: (catalog, context) => produceSkillOutputs(adapter, catalog.skills, context) });
+  }
   if (adapter.renderCommand || (adapter.additionalCommandOutputs?.length ?? 0) > 0) {
-    producers.push({ id: "commands", sourceKind: "commands", emits: adapter.commandRenders ?? ["commands"], produce: (commands, context) => produceCommandOutputs(adapter, commands, context) });
+    producers.push({ id: "commands", sourceKind: "commands", emits: adapter.commandRenders ?? ["commands"], produce: (catalog, context) => produceCommandOutputs(adapter, catalog.commands, context) });
   }
   if (adapter.staticOutputs) {
-    producers.push({ id: "static", sourceKind: "rules", emits: adapter.staticRenders ?? [], produce: (commands, context) => adapter.staticOutputs(commands, context) });
+    producers.push({ id: "static", sourceKind: "rules", emits: adapter.staticRenders ?? [], produce: (catalog, context) => adapter.staticOutputs(catalog, context) });
   }
-  if (adapter.externalSkillOutputRoot) {
+  if (adapter.externalSkillOutputRoot || adapter.skillOutputRoot) {
     producers.push({ id: "external-skills", sourceKind: "external", emits: ["external"], produce: (_commands, context) => externalSkillOutputs(adapter, context) });
   }
   if (adapter.subagentOutputRoot && adapter.renderSubagent) {
@@ -502,11 +575,11 @@ export function targetProducers(adapter) {
   return producers;
 }
 
-export async function targetOutputs(adapter, commands, context) {
+export async function targetOutputs(adapter, catalog, context) {
   const outputs = [];
 
   for (const producer of targetProducers(adapter)) {
-    const produced = await producer.produce(commands, context);
+    const produced = await producer.produce(catalog, context);
     outputs.push(...produced.map((output) => ({
       ...output,
       producerId: producer.id,
@@ -566,15 +639,33 @@ export async function produceCommandOutputs(adapter, commands, context) {
   return outputs;
 }
 
+export async function produceSkillOutputs(adapter, skills, context) {
+  const outputs = [];
+  for (const skill of skills) {
+    if (adapter.renderSkill) {
+      outputs.push({
+        source: skill.relativePath,
+        relativeOutput: skillRelativeOutput(adapter, skill, context),
+        content: await adapter.renderSkill(skill, context),
+      });
+    }
+    for (const buildOutput of adapter.additionalSkillOutputs ?? []) {
+      outputs.push(await buildOutput(skill, context));
+    }
+  }
+  return outputs;
+}
+
 export async function externalSkillOutputs(adapter, context) {
-  if (!adapter.externalSkillOutputRoot) return [];
+  const externalOutputRoot = adapter.externalSkillOutputRoot ?? adapter.skillOutputRoot;
+  if (!externalOutputRoot) return [];
   // External assets are part of the default distribution: a full install (no category
   // filter) generates them so strict-sync keeps in-scope packs and prunes de-scoped ones.
   // Only skip when an explicit category filter excludes "external".
   if (context.mode === "install" && context.categoryFilter && !context.categoryFilter.has("external")) return [];
   const outputs = [];
   const roots = await externalSkillRoots();
-  const outputRoot = outputRootFor(adapter.externalSkillOutputRoot, context);
+  const outputRoot = outputRootFor(externalOutputRoot, context);
   const textExtensions = [".md", ".mdx", ".json", ".yaml", ".yml", ".toml", ".txt", ".sh", ".py", ".js", ".ts", ".ps1"];
 
   let totalBytes = 0;
@@ -758,18 +849,30 @@ export function commandRelativeOutput(adapter, command, context) {
   return path.join(outputRootFor(adapter.commandOutputRoot, context), adapter.commandOutputName ? adapter.commandOutputName(command, context) : path.basename(command.file));
 }
 
+export function skillRelativeOutput(adapter, skill, context) {
+  return path.join(outputRootFor(adapter.skillOutputRoot, context), adapter.skillOutputName ? adapter.skillOutputName(skill, context) : path.basename(skill.file));
+}
+
 export async function codexOpenAiAgentOutput(source) {
+  return codexOpenAiAgentPolicyOutput(source, path.join(".agents", "skills"), true);
+}
+
+export async function codexManualOpenAiAgentOutput(source) {
+  return codexOpenAiAgentPolicyOutput(source, codexPrivateSkillRoot(), false);
+}
+
+export function codexOpenAiAgentPolicyOutput(source, outputRoot, allowImplicitInvocation) {
   const description = yamlBlockString(source.metadata.description ?? firstHeading(source.body) ?? `Run ${source.name.replaceAll("-", " ")}.`);
   return {
     source: source.relativePath,
-    relativeOutput: path.join(".agents", "skills", source.name, "agents", "openai.yaml"),
+    relativeOutput: path.join(outputRoot, source.name, "agents", "openai.yaml"),
     content: [
       "interface:",
       `  display_name: "${source.name}"`,
       "  short_description: >-",
       `    ${description}`,
       "policy:",
-      `  allow_implicit_invocation: ${source.metadata.model_invocation ? "true" : "false"}`,
+      `  allow_implicit_invocation: ${allowImplicitInvocation}`,
       "",
     ].join("\n"),
   };
@@ -784,7 +887,7 @@ export function adapterMcpConfigs(adapter) {
   return adapter.mcpConfig ? [adapter.mcpConfig] : [];
 }
 
-export async function antigravityCliStaticOutputs(commands, context) {
+export async function antigravityCliStaticOutputs(catalog, context) {
   const metadata = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
   const rules = await readRules();
   const alwaysApplyRules = rules.filter((rule) => rule.alwaysApply !== false);
@@ -812,7 +915,7 @@ export async function antigravityCliStaticOutputs(commands, context) {
         "",
         "Validate with `agy plugin validate ~/.gemini/config/plugins/agent-surface`, then enable with `agy plugin enable agent-surface` after installation.",
         "",
-        `Packaged skills: ${commands.length}`,
+        `Packaged skills: ${catalog.skills.length}`,
         "",
       ].join("\n"),
     },
@@ -854,15 +957,16 @@ export async function codexStaticOutputs(_commands, context) {
 }
 
 export async function copilotStaticOutputs(_commands, context) {
+  const instructionRoot = path.join(vsCodeUserRoot("Code", context), "instructions");
   return [
     {
       sourceKind: "rules",
       renderKind: "instructions",
       source: "rules/*.mdc",
-      relativeOutput: path.join("instructions", "agent-surface-copilot.instructions.md"),
+      relativeOutput: path.join(instructionRoot, "agent-surface-copilot.instructions.md"),
       content: await renderVsCodeInstructionDocument("agent-surface Copilot global instructions", "copilot"),
     },
-    ...await scopedRuleReferenceOutputs(context, path.join("instructions", "references", "rules")),
+    ...await scopedRuleReferenceOutputs(context, path.join(instructionRoot, "references", "rules")),
   ];
 }
 
@@ -1022,42 +1126,30 @@ export async function traeStaticOutputs(_commands, context) {
 }
 
 export async function vscodeStaticOutputs(_commands, context) {
+  const instructionRoot = path.join(vsCodeUserRoot("Code", context), "instructions");
   return [
     {
       sourceKind: "rules",
       renderKind: "instructions",
       source: "rules/*.mdc",
-      relativeOutput: path.join("instructions", "agent-surface.instructions.md"),
+      relativeOutput: path.join(instructionRoot, "agent-surface.instructions.md"),
       content: await renderVsCodeInstructionDocument("agent-surface VS Code instructions", "vscode"),
     },
-    ...await scopedRuleReferenceOutputs(context, path.join("instructions", "references", "rules")),
-    {
-      sourceKind: "commands",
-      renderKind: "prompts",
-      source: "commands/ops-flow.md",
-      relativeOutput: path.join("prompts", "agent-surface.prompt.md"),
-      content: await renderVsCodePromptDocument(),
-    },
+    ...await scopedRuleReferenceOutputs(context, path.join(instructionRoot, "references", "rules")),
   ];
 }
 
 export async function vscodiumStaticOutputs(_commands, context) {
+  const instructionRoot = path.join(vsCodeUserRoot("VSCodium", context), "instructions");
   return [
     {
       sourceKind: "rules",
       renderKind: "instructions",
       source: "rules/*.mdc",
-      relativeOutput: path.join("instructions", "agent-surface.instructions.md"),
+      relativeOutput: path.join(instructionRoot, "agent-surface.instructions.md"),
       content: await renderVsCodeInstructionDocument("agent-surface VSCodium instructions", "vscodium"),
     },
-    ...await scopedRuleReferenceOutputs(context, path.join("instructions", "references", "rules")),
-    {
-      sourceKind: "commands",
-      renderKind: "prompts",
-      source: "commands/ops-flow.md",
-      relativeOutput: path.join("prompts", "agent-surface.prompt.md"),
-      content: await renderVsCodePromptDocument(),
-    },
+    ...await scopedRuleReferenceOutputs(context, path.join(instructionRoot, "references", "rules")),
   ];
 }
 

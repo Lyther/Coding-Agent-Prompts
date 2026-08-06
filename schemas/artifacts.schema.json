@@ -4,7 +4,7 @@
   "type": "object",
   "required": [
     "source_types",
-    "canonical_command_rule"
+    "canonical_skill_rule"
   ],
   "properties": {
     "source_types": {
@@ -26,7 +26,7 @@
         ]
       }
     },
-    "canonical_command_rule": {
+    "canonical_skill_rule": {
       "type": "string",
       "minLength": 1
     }

@@ -8,7 +8,8 @@ Last runtime probe: Cline CLI `3.0.46` on 2026-07-25. With auto-approval and its
 
 User scope:
 
-- workflows: `~/Documents/Cline/Workflows/*.md`
+- canonical skills: `~/.cline/skills/<name>/SKILL.md`
+- manual workflows: `~/Documents/Cline/Workflows/*.md`
 - rules: `~/Documents/Cline/Rules/agent-surface.md`
 - scoped rule references: `~/Documents/Cline/Rules/references/rules/<rule>.md`
 - configured agents: `~/.cline/agents/*.yaml`
@@ -19,7 +20,8 @@ User scope:
 
 Project scope:
 
-- workflows: `.clinerules/workflows/*.md`
+- canonical skills: `.cline/skills/<name>/SKILL.md`
+- manual workflows: `.clinerules/workflows/*.md`
 - rules: `.clinerules/agent-surface.md`
 - scoped rule references: `.clinerules/references/rules/<rule>.md`
 - configured agents: `.cline/agents/*.yaml`
@@ -30,12 +32,13 @@ Project scope:
 
 ## Runtime contracts
 
-Cline command sources remain workflows. They are not duplicated as Agent Skills. Invoke a current headless workflow by stem, for example `/workflow-runtime`; adding the `.md` suffix does not resolve the command.
+Safe reusable procedures are native Agent Skills and can be selected through Cline's skill tool. Only the five high-impact commands remain workflows; invoke those by stem and do not add the `.md` suffix.
 
 `registry/targets.json` records normalized render classes, not Cline product labels. The Cline mappings are:
 
 | Render token | agent-surface input | Cline output |
 |---|---|---|
+| `skills` | `skills/*/SKILL.md` | Agent Skill directories |
 | `commands-as-workflows` | `commands/*.md` | workflow Markdown |
 | `rules` | `rules/*.mdc` | bundled rules and scoped references |
 | `subagents` | `subagents/*.md` | Configured Agent YAML |

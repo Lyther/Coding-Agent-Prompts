@@ -1,6 +1,6 @@
 # Claude Code adapter
 
-Current implementation renders command sources to Claude Code Agent Skills and normalized subagent sources to Claude Code subagents. Claude Code's legacy `.claude/commands` format is intentionally not generated.
+Canonical skills are emitted unchanged to Claude Code. The five high-impact commands use the same skill surface with `disable-model-invocation: true`; normalized subagents use Claude Code subagent files.
 
 Implemented target paths:
 
@@ -11,7 +11,7 @@ Implemented target paths:
 - user merge: `~/.claude.json` `mcpServers.{synapse,grimoire}`
 - project merge: `.mcp.json` `mcpServers.{synapse,grimoire}`
 
-Generated workflow skills remain user-invocable as `/<name>`. Sources with `model_invocation: true` may also be selected by Claude when their description matches the task; all others render `disable-model-invocation: true`.
+Canonical skills may be selected automatically or invoked as `/<name>`. Manual commands remain user-invocable but cannot be selected by the model.
 
 The current subagent batch emits `subagents/{boss,researcher,analyzer,adversary,reviewer,worker}.md` to `.claude/agents/*.md`. First-party MCP wiring (Synapse and Grimoire) is generated and safely merged; external or secret-bearing MCPs remain opt-in.
 

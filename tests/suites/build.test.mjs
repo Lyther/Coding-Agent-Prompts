@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { vsCodeUserRoot } from "../../scripts/agent-surface/roots.mjs";
 import {
   assertCodexAgentTomlParses,
   files,
@@ -40,10 +41,11 @@ const mustExist = [
   ["codex", path.join(".agents", "skills", "workflow-runtime", "SKILL.md")],
   ["codex", path.join(".agents", "skills", "arch-contract", "SKILL.md")],
   ["codex", path.join(".codex", "AGENTS.md")],
-  ["cline", path.join("Documents", "Cline", "Workflows", "verify-readiness.md")],
+  ["cline", path.join(".cline", "skills", "verify-readiness", "SKILL.md")],
   ["cline", path.join("Documents", "Cline", "Rules", "agent-surface.md")],
   ["cline", path.join(".cline", "agents", "boss.yaml")],
   ["kilo", path.join(".config", "kilo", "kilo.jsonc")],
+  ["kilo", path.join(".kilo", "skills", "verify-readiness", "SKILL.md")],
   ["kimi-code", path.join("skills", "workflow-runtime", "SKILL.md")],
   ["kimi-code", "AGENTS.md"],
   ["kimi-code", path.join("agents", "boss.md")],
@@ -65,15 +67,21 @@ assert.equal(generated.some((file) => file.includes(`${path.sep}verify-spec${pat
 assert.equal(generated.some((file) => file.includes(`${path.sep}arch-api${path.sep}`) || file.endsWith(`${path.sep}arch-api.md`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}arch-model${path.sep}`) || file.endsWith(`${path.sep}arch-model.md`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}.claude${path.sep}commands${path.sep}`)), false);
+assert.equal(generated.some((file) => file.includes(`${path.sep}ops-server${path.sep}`) || file.endsWith(`${path.sep}ops-server.md`)), false);
 
 const claudeOpsAsk = readFileSync(path.join(root, "dist", "claude-code", ".claude", "skills", "ops-ask", "SKILL.md"), "utf8");
 const claudeOpsNuke = readFileSync(path.join(root, "dist", "claude-code", ".claude", "skills", "ops-nuke", "SKILL.md"), "utf8");
 assert.doesNotMatch(claudeOpsAsk, /^disable-model-invocation:/m);
 assert.match(claudeOpsNuke, /^disable-model-invocation: true$/m);
 const codexOpsAskPolicy = readFileSync(path.join(root, "dist", "codex", ".agents", "skills", "ops-ask", "agents", "openai.yaml"), "utf8");
-const codexOpsNukePolicy = readFileSync(path.join(root, "dist", "codex", ".agents", "skills", "ops-nuke", "agents", "openai.yaml"), "utf8");
 assert.match(codexOpsAskPolicy, /^  allow_implicit_invocation: true$/m);
-assert.match(codexOpsNukePolicy, /^  allow_implicit_invocation: false$/m);
+assert.match(readFileSync(path.join(root, "dist", "codex", ".codex", "skills", "ops-nuke", "SKILL.md"), "utf8"), /^---\nname: ops-nuke\n/);
+assert.match(readFileSync(path.join(root, "dist", "codex", ".codex", "skills", "ops-nuke", "agents", "openai.yaml"), "utf8"), /^  allow_implicit_invocation: false$/m);
+assert.equal(existsSync(path.join(root, "dist", "codex", ".agents", "skills", "ops-nuke", "SKILL.md")), false);
+const canonicalOpsAsk = readFileSync(path.join(root, "skills", "ops-ask", "SKILL.md"), "utf8");
+assert.equal(claudeOpsAsk, canonicalOpsAsk);
+assert.equal(readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-ask", "SKILL.md"), "utf8"), canonicalOpsAsk);
+assert.equal(existsSync(path.join(root, "dist", "deepagents", ".deepagents", "agent", "skills", "ops-nuke", "SKILL.md")), false);
 
 // Substitute-policy contract lands in always-on Codex instructions + verify-test skill.
 const codexInstructions = readFileSync(path.join(root, "dist", "codex", ".codex", "AGENTS.md"), "utf8");
@@ -143,7 +151,7 @@ const jsonMcpHosts = [
   [path.join(root, "dist", "kimi-code", "mcp.json"), "mcpServers"],
   [path.join(root, "dist", "cursor", ".cursor", "mcp.json"), "mcpServers"],
   [path.join(root, "dist", "openhands", ".openhands", "mcp.json"), "mcpServers"],
-  [path.join(root, "dist", "vscode", "mcp.json"), "servers"],
+  [path.join(root, "dist", "vscode", vsCodeUserRoot("Code", { scope: "user" }), "mcp.json"), "servers"],
   [path.join(root, "dist", "zed", ".config", "zed", "settings.json"), "context_servers"],
 ];
 for (const [file, rootKey] of jsonMcpHosts) {
@@ -155,17 +163,19 @@ for (const [file, rootKey] of jsonMcpHosts) {
 }
 const kimiMcp = JSON.parse(readFileSync(path.join(root, "dist", "kimi-code", "mcp.json"), "utf8"));
 assert.equal(Object.hasOwn(kimiMcp.mcpServers.synapse, "type"), false);
-assert.match(
+assert.doesNotMatch(
   readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-flow", "SKILL.md"), "utf8"),
-  /^disableModelInvocation: true$/m,
+  /^disableModelInvocation:/m,
 );
-assert.match(
-  readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-ask", "SKILL.md"), "utf8"),
-  /^disableModelInvocation: false$/m,
-);
+assert.match(readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-nuke", "SKILL.md"), "utf8"), /^type: flow$/m);
+assert.match(readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-nuke", "SKILL.md"), "utf8"), /^disableModelInvocation: true$/m);
 assert.match(
   readFileSync(path.join(root, "dist", "kimi-code", "config.toml"), "utf8"),
   /^default_permission_mode = "auto"$/m,
+);
+assert.match(
+  readFileSync(path.join(root, "dist", "kimi-code", "config.toml"), "utf8"),
+  /^merge_all_available_skills = true$/m,
 );
 const kiloMcp = JSON.parse(readFileSync(path.join(root, "dist", "kilo", ".config", "kilo", "kilo.jsonc"), "utf8"));
 assert.deepEqual(kiloMcp.mcp.synapse.command, [mcpAbs.synapse]);

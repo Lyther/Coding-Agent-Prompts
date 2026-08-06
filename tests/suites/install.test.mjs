@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { kimiCodeCursorSettingsPath, kimiCodeVsCodeSettingsPath } from "../../scripts/agent-surface/roots.mjs";
 import {
+  clineIdeUserDataRoot,
   clineUserMcpRoutes,
   hasLocalOpsServerCommand,
   root,
@@ -32,7 +33,8 @@ function planLacks(plan, patterns, label) {
 const clinePlan = dryRun("cline");
 planHas(clinePlan, [
   /^target: cline$/m,
-  /\.clinerules\/workflows\/workflow-boss\.md <- commands\/workflow-boss\.md/,
+  /\.cline\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/,
+  /\.clinerules\/workflows\/ops-nuke\.md <- commands\/ops-nuke\.md/,
   /\.clinerules\/agent-surface\.md <- rules\/\*\.mdc/,
   /\.cline\/agents\/boss\.yaml <- subagents\/boss\.md/,
   /\.agent-surface\/cline-manifest\.json/,
@@ -51,7 +53,8 @@ planLacks(clineUserMcpPlan, [/\.cline\/mcp\.json/], "cline user mcps");
 
 const kiloPlan = dryRun("kilo");
 planHas(kiloPlan, [
-  /\.kilo\/commands\/workflow-boss\.md <- commands\/workflow-boss\.md/,
+  /\.kilo\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/,
+  /\.kilo\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/,
   /\.kilo\/rules\/00-precedence-and-safety\.md <- rules\/00-precedence-and-safety\.mdc/,
   /\.kilo\/agents\/boss\.md <- subagents\/boss\.md/,
   /kilo\.jsonc instructions \+= \.kilo\/rules\/00-precedence-and-safety\.md/,
@@ -60,7 +63,7 @@ planLacks(kiloPlan, [/^  AGENTS\.md <- rules\/\*\.mdc$/m, /kilo\.jsonc instructi
 
 const kimiCodePlan = dryRun("kimi-code");
 planHas(kimiCodePlan, [
-  /\.kimi-code\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/,
+  /\.kimi-code\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/,
   /\.kimi-code\/agents\/boss\.md <- subagents\/boss\.md/,
   /\.kimi-code\/config\.toml default_permission_mode := "auto"/,
   /\.kimi-code\/mcp\.json MCP \+= grimoire, synapse/,
@@ -71,12 +74,12 @@ assert.notEqual(geminiPlan.status, 0);
 assert.match(`${geminiPlan.stdout}${geminiPlan.stderr}`, /unsupported install target: gemini-cli/);
 
 for (const [target, patterns] of [
-  ["claude-code", [/\.claude\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/, /\.claude\/agents\/boss\.md <- subagents\/boss\.md/]],
-  ["cursor", [/\.cursor\/commands\/workflow-boss\.md <- commands\/workflow-boss\.md/, /\.cursor\/agents\/boss\.md <- subagents\/boss\.md/]],
-  ["droid", [/\.factory\/commands\/workflow-boss\.md <- commands\/workflow-boss\.md/, /\.factory\/mcp\.json MCP \+= grimoire, synapse/, /karpathy-guidelines\/SKILL\.md/]],
-  ["codex", [/\.agents\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/]],
-  ["openhands", [/\.agents\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/]],
-  ["antigravity-cli", [/config\/plugins\/agent-surface\/skills\/workflow-boss\.md <- commands\/workflow-boss\.md/]],
+  ["claude-code", [/\.claude\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/, /\.claude\/agents\/boss\.md <- subagents\/boss\.md/]],
+  ["cursor", [/\.cursor\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/, /\.cursor\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/, /\.cursor\/agents\/boss\.md <- subagents\/boss\.md/]],
+  ["droid", [/\.factory\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/, /\.factory\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/, /\.factory\/mcp\.json MCP \+= grimoire, synapse/, /karpathy-guidelines\/SKILL\.md/]],
+  ["codex", [/\.agents\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
+  ["openhands", [/\.agents\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
+  ["antigravity-cli", [/config\/plugins\/agent-surface\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
 ]) {
   planHas(dryRun(target), patterns, target);
 }
@@ -98,6 +101,36 @@ assert.doesNotMatch(gooseUserPlan, /recipes\//);
 }
 const piCopilotStatus = status(["install", "--target", "pi,copilot", "--scope", "user", "--allow-scope-root", "--category", "mcps", "--dry-run"]);
 assert.notEqual(piCopilotStatus.status, 0);
+
+// Manual Codex workflows stay out of the shared Agent Skills root. A stale
+// shared copy must be removed while the explicit-only private Codex skill is written.
+const sharedRootHome = "/tmp/agent-surface-shared-root-home";
+rmSync(sharedRootHome, { recursive: true, force: true });
+const sharedManualRel = path.join(".agents", "skills", "ops-nuke", "SKILL.md");
+const sharedManualPath = path.join(sharedRootHome, sharedManualRel);
+mkdirSync(path.dirname(sharedManualPath), { recursive: true });
+writeFileSync(sharedManualPath, "old shared command\n");
+mkdirSync(path.join(sharedRootHome, ".agent-surface"), { recursive: true });
+writeFileSync(
+  path.join(sharedRootHome, ".agent-surface", "openhands-manifest.json"),
+  `${JSON.stringify({
+    target: "openhands",
+    scope: "user",
+    managed: [{ target: "openhands", output: sharedManualRel, version: "test" }],
+  }, null, 2)}\n`,
+);
+run(["install", "--target", "codex,openhands", "--scope", "user", "--allow-scope-root"], {
+  env: { ...process.env, HOME: sharedRootHome },
+});
+assert.equal(existsSync(sharedManualPath), false);
+const privateManualPath = path.join(sharedRootHome, ".codex", "skills", "ops-nuke", "SKILL.md");
+assert.match(readFileSync(privateManualPath, "utf8"), /^---\nname: ops-nuke\n/);
+assert.match(
+  readFileSync(path.join(sharedRootHome, ".codex", "skills", "ops-nuke", "agents", "openai.yaml"), "utf8"),
+  /^  allow_implicit_invocation: false$/m,
+);
+assert.equal(existsSync(path.join(sharedRootHome, ".agents", "skills", "ops-flow", "SKILL.md")), true);
+rmSync(sharedRootHome, { recursive: true, force: true });
 
 // Strict-sync: prune managed external skill that is no longer generated.
 const syncDest = "/tmp/agent-surface-strict-sync";
@@ -124,8 +157,8 @@ const liveDest = "/tmp/agent-surface-live";
 rmSync(liveDest, { recursive: true, force: true });
 const liveInstall = run(["install", "--target", "cline", "--dest", liveDest]);
 assert.match(liveInstall, /^installed:$/m);
-assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "workflow-boss.md"), "utf8"), /^## OBJECTIVE/);
-assert.match(readFileSync(path.join(liveDest, ".clinerules", "workflows", "verify-readiness.md"), "utf8"), /^## OBJECTIVE/);
+assert.match(readFileSync(path.join(liveDest, ".cline", "skills", "workflow-boss", "SKILL.md"), "utf8"), /^---\nname: workflow-boss\n/);
+assert.match(readFileSync(path.join(liveDest, ".cline", "skills", "verify-readiness", "SKILL.md"), "utf8"), /^---\nname: verify-readiness\n/);
 assert.match(readFileSync(path.join(liveDest, ".cline", "agents", "boss.yaml"), "utf8"), /^---\nname: boss\n/);
 assert.match(readFileSync(path.join(liveDest, ".cline", "skills", "karpathy-guidelines", "SKILL.md"), "utf8"), /^---\n/);
 assert.match(readFileSync(path.join(liveDest, ".clineignore"), "utf8"), /agent-surface canonical AI-tool ignore baseline/);
@@ -163,6 +196,7 @@ writeFileSync(kimiCodeCursorSettings, `${JSON.stringify({ "editor.fontSize": 15 
 run(["install", "--target", "kimi-code", "--scope", "user", "--dest", kimiCodeDest]);
 const kimiCodeConfig = readFileSync(path.join(kimiCodeDest, "config.toml"), "utf8");
 assert.match(kimiCodeConfig, /^default_permission_mode = "auto"$/m);
+assert.match(kimiCodeConfig, /^merge_all_available_skills = true$/m);
 assert.match(kimiCodeConfig, /^telemetry = false$/m);
 assert.match(kimiCodeConfig, /^\[providers\.local\]$/m);
 assert.match(kimiCodeConfig, /^model = "keep-me"$/m);
@@ -180,8 +214,10 @@ assert.deepEqual(JSON.parse(readFileSync(kimiCodeCursorSettings, "utf8")), {
 });
 assert.match(
   readFileSync(path.join(kimiCodeDest, "skills", "workflow-boss", "SKILL.md"), "utf8"),
-  /^disableModelInvocation: true$/m,
+  /^---\nname: workflow-boss\n/,
 );
+assert.doesNotMatch(readFileSync(path.join(kimiCodeDest, "skills", "workflow-boss", "SKILL.md"), "utf8"), /disableModelInvocation/);
+assert.match(readFileSync(path.join(kimiCodeDest, "skills", "ops-nuke", "SKILL.md"), "utf8"), /^disableModelInvocation: true$/m);
 const kimiCodeMcpOnlyPlan = run([
   "install", "--target", "kimi-code", "--scope", "user", "--dest", kimiCodeDest, "--category", "mcps", "--dry-run",
 ]);
@@ -193,10 +229,10 @@ rmSync(kimiCodeDest, { recursive: true, force: true });
 const unmanagedDest = "/tmp/agent-surface-unmanaged";
 rmSync(unmanagedDest, { recursive: true, force: true });
 mkdirSync(path.join(unmanagedDest, ".clinerules", "workflows"), { recursive: true });
-writeFileSync(path.join(unmanagedDest, ".clinerules", "workflows", "workflow-boss.md"), "local workflow\n");
+writeFileSync(path.join(unmanagedDest, ".clinerules", "workflows", "ops-nuke.md"), "local workflow\n");
 const overwriteInstall = run(["install", "--target", "cline", "--dest", unmanagedDest]);
 assert.match(overwriteInstall, /^installed:$/m);
-assert.match(readFileSync(path.join(unmanagedDest, ".clinerules", "workflows", "workflow-boss.md"), "utf8"), /^## OBJECTIVE/);
+assert.match(readFileSync(path.join(unmanagedDest, ".clinerules", "workflows", "ops-nuke.md"), "utf8"), /^## OBJECTIVE/);
 rmSync(unmanagedDest, { recursive: true, force: true });
 
 const liveStaleDest = "/tmp/agent-surface-live-stale";
@@ -244,7 +280,7 @@ mkdirSync(scopeRootDest, { recursive: true });
 const scopeRootInstall = run(["install", "--target", "cline", "--scope", "project", "--allow-scope-root"], { cwd: scopeRootDest });
 assert.match(scopeRootInstall, /^root source: scope-derived root$/m);
 assert.match(scopeRootInstall, /^installed:$/m);
-assert.equal(existsSync(path.join(scopeRootDest, ".clinerules", "workflows", "workflow-boss.md")), true);
+assert.equal(existsSync(path.join(scopeRootDest, ".cline", "skills", "workflow-boss", "SKILL.md")), true);
 rmSync(scopeRootDest, { recursive: true, force: true });
 
 const unsafeInstall = status(["install", "--target", "cline"]);
@@ -261,7 +297,8 @@ mkdirSync(userScopeHome, { recursive: true });
 const userScopeEnv = { ...process.env, HOME: userScopeHome };
 const clineUserScope = status(["install", "--target", "cline", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(clineUserScope.status, 0, `${clineUserScope.stdout}${clineUserScope.stderr}`);
-assert.match(clineUserScope.stdout, /Documents\/Cline\/Workflows\/workflow-boss\.md <- commands\/workflow-boss\.md/);
+assert.match(clineUserScope.stdout, /\.cline\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/);
+assert.match(clineUserScope.stdout, /Documents\/Cline\/Workflows\/ops-nuke\.md <- commands\/ops-nuke\.md/);
 assert.match(clineUserScope.stdout, /Documents\/Cline\/Rules\/agent-surface\.md <- rules\/\*\.mdc/);
 assert.match(clineUserScope.stdout, /\.cline\/agents\/boss\.yaml <- subagents\/boss\.md/);
 assert.match(clineUserScope.stdout, /\.cline\/skills\/karpathy-guidelines\/SKILL\.md/);
@@ -272,13 +309,14 @@ assert.match(clineUserScope.stdout, /Windsurf\/User\/globalStorage\/saoudrizwan\
 
 const kiloUserScope = status(["install", "--target", "kilo", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(kiloUserScope.status, 0, `${kiloUserScope.stdout}${kiloUserScope.stderr}`);
-assert.match(kiloUserScope.stdout, /\.config\/kilo\/commands\/workflow-boss\.md <- commands\/workflow-boss\.md/);
+assert.match(kiloUserScope.stdout, /\.kilo\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/);
+assert.match(kiloUserScope.stdout, /\.config\/kilo\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/);
 assert.doesNotMatch(kiloUserScope.stdout, /\.config\/kilo\/AGENTS\.md <- rules\/\*\.mdc/);
 assert.match(kiloUserScope.stdout, /\.config\/kilo\/rules\/00-precedence-and-safety\.md <- rules\/00-precedence-and-safety\.mdc/);
 assert.match(kiloUserScope.stdout, /\.config\/kilo\/references\/rules\/14-shell\.md <- rules\/14-shell\.mdc/);
 assert.match(kiloUserScope.stdout, /\.config\/kilo\/agents\/boss\.md <- subagents\/boss\.md/);
 assert.match(kiloUserScope.stdout, /\.config\/kilo\/kilo\.jsonc instructions \+= \.\/rules\/00-precedence-and-safety\.md, .*\.\/rules\/06-test-policy\.md/);
-assert.doesNotMatch(kiloUserScope.stdout, /\.kilo\/skills/);
+assert.match(kiloUserScope.stdout, /\.kilo\/skills\/ops-flow\/SKILL\.md/);
 assert.doesNotMatch(kiloUserScope.stdout, /skills\.paths/);
 assert.doesNotMatch(kiloUserScope.stdout, /permission\.skill/);
 assert.doesNotMatch(kiloUserScope.stdout, /kilo\.jsonc instructions \+= .*14-shell/);
@@ -293,8 +331,9 @@ const kimiCodeUserScope = status(["install", "--target", "kimi-code", "--scope",
 });
 assert.equal(kimiCodeUserScope.status, 0, `${kimiCodeUserScope.stdout}${kimiCodeUserScope.stderr}`);
 assert.match(kimiCodeUserScope.stdout, new RegExp(`^root: ${kimiCodeHome.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"));
-assert.match(kimiCodeUserScope.stdout, /skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/);
+assert.match(kimiCodeUserScope.stdout, /skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/);
 assert.match(kimiCodeUserScope.stdout, /^  config\.toml default_permission_mode := "auto"$/m);
+assert.match(kimiCodeUserScope.stdout, /^  config\.toml merge_all_available_skills := true$/m);
 assert.match(kimiCodeUserScope.stdout, /^  mcp\.json MCP \+= grimoire, synapse$/m);
 assert.match(kimiCodeUserScope.stdout, /Code\/User\/settings\.json kimi\.yoloMode := true/);
 assert.match(kimiCodeUserScope.stdout, /Cursor\/User\/settings\.json kimi\.yoloMode := true/);
@@ -302,12 +341,12 @@ assert.match(kimiCodeUserScope.stdout, /Cursor\/User\/settings\.json kimi\.yoloM
 const claudeUserScope = status(["install", "--target", "claude-code", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(claudeUserScope.status, 0, `${claudeUserScope.stdout}${claudeUserScope.stderr}`);
 assert.doesNotMatch(claudeUserScope.stdout, /\.mcp\.json/);
-assert.match(claudeUserScope.stdout, /\.claude\/skills\/ops-ask\/SKILL\.md <- commands\/ops-ask\.md/);
+assert.match(claudeUserScope.stdout, /\.claude\/skills\/ops-ask\/SKILL\.md <- skills\/ops-ask\/SKILL\.md/);
 assert.match(claudeUserScope.stdout, /\.claude\/agents\/boss\.md <- subagents\/boss\.md/);
 
 const openhandsUserScope = status(["install", "--target", "openhands", "--scope", "user", "--dry-run"], { env: userScopeEnv });
 assert.equal(openhandsUserScope.status, 0, `${openhandsUserScope.stdout}${openhandsUserScope.stderr}`);
-assert.match(openhandsUserScope.stdout, /\.agents\/skills\/workflow-boss\/SKILL\.md <- commands\/workflow-boss\.md/);
+assert.match(openhandsUserScope.stdout, /\.agents\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/);
 assert.match(openhandsUserScope.stdout, /\.openhands\/skills\/agent-surface-rules\.md <- rules\/\*\.mdc/);
 assert.match(openhandsUserScope.stdout, /\.openhands\/references\/rules\/10-python\.md <- rules\/10-python\.mdc/);
 assert.match(openhandsUserScope.stdout, /\.openhands\/mcp\.json MCP \+= grimoire, synapse/);
@@ -357,7 +396,7 @@ writeFileSync(
 );
 run(["install", "--target", "kilo", "--dest", existingKiloDest]);
 const mergedKiloConfig = readFileSync(path.join(existingKiloDest, "kilo.jsonc"), "utf8");
-assert.equal(existsSync(path.join(existingKiloDest, ".kilo", "skills")), false);
+assert.equal(existsSync(path.join(existingKiloDest, ".kilo", "skills", "ops-flow", "SKILL.md")), true);
 assert.match(mergedKiloConfig, /\/\/ keep this comment/);
 assert.match(mergedKiloConfig, /"marker": ",\]"/);
 assert.match(mergedKiloConfig, /"\.\/existing-rule\.md"/);
@@ -765,7 +804,7 @@ const mergeFixtures = [
     }
   },
   { target: "trae", rel: ".trae/mcp.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
-  { target: "vscode", rel: "mcp.json", root: "servers", pre: { servers: { existing: { type: "stdio", command: "local-existing", args: ["--keep"] } } } },
+  { target: "vscode", rel: path.join(clineIdeUserDataRoot("Code"), "User", "mcp.json"), root: "servers", pre: { servers: { existing: { type: "stdio", command: "local-existing", args: ["--keep"] } } } },
   { target: "windsurf", rel: ".windsurf/mcp_config.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
   {
     target: "zed", rel: ".zed/settings.json", root: "context_servers", pre: { context_servers: { existing: { command: "local-existing", args: ["--keep"] } }, theme: "mono" },

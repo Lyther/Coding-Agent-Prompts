@@ -1,10 +1,12 @@
 # Goose Adapter
 
-Generates Goose recipe YAML files from `commands/*.md`.
+Generates native Agent Skills for safe reusable procedures and Goose recipes for the five high-impact manual commands.
 
 ## Outputs
 
-- `recipes/<command>.yaml` for project-local recipe loading or a configured `GOOSE_RECIPE_PATH`.
+- `~/.agents/skills/<name>/SKILL.md` or `.agents/skills/<name>/SKILL.md`
+- reviewed external packs under the same native skill root
+- `recipes/<command>.yaml` for project-local manual recipe loading or a configured `GOOSE_RECIPE_PATH`.
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # Antigravity CLI plugin adapter
 
-Render `commands/*.md` as Antigravity CLI plugin skills, package always-on rules as plugin rules, keep scoped language rules as references, and include normalized subagents.
+Package canonical Agent Skills, always-on rules, scoped rule references, and normalized subagents. High-impact manual commands are omitted because this plugin surface does not enforce explicit-only invocation.
 
 Default user install target:
 
@@ -8,7 +8,7 @@ Default user install target:
 - `~/.gemini/config/plugins/agent-surface/README.md`
 - `~/.gemini/config/plugins/agent-surface/rules/<always-on-rule>.md`
 - `~/.gemini/config/plugins/agent-surface/references/rules/<scoped-rule>.md`
-- `~/.gemini/config/plugins/agent-surface/skills/<command>.md`
+- `~/.gemini/config/plugins/agent-surface/skills/<name>/SKILL.md`
 - `~/.gemini/config/plugins/agent-surface/skills/<external-skill>/SKILL.md`
 - `~/.gemini/config/plugins/agent-surface/agents/<name>.md`
 - `~/.gemini/config/plugins/agent-surface/mcp_config.json` `mcpServers.{synapse,grimoire}`
@@ -19,7 +19,7 @@ Validate generated output with:
 agy plugin validate ~/.gemini/config/plugins/agent-surface
 ```
 
-The local `agy 1.0.12` validator accepts flat command skills, nested external skill directories, and `agents/*.md` in this package. It reports rules as package files but only summarizes skills and agents, so rule loading should be re-probed if Antigravity changes its plugin loader.
+Canonical skills use the standard directory form. Re-run `agy plugin validate` after Antigravity changes its plugin loader before claiming live plugin compatibility.
 
 External skill packs render only when the optional-service entry declares `skill_roots`. `anthropic-cybersecurity-skills` is kept as a pinned source asset but is not emitted into the Antigravity CLI plugin by default.
 

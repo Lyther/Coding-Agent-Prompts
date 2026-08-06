@@ -1,8 +1,8 @@
 {
-  "reviewed_at": "2026-07-30",
+  "reviewed_at": "2026-08-06",
   "targets": {
     "claude-code": {
-      "summary": "Claude Code supports Agent Skills, subagents, and MCP; agent-surface generates first-party workflow skills with per-workflow invocation policy, subagents, first-party MCP wiring (Synapse + Grimoire), and external skills.",
+      "summary": "Claude Code supports Agent Skills, subagents, and MCP; agent-surface generates canonical auto-invocable skills plus explicit-only high-impact workflows, subagents, first-party MCP wiring (Synapse + Grimoire), and external skills.",
       "generated_render_tokens": [
         "skills",
         "subagents",
@@ -35,7 +35,7 @@
             "~/.claude/skills/<name>/SKILL.md",
             ".claude/skills/<name>/SKILL.md"
           ],
-          "notes": "First-party command sources compile to Agent Skills. model_invocation controls whether Claude may select each skill automatically; every skill remains available through /<name>."
+          "notes": "Canonical skills are emitted unchanged and may be selected automatically. Five high-impact commands use the same native surface with disable-model-invocation: true."
         },
         "subagents": {
           "support": "native",
@@ -79,7 +79,7 @@
       }
     },
     "codex": {
-      "summary": "Codex supports skills, custom agent TOML files, AGENTS.md instructions, and MCP config; agent-surface generates skills with per-workflow invocation policy, custom agents, global instructions, first-party MCP wiring (Synapse + Grimoire), and external skills.",
+      "summary": "Codex supports Agent Skills, custom agent TOML files, AGENTS.md instructions, and MCP config; agent-surface generates canonical auto-invocable skills, five explicit-only private skills, custom agents, global instructions, first-party MCP wiring (Synapse + Grimoire), and external skills.",
       "generated_render_tokens": [
         "skills",
         "subagents",
@@ -110,10 +110,11 @@
             "project"
           ],
           "paths": [
-            "~/.agents/skills/<command>/SKILL.md",
-            ".agents/skills/<command>/SKILL.md"
+            "~/.agents/skills/<name>/SKILL.md",
+            ".agents/skills/<name>/SKILL.md",
+            "~/.codex/skills/<manual>/SKILL.md"
           ],
-          "notes": "Source commands compile to Agent Skills with openai.yaml sidecars. model_invocation enables implicit selection for a small allowlist; other workflows remain explicit-only. Codex does not receive a separate native workflow or slash-command surface."
+          "notes": "Canonical skills use the shared Agent Skills root with allow_implicit_invocation: true. Five high-impact workflows use the private Codex skill root with allow_implicit_invocation: false and require explicit $<name> invocation."
         },
         "subagents": {
           "support": "native",
@@ -201,10 +202,10 @@
             "project"
           ],
           "paths": [
-            "~/.deepagents/agent/skills/<command>/SKILL.md",
-            ".deepagents/skills/<command>/SKILL.md"
+            "~/.deepagents/<agent>/skills/<name>/SKILL.md",
+            ".deepagents/skills/<name>/SKILL.md"
           ],
-          "notes": "Command sources render as Deep Agents Code SKILL.md directories; --agent changes the user-level agent directory."
+          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted because this target has no enforced manual-only procedure surface."
         },
         "rules": {
           "support": "native",
@@ -261,9 +262,11 @@
       }
     },
     "goose": {
-      "summary": "Goose supports reusable recipe YAML files; agent-surface renders command sources as project-oriented recipes.",
+      "summary": "Goose supports reusable recipe YAML files; agent-surface renders canonical skills plus five manual project recipes.",
       "generated_render_tokens": [
+        "skills",
         "recipes",
+        "external",
         "mcps"
       ],
       "evidence": [
@@ -282,7 +285,7 @@
           "paths": [
             "recipes/<command>.yaml"
           ],
-          "notes": "Recipes can be loaded from the current directory or configured recipe paths."
+          "notes": "Five high-impact commands render as project-oriented recipes; safe reusable procedures are native skills."
         },
         "mcp": {
           "support": "native",
@@ -294,6 +297,32 @@
             "~/.config/goose/config.yaml"
           ],
           "notes": "First-party secretless MCP services are non-destructively merged into Goose YAML `extensions` (type: stdio); user-scope only (config.yaml is user-global)."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.agents/skills/<name>/SKILL.md",
+            ".agents/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills use Goose native Agent Skills discovery. High-impact commands remain project recipes."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.agents/skills/<external-skill>/...",
+            ".agents/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
@@ -324,10 +353,10 @@
             "project"
           ],
           "paths": [
-            "~/.grok/skills/<command>/SKILL.md",
-            ".grok/skills/<command>/SKILL.md"
+            "~/.grok/skills/<name>/SKILL.md",
+            ".grok/skills/<name>/SKILL.md"
           ],
-          "notes": "Command sources render as user-invocable skills."
+          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted without a proven explicit-only control."
         },
         "rules": {
           "support": "native",
@@ -351,7 +380,7 @@
             "~/.grok/skills/<skill>/...",
             ".grok/skills/<skill>/..."
           ],
-          "notes": "External skill packs mirror into the same skill root as generated command skills."
+          "notes": "External skill packs mirror into the same skill root as canonical skills."
         },
         "mcp": {
           "support": "native",
@@ -398,10 +427,10 @@
             "project"
           ],
           "paths": [
-            "~/.pi/agent/skills/<command>/SKILL.md",
-            ".pi/skills/<command>/SKILL.md"
+            "~/.pi/agent/skills/<name>/SKILL.md",
+            ".pi/skills/<name>/SKILL.md"
           ],
-          "notes": "Command sources render as Agent Skills."
+          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted without a proven explicit-only control."
         },
         "rules": {
           "support": "native",
@@ -471,10 +500,10 @@
             "project"
           ],
           "paths": [
-            "~/.config/poolside/skills/<command>/SKILL.md",
-            ".poolside/skills/<command>/SKILL.md"
+            "~/.config/poolside/skills/<name>/SKILL.md",
+            ".poolside/skills/<name>/SKILL.md"
           ],
-          "notes": "Command sources render as local Poolside Agent Skills."
+          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted without a proven explicit-only control."
         },
         "rules": {
           "support": "native",
@@ -520,6 +549,7 @@
     "cline": {
       "summary": "Cline supports workflows, rules, Agent Skills, Configured Agents, MCP, plugins, hooks, scheduling, connectors, built-in spawn_agent delegation, and agent teams. The agent-surface subagents primitive compiles to Cline Configured Agent YAML; spawn_agent is separate runtime behavior that needs no generated artifact. agent-surface also generates workflows, rules, external skills, the ignore file, and first-party MCP wiring for the CLI plus installed VS Code/Cursor/Windsurf extension routes.",
       "generated_render_tokens": [
+        "skills",
         "commands-as-workflows",
         "rules",
         "subagents",
@@ -593,7 +623,7 @@
             "~/Documents/Cline/Workflows/*.md",
             ".clinerules/workflows/*.md"
           ],
-          "notes": "The shared Documents/Cline/Workflows directory is discovered by both the CLI and IDE extension. Project workflows retain the supported .clinerules compatibility route. Current headless invocation uses the filename stem, for example /workflow-runtime; including .md does not resolve the command."
+          "notes": "Five high-impact commands render as manual workflows; safe reusable procedures are native skills."
         },
         "rules": {
           "support": "native",
@@ -640,10 +670,10 @@
             "project"
           ],
           "paths": [
-            "~/.cline/skills/<skill>/...",
-            ".cline/skills/<skill>/..."
+            "~/.cline/skills/<name>/SKILL.md",
+            ".cline/skills/<name>/SKILL.md"
           ],
-          "notes": "Pinned external Agent Skill packs are mirrored into Cline's native skill root; command sources remain workflows and are not duplicated as skills."
+          "notes": "Canonical skills are emitted unchanged for model selection through Cline use_skill. Five high-impact commands remain native workflows."
         },
         "mcp": {
           "support": "native",
@@ -738,16 +768,31 @@
             "~/.cline/data/teams/"
           ],
           "notes": "Persistent team state is created and managed by the Cline runtime; agent-surface does not generate or modify it."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.cline/skills/<external-skill>/...",
+            ".cline/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
     "kilo": {
       "summary": "Kilo supports workflows, instructions, subagents, skills, MCP, and ignore files; agent-surface generates workflows, AGENTS/rule files, subagents, ignore files, and a safe kilo.jsonc merge with full-access execution and automatic sharing disabled.",
       "generated_render_tokens": [
+        "skills",
         "commands-as-workflows",
         "rules",
         "subagents",
         "ignores",
+        "external",
         "mcps"
       ],
       "evidence": [
@@ -776,7 +821,7 @@
             "~/.config/kilo/commands/*.md",
             ".kilo/commands/*.md"
           ],
-          "notes": "Command sources render as Kilo workflow files. Generated and installed config disables automatic session sharing."
+          "notes": "Five high-impact commands render as manual custom commands; safe reusable procedures are native skills. Automatic session sharing remains disabled."
         },
         "rules": {
           "support": "native",
@@ -830,6 +875,32 @@
             "kilo.jsonc"
           ],
           "notes": "First-party secretless MCP services are merged into the existing mcp map; external or secret-bearing MCPs remain opt-in. Full installs apply the declared full-access/share-disabled host policy, while category-only MCP installs preserve existing host-wide policy."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.kilo/skills/<name>/SKILL.md",
+            ".kilo/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills are emitted unchanged for Kilo use_skill discovery. Five high-impact commands remain native custom commands."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.kilo/skills/<external-skill>/...",
+            ".kilo/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
@@ -876,7 +947,7 @@
             "$KIMI_CODE_HOME/skills/<name>/SKILL.md",
             ".kimi-code/skills/<name>/SKILL.md"
           ],
-          "notes": "Command sources render as directory-form prompt skills with explicit /skill:<name> invocation. model_invocation enables automatic selection for a small allowlist; other workflows disable it."
+          "notes": "Canonical skills are emitted unchanged and model-invocable. Five high-impact commands render as explicit-only type: flow skills with disableModelInvocation: true."
         },
         "rules": {
           "support": "native",
@@ -996,7 +1067,9 @@
     "antigravity": {
       "summary": "The legacy Antigravity desktop target supports workflow files; current Antigravity CLI plugin packaging is generated by antigravity-cli.",
       "generated_render_tokens": [
-        "commands-as-workflows"
+        "skills",
+        "commands-as-workflows",
+        "external"
       ],
       "evidence": [
         {
@@ -1014,7 +1087,7 @@
           "paths": [
             "~/.gemini/antigravity/global_workflows/*.md"
           ],
-          "notes": "Legacy workflow compatibility target only."
+          "notes": "Five high-impact commands remain manual legacy workflows; safe reusable procedures are native skills."
         },
         "mcp": {
           "support": "manual-only",
@@ -1024,6 +1097,28 @@
           ],
           "paths": [],
           "notes": "Use the current antigravity-cli target for generated plugin packaging."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.gemini/config/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills are emitted unchanged for Antigravity discovery. Five high-impact commands remain legacy manual workflows."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.gemini/config/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
@@ -1066,9 +1161,9 @@
             "user"
           ],
           "paths": [
-            "~/.gemini/config/plugins/agent-surface/skills/<command>.md"
+            "~/.gemini/config/plugins/agent-surface/skills/<name>/SKILL.md"
           ],
-          "notes": "Command sources render as flat plugin skills accepted by agy plugin validation."
+          "notes": "Canonical skills are packaged in directory-form Agent Skills. High-impact manual commands are omitted."
         },
         "subagents": {
           "support": "native",
@@ -1121,9 +1216,11 @@
     "opencode": {
       "summary": "OpenCode supports AGENTS.md, commands, agents, skills, MCP, and plugins; agent-surface generates rules, command files, agent files, first-party MCP wiring (Synapse + Grimoire), full-access execution, and disabled automatic sharing while keeping skills/plugins manual.",
       "generated_render_tokens": [
+        "skills",
         "commands",
         "subagents",
         "rules",
+        "external",
         "mcps"
       ],
       "evidence": [
@@ -1152,7 +1249,7 @@
             "~/.config/opencode/commands/*.md",
             ".opencode/commands/*.md"
           ],
-          "notes": "Command sources render as OpenCode custom commands. Generated and installed config disables automatic session sharing."
+          "notes": "Five high-impact commands remain native custom commands; safe reusable procedures are native skills. Automatic sharing remains disabled."
         },
         "subagents": {
           "support": "native",
@@ -1182,13 +1279,16 @@
         },
         "skills": {
           "support": "native",
-          "generation": "manual",
+          "generation": "generated",
           "scope": [
             "user",
             "project"
           ],
-          "paths": [],
-          "notes": "Native skills are not synthesized from command files."
+          "paths": [
+            "~/.config/opencode/skills/<name>/SKILL.md",
+            ".opencode/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills are emitted unchanged for OpenCode skill-tool discovery. Five high-impact commands remain native custom commands."
         },
         "mcp": {
           "support": "native",
@@ -1212,6 +1312,19 @@
           ],
           "paths": [],
           "notes": "Plugin packaging is tracked separately from direct generated files."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.config/opencode/skills/<external-skill>/...",
+            ".opencode/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
@@ -1250,10 +1363,10 @@
             "project"
           ],
           "paths": [
-            "~/.agents/skills/<command>/SKILL.md",
-            ".agents/skills/<command>/SKILL.md"
+            "~/.agents/skills/<name>/SKILL.md",
+            ".agents/skills/<name>/SKILL.md"
           ],
-          "notes": "OpenHands loads ~/.agents/skills before ~/.openhands/skills, so user-scope command skills use the shared Codex/OpenHands/Zed AgentSkills root."
+          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted because this target has no enforced manual-only procedure surface."
         },
         "rules": {
           "support": "native",
@@ -1309,8 +1422,10 @@
     "vscode": {
       "summary": "VS Code/Copilot supports instruction files, prompt files, MCP, and preview agent plugins; agent-surface generates user instruction and prompt files plus first-party MCP wiring (Synapse + Grimoire).",
       "generated_render_tokens": [
+        "skills",
         "instructions",
         "prompts",
+        "external",
         "mcps"
       ],
       "evidence": [
@@ -1366,14 +1481,38 @@
           ],
           "paths": [],
           "notes": "Preview agent plugins are kept out of the direct file adapter."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.agents/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills use VS Code Agent Skills discovery. Five high-impact commands remain user prompt files."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.agents/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
     "vscodium": {
       "summary": "VSCodium uses the VS Code OSS customization surfaces with VSCodium-specific user-data paths; agent-surface generates instruction and prompt files.",
       "generated_render_tokens": [
+        "skills",
         "instructions",
         "prompts",
+        "external",
         "mcps"
       ],
       "evidence": [
@@ -1419,16 +1558,40 @@
             "mcp.json"
           ],
           "notes": "First-party secretless MCP services are generated/merged into the VSCodium user MCP config (servers map); external or secret-bearing MCPs remain opt-in."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.agents/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills use the same Agent Skills compatibility root. Five high-impact commands remain user prompt files."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.agents/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
     "cursor": {
       "summary": "Cursor supports rules, commands, agents, MCP, and ignore files; agent-surface generates rules, commands, subagents, ignore files, and first-party MCP wiring (Synapse + Grimoire).",
       "generated_render_tokens": [
+        "skills",
         "rules",
         "commands",
         "subagents",
         "ignores",
+        "external",
         "mcps"
       ],
       "evidence": [
@@ -1466,7 +1629,7 @@
           "paths": [
             "~/.cursor/commands/*.md"
           ],
-          "notes": "Command sources render as global Cursor commands."
+          "notes": "Five high-impact commands remain native Cursor commands; safe reusable procedures are native skills."
         },
         "subagents": {
           "support": "native",
@@ -1502,12 +1665,35 @@
             ".cursor/mcp.json"
           ],
           "notes": "First-party secretless MCP services are generated/merged; external or secret-bearing MCPs remain opt-in."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.cursor/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills are emitted unchanged for Cursor automatic skill discovery. Five high-impact commands remain native commands."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.cursor/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
     "droid": {
       "summary": "Factory Droid supports .factory commands, droids, instructions, MCP, and skills; agent-surface generates the core .factory surfaces and optional external skill packs when submodules are present.",
       "generated_render_tokens": [
+        "skills",
         "commands",
         "rules",
         "subagents",
@@ -1531,7 +1717,7 @@
           "paths": [
             ".factory/commands/<command>.md"
           ],
-          "notes": "Command sources remain commands."
+          "notes": "Five high-impact commands remain native commands; safe reusable procedures are native skills."
         },
         "rules": {
           "support": "native",
@@ -1581,13 +1767,28 @@
             ".factory/skills/<skill>/..."
           ],
           "notes": "External packs are optional and render only when the corresponding submodule checkout exists and the service declares skill_roots."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.factory/skills/<name>/SKILL.md",
+            ".factory/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills are emitted unchanged for Droid automatic skill discovery. Five high-impact commands remain native commands."
         }
       }
     },
     "copilot": {
       "summary": "GitHub Copilot and VS Code consume instruction files and repository instructions; agent-surface generates the user-profile instruction file only.",
       "generated_render_tokens": [
-        "instructions"
+        "skills",
+        "instructions",
+        "external"
       ],
       "evidence": [
         {
@@ -1619,13 +1820,37 @@
           ],
           "paths": [],
           "notes": "Copilot MCP is configured through the host editor (see the vscode target), not a standalone Copilot file; not generated here."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.copilot/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills use GitHub Copilot Agent Skills discovery. High-impact manual commands are omitted; VS Code and VSCodium targets provide prompt files."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.copilot/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
     "trae": {
       "summary": "Trae exposes user/project rules and MCP config; agent-surface generates the user rules file and first-party MCP wiring (Synapse + Grimoire).",
       "generated_render_tokens": [
+        "skills",
         "rules",
+        "external",
         "mcps"
       ],
       "evidence": [
@@ -1661,12 +1886,35 @@
             ".trae/mcp.json"
           ],
           "notes": "First-party secretless MCP services are generated/merged; external or secret-bearing MCPs remain opt-in."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.trae/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills are emitted unchanged for the installed Trae native skill root. High-impact manual commands are omitted."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.trae/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
         }
       }
     },
     "windsurf": {
       "summary": "Windsurf supports workflows, rule files, skills, and MCP configuration; agent-surface generates workflows, rules, external skills, and first-party MCP wiring (Synapse + Grimoire).",
       "generated_render_tokens": [
+        "skills",
         "commands-as-workflows",
         "rules",
         "external",
@@ -1698,7 +1946,7 @@
             "~/.codeium/windsurf/global_workflows/<command>.md",
             ".windsurf/workflows/<command>.md"
           ],
-          "notes": "Command sources render as Windsurf workflows."
+          "notes": "Five high-impact commands remain native workflows; safe reusable procedures are native skills."
         },
         "rules": {
           "support": "native",
@@ -1737,6 +1985,19 @@
             ".windsurf/mcp_config.json"
           ],
           "notes": "First-party secretless MCP services are generated/merged; external or secret-bearing MCPs remain opt-in."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.codeium/windsurf/skills/<name>/SKILL.md",
+            ".windsurf/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills are emitted unchanged for automatic skill discovery. Five high-impact commands remain native workflows."
         }
       }
     },
@@ -1771,10 +2032,10 @@
             "project"
           ],
           "paths": [
-            "~/.agents/skills/<command>/SKILL.md",
-            ".agents/skills/<command>/SKILL.md"
+            "~/.agents/skills/<name>/SKILL.md",
+            ".agents/skills/<name>/SKILL.md"
           ],
-          "notes": "Command sources render as Agent Skills."
+          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted because this target has no enforced manual-only procedure surface."
         },
         "rules": {
           "support": "native",

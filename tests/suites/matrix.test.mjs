@@ -4,7 +4,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { readCommands } from "../../scripts/agent-surface/commands.mjs";
-import { targetOutputs, targets } from "../../scripts/agent-surface/targets.mjs";
+import { readSkills } from "../../scripts/agent-surface/skills.mjs";
+import { targetOutputs, targetProducers, targets } from "../../scripts/agent-surface/targets.mjs";
 import { root } from "../lib/helpers.mjs";
 
 const publishableCommandPaths = new Set(
@@ -14,7 +15,32 @@ const publishableCommandPaths = new Set(
   }).split(/\r?\n/).filter(Boolean),
 );
 const publishableCommands = (await readCommands()).filter((command) => publishableCommandPaths.has(command.relativePath));
-assert.equal(publishableCommands.length, 65, "committed target matrix command count must match publishable Git inputs");
+const publishableSkillPaths = new Set(
+  execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "--", "skills/*/SKILL.md"], {
+    cwd: root,
+    encoding: "utf8",
+  }).split(/\r?\n/).filter(Boolean),
+);
+const publishableSkills = (await readSkills()).filter((skill) => publishableSkillPaths.has(skill.relativePath));
+assert.equal(publishableCommands.length, 5, "manual command count must match publishable Git inputs");
+assert.equal(publishableSkills.length, 60, "canonical skill count must match publishable Git inputs");
+const catalog = { commands: publishableCommands, skills: publishableSkills };
+const canonicalOpsFlow = publishableSkills.find((skill) => skill.name === "ops-flow").text;
+const manualTargets = new Set([
+  "antigravity",
+  "claude-code",
+  "cline",
+  "codex",
+  "cursor",
+  "droid",
+  "goose",
+  "kilo",
+  "kimi-code",
+  "opencode",
+  "vscode",
+  "vscodium",
+  "windsurf",
+]);
 const targetMatrixRows = new Map(
   readFileSync(path.join(root, "docs", "reference", "targets.md"), "utf8")
     .split(/\r?\n/)
@@ -33,7 +59,7 @@ const targetMatrixLabels = {
   cline: "Cline",
   kilo: "Kilo",
   "kimi-code": "Kimi Code",
-  antigravity: "Antigravity (legacy workflows)",
+  antigravity: "Antigravity",
   "antigravity-cli": "Antigravity CLI",
   cursor: "Cursor",
   droid: "Droid",
@@ -47,7 +73,13 @@ const targetMatrixLabels = {
   zed: "Zed",
 };
 for (const [target, adapter] of Object.entries(targets)) {
-  const outputs = await targetOutputs(adapter, publishableCommands, {
+  if (adapter.renderSkill) {
+    assert.ok(
+      targetProducers(adapter).some((producer) => producer.id === "external-skills"),
+      `${target}: native skill root also receives configured external skill packs`,
+    );
+  }
+  const outputs = await targetOutputs(adapter, catalog, {
     target,
     scope: "user",
     mode: "build",
@@ -56,5 +88,14 @@ for (const [target, adapter] of Object.entries(targets)) {
     optionalServices: null,
   });
   assert.equal(targetMatrixRows.get(targetMatrixLabels[target]), outputs.length, `${target}: committed target matrix count`);
+  const safeOutput = outputs.find((output) =>
+    output.source === "skills/ops-flow/SKILL.md" && output.relativeOutput.endsWith("SKILL.md"));
+  assert.ok(safeOutput, `${target}: canonical ops-flow skill emitted`);
+  assert.equal(safeOutput.content, canonicalOpsFlow, `${target}: canonical skill remains unchanged`);
+  assert.equal(
+    outputs.some((output) => output.source === "commands/ops-nuke.md"),
+    manualTargets.has(target),
+    `${target}: manual command projection policy`,
+  );
 }
 console.log("matrix: ok");

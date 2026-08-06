@@ -1,14 +1,14 @@
 # Architecture — agent-surface
 
-Status: IMPLEMENTED · Last updated: 2026-07-30 · Scope: the compiler under `scripts/` (the `agent-surface.mjs` CLI entry + the `agent-surface/` modules) and the registries/schemas that drive it. The two first-party MCP services have their own architecture docs: [../mcps/synapse/architecture.md](../mcps/synapse/architecture.md), [../mcps/grimoire/architecture.md](../mcps/grimoire/architecture.md).
+Status: IMPLEMENTED · Last updated: 2026-08-06 · Scope: the compiler under `scripts/` (the `agent-surface.mjs` CLI entry + the `agent-surface/` modules) and the registries/schemas that drive it. The two first-party MCP services have their own architecture docs: [../mcps/synapse/architecture.md](../mcps/synapse/architecture.md), [../mcps/grimoire/architecture.md](../mcps/grimoire/architecture.md).
 
 ## What it is
 
-agent-surface is a **source-to-native compiler**. Author each surface once — commands, rules, subagents, external skill packs, ignore files, and first-party MCP services — and it renders them into the native formats of **22 agent-host targets**, then installs them non-destructively. One source tree instead of twenty-two bespoke configs. It is a set of zero-dependency Node ES modules behind one CLI entry point; **registries are the source of truth**, JSON Schemas validate them, and `check` gates every invariant.
+agent-surface is a **source-to-native compiler**. Author each surface once — vanilla skills, manual-only commands, rules, subagents, external skill packs, ignore files, and first-party MCP services — and it renders them into the native formats of **22 agent-host targets**, then installs them non-destructively. One source tree instead of twenty-two bespoke configs. **Registries are the source of truth**, JSON Schemas validate them, and `check` gates every invariant.
 
 ## System context
 
-- **Author** edits `commands/`, `rules/`, `subagents/`, and the registries. **Operator** runs `build` (to `dist/`) or `install` (to real host config roots).
+- **Author** edits `skills/`, manual-only `commands/`, `rules/`, `subagents/`, and the registries. **Operator** runs `build` (to `dist/`) or `install` (to real host config roots).
 - **Inputs**: the source dirs above; pinned external skill packs under `external/` (git submodules); the first-party MCP services under `mcps/`.
 - **Outputs**: per-target native files (skills, workflows, instructions, plugins, MCP configs, ignore files) plus an install manifest per target.
 - **Trust boundary**: the compiler only writes files it owns and **merges** (read-modify-write) into shared/secret-bearing host configs; it never clobbers user-owned entries.
@@ -18,13 +18,13 @@ agent-surface is a **source-to-native compiler**. Author each surface once — c
 ```mermaid
 flowchart TB
     subgraph src["Sources (authored once)"]
-        C[commands/]; R[rules/]; S[subagents/]; X["external/ (submodule packs)"]; M["mcps/ (synapse, grimoire)"]
+        K[skills/]; C["commands/ (manual only)"]; R[rules/]; S[subagents/]; X["external/ (submodule packs)"]; M["mcps/ (synapse, grimoire)"]
     end
     subgraph reg["Registries (source of truth)"]
         T[targets.json]; TC[target-capabilities.json]; OS[optional-services.json]; SK[source-kinds.json]; A[artifacts.json]
     end
-    P["producers per target\n(commands · rules · subagents · external-skills · ignores · mcps)"]
-    C & R & S & X & M --> P
+    P["producers per target\n(skills · commands · rules · subagents · external · ignores · mcps)"]
+    K & C & R & S & X & M --> P
     reg --> P
     P -->|build| DIST["dist/&lt;target&gt;/… (inspection)"]
     P -->|install| PLAN["install plan:\nwrites + config merges + strict-sync + manifest"]
@@ -45,16 +45,16 @@ scripts/agent-surface/      - the compiler, split into focused zero-dependency E
   install.mjs               - build (→ dist/) + install (planner, config merges, strict-sync, manifest).
   check.mjs                 - the validators behind `check` (registry/schema/producer coherence, generated output, references, workflow fixtures).
   workflow.mjs · evidence.mjs · doctor.mjs - workflow-ledger transitions, semantic task-state and monitor-liveness validation; `run` evidence capture (redaction/declared execution policy); environment + MCP health.
-  commands.mjs · rules.mjs · source-primitives.mjs - source readers (commands + frontmatter and invocation policy, rules, subagents/ignores).
+  skills.mjs · commands.mjs · rules.mjs · source-primitives.mjs - source readers (vanilla skills, manual commands, rules, subagents/ignores).
   registry.mjs · roots.mjs · io.mjs · proc.mjs · fs-tree.mjs · util.mjs · format.mjs - foundations: registry loaders; install roots + path/naming; FS read/parse; git/proc; dir listing; primitives; token formatting.
 registry/
   targets.json              - the 22 in-scope targets + their render tokens + build/install support.
   target-capabilities.json  - per-target surface matrix (support/generation/scope/paths/notes) + generated_render_tokens.
   optional-services.json    - external packs + first-party MCP services (synapse, grimoire) + served_by links.
-  source-kinds.json         - install scopes per source kind (commands/rules/subagents/ignores/external).
+  source-kinds.json         - install scopes per source kind (skills/commands/rules/subagents/ignores/external).
   artifacts.json            - output artifact classes.
 schemas/*.json              - JSON Schemas validating every registry + the workflow ledger.
-commands/  rules/  subagents/  - the authored sources (rendered per target).
+skills/  commands/  rules/  subagents/  - the authored sources (rendered per target).
 adapters/<target>/README.md - per-target adapter notes (paths, quirks, MCP surface).
 mcps/{synapse,grimoire}/    - first-party MCP services (own build/test/install; distributed via the MCP rails).
 external/                   - pinned upstream skill-pack submodules.
@@ -71,7 +71,7 @@ tests/agent-surface.test.mjs - the snapshot/behaviour suite (repo `npm test`).
 
 ## Interfaces (CLI)
 
-`build` · `install` (`--target`, `--scope user|project`, `--category`, `--service`, `--dest`, `--allow-scope-root`, `--dry-run`) · `check [commands|rules|subagents|generated]` · `inventory` · `doctor` · `workflow <apply|doctor|patch …>`. Install is **dry-run-first**: a live write to a real scope root needs `--allow-scope-root` or an explicit `--dest`.
+`build` · `install` (`--target`, `--scope user|project`, `--category`, `--service`, `--dest`, `--allow-scope-root`, `--dry-run`) · `check [skills|commands|rules|subagents|generated]` · `skills` · `commands` · `inventory` · `doctor` · `workflow <apply|doctor|patch …>`. Install is **dry-run-first**: a live write to a real scope root needs `--allow-scope-root` or an explicit `--dest`.
 
 ## First-party MCP distribution
 
@@ -85,7 +85,7 @@ MCP services declared `first_party kind:"mcp"` in `optional-services.json` are a
 
 - **Registry-driven, schema-validated** — behaviour lives in data, not code branches; `check` makes the three registries agree with the producers.
 - **Zero-dependency ES modules** — portability and auditability with no runtime deps; the former single ~4k-line script was decomposed into cohesive modules (CLI entry + engine + emit + command domains + foundations), verified byte-identical against the pre-refactor `build` output.
-- **Native workflow projection** — one portable command source renders to each host's native workflow surface. Skill-capable hosts receive skills, and automatic model invocation is opt-in per workflow rather than enabled for every command.
+- **Skills first** — safe reusable procedures are vanilla `skills/<name>/SKILL.md` sources and remain model-invocable on every skill-capable host. Only five high-impact workflows remain commands; they use an explicit-only native surface or are omitted.
 - **Merge, never clobber** — host configs are shared/secret-bearing; the compiler owns only its own keys and blocks on ambiguous shapes.
 - **Strict-sync via manifest** — de-scoped assets self-prune on the next full install without tracking deletions by hand.
 - **First-party MCP on shared rails** — synapse and grimoire ride the same generate+merge path; adding a service is a registry entry, not new plumbing.

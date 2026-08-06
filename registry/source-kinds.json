@@ -1,5 +1,14 @@
 {
   "source_kinds": {
+    "skills": {
+      "source_dir": "skills",
+      "load_mode": "on_demand",
+      "scope": "both",
+      "install_scopes": [
+        "user",
+        "project"
+      ]
+    },
     "commands": {
       "source_dir": "commands",
       "load_mode": "on_demand",
