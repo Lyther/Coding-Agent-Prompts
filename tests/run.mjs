@@ -16,6 +16,7 @@ function wipeDist() {
 
 const suites = [
   "roots.test.mjs",
+  "dependency-security.test.mjs",
   "hooks.test.mjs",
   "policy.test.mjs",
   "matrix.test.mjs",
