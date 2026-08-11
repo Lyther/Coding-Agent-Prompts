@@ -1,9 +1,25 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { targets } from "../../scripts/agent-surface/targets.mjs";
 import {
   expectedCommandCount,
+  expectedSkillCount,
+  expectedSourceCommandCount,
   files,
   hasLocalOpsServerCommand,
   root,
@@ -18,6 +34,7 @@ rmSync(path.join(root, "dist"), { recursive: true, force: true, maxRetries: 10, 
 
 assert.equal(run(["check"]).trim(), "check: ok");
 assert.match(run(["check", "commands"]), /commands check: ok/);
+assert.match(run(["check", "skills"]), /skills check: ok/);
 const targetCapabilities = JSON.parse(readFileSync(path.join(root, "registry", "target-capabilities.json"), "utf8"));
 const clineCapabilities = targetCapabilities.targets.cline;
 assert.ok(clineCapabilities.generated_render_tokens.includes("subagents"));
@@ -119,75 +136,86 @@ const expectedInventory = {
 for (const [key, count] of Object.entries(expectedInventory)) {
   assert.match(inventory, new RegExp(`^${key}: ${count}$`, "m"));
 }
-assert.equal(expectedInventory.commands, expectedCommandCount);
+assert.equal(expectedInventory.commands, expectedSourceCommandCount);
+assert.match(inventory, new RegExp(`^skills: ${expectedSkillCount}$`, "m"));
+
+const skillRegistry = JSON.parse(run(["skills", "--json"]));
+assert.equal(skillRegistry.count, expectedSkillCount);
+const readinessSkill = skillRegistry.skills.find((skill) => skill.name === "verify-readiness");
+assert.equal(readinessSkill.phase, "verify");
+const archDiagramSkill = skillRegistry.skills.find((skill) => skill.name === "arch-diagram");
+assert.equal(archDiagramSkill.phase, "decide");
+assert.match(archDiagramSkill.description, /evidence-backed architecture atlas/);
+const archContractSkill = skillRegistry.skills.find((skill) => skill.name === "arch-contract");
+assert.equal(archContractSkill.phase, "decide");
+assert.equal(archContractSkill.model_invocation, true);
+assert.equal(skillRegistry.skills.find((skill) => skill.name === "arch-api"), undefined);
+assert.equal(skillRegistry.skills.find((skill) => skill.name === "arch-model"), undefined);
+const opsFlowSkill = skillRegistry.skills.find((skill) => skill.name === "ops-flow");
+assert.equal(opsFlowSkill.phase, "decide");
+assert.equal(opsFlowSkill.model_invocation, true);
+assert.equal(opsFlowSkill.metadata_source, "frontmatter");
+assert.deepEqual(opsFlowSkill.lazy_body, {
+  type: "file",
+  path: "skills/ops-flow/SKILL.md",
+  frontmatter_stripped: true,
+});
+assert.equal(Object.hasOwn(opsFlowSkill, "body"), false);
+assert.equal(opsFlowSkill.targets["claude-code"], path.join(".claude", "skills", "ops-flow", "SKILL.md"));
+assert.equal(opsFlowSkill.targets.cline, path.join(".cline", "skills", "ops-flow", "SKILL.md"));
+const bootConceptSkill = skillRegistry.skills.find((skill) => skill.name === "boot-concept");
+assert.equal(bootConceptSkill.phase, "bootstrap");
+
+for (const name of ["arch-diagram", "qa-self-critique", "verify-test"]) {
+  assert.equal(skillRegistry.skills.find((skill) => skill.name === name)?.model_invocation, true);
+}
+assert.equal(skillRegistry.skills.find((skill) => skill.name === "qa-sec"), undefined);
+assert.equal(skillRegistry.skills.find((skill) => skill.name === "verify-spec"), undefined);
+assert.equal(skillRegistry.skills.find((skill) => skill.name === "dev-spec")?.phase, "build");
 
 const registry = JSON.parse(run(["commands", "--json"]));
 assert.equal(registry.count, expectedCommandCount);
-const readinessCommand = registry.commands.find((command) => command.name === "verify-readiness");
-assert.ok(readinessCommand);
-assert.equal(readinessCommand.phase, "verify");
-const archDiagramCommand = registry.commands.find((command) => command.name === "arch-diagram");
-assert.ok(archDiagramCommand);
-assert.equal(archDiagramCommand.phase, "decide");
-assert.match(archDiagramCommand.description, /evidence-backed architecture atlas/);
-const archContractCommand = registry.commands.find((command) => command.name === "arch-contract");
-assert.ok(archContractCommand);
-assert.equal(archContractCommand.phase, "decide");
-assert.equal(archContractCommand.model_invocation, false);
-assert.equal(registry.commands.find((command) => command.name === "arch-api"), undefined);
-assert.equal(registry.commands.find((command) => command.name === "arch-model"), undefined);
-const opsFlowCommand = registry.commands.find((command) => command.name === "ops-flow");
-assert.ok(opsFlowCommand);
-assert.equal(opsFlowCommand.phase, "decide");
-assert.equal(opsFlowCommand.model_invocation, false);
-assert.equal(opsFlowCommand.metadata_source, "frontmatter");
-assert.deepEqual(opsFlowCommand.lazy_body, {
-  type: "file",
-  path: "commands/ops-flow.md",
-  frontmatter_stripped: true,
-});
-assert.equal(Object.hasOwn(opsFlowCommand, "body"), false);
-assert.equal(opsFlowCommand.targets["claude-code"], path.join(".claude", "skills", "ops-flow", "SKILL.md"));
-assert.equal(opsFlowCommand.targets.cline, path.join("Documents", "Cline", "Workflows", "ops-flow.md"));
-assert.equal(Object.hasOwn(opsFlowCommand.targets, "gemini-cli"), false);
-const bootConceptCommand = registry.commands.find((command) => command.name === "boot-concept");
-assert.ok(bootConceptCommand);
-assert.equal(bootConceptCommand.phase, "bootstrap");
-assert.deepEqual(bootConceptCommand.aliases, ["concept-zero"]);
-assert.equal(bootConceptCommand.targets["claude-code"], path.join(".claude", "skills", "boot-concept", "SKILL.md"));
-assert.equal(bootConceptCommand.targets.cline, path.join("Documents", "Cline", "Workflows", "boot-concept.md"));
-assert.equal(Object.hasOwn(bootConceptCommand.targets, "gemini-cli"), false);
-
-const opsServerCommand = registry.commands.find((command) => command.name === "ops-server");
-if (hasLocalOpsServerCommand) {
-  assert.ok(opsServerCommand);
-  assert.equal(opsServerCommand.phase, "improve");
-  assert.deepEqual(opsServerCommand.lazy_body, {
-    type: "file",
-    path: "commands/ops-server.md",
-    frontmatter_stripped: true,
-  });
-  assert.equal(opsServerCommand.targets["claude-code"], path.join(".claude", "skills", "ops-server", "SKILL.md"));
-  assert.equal(opsServerCommand.targets.codex, path.join(".agents", "skills", "ops-server", "SKILL.md"));
-  assert.equal(opsServerCommand.targets.cursor, path.join(".cursor", "commands", "ops-server.md"));
-  assert.equal(opsServerCommand.targets.openhands, path.join(".agents", "skills", "ops-server", "SKILL.md"));
-} else {
-  assert.equal(opsServerCommand, undefined);
-}
-
-const opsAskCommand = registry.commands.find((command) => command.name === "ops-ask");
-assert.ok(opsAskCommand);
-assert.equal(opsAskCommand.model_invocation, true);
-for (const name of ["arch-diagram", "qa-self-critique", "verify-test"]) {
-  assert.equal(registry.commands.find((command) => command.name === name)?.model_invocation, true);
-}
-assert.equal(registry.commands.find((command) => command.name === "qa-sec"), undefined);
-assert.equal(registry.commands.find((command) => command.name === "verify-spec"), undefined);
-assert.equal(registry.commands.find((command) => command.name === "dev-spec")?.phase, "build");
+const expectedCommands = ["boot-facade", "ops-nuke", "ship-commit", "ship-deploy", "ship-release"];
+if (hasLocalOpsServerCommand) expectedCommands.push("ops-server");
+assert.deepEqual(registry.commands.map((command) => command.name).sort(), expectedCommands.sort());
+assert.equal(registry.commands.every((command) => command.model_invocation === false), true);
+const opsServer = registry.commands.find((command) => command.name === "ops-server");
+assert.equal(Boolean(opsServer), hasLocalOpsServerCommand);
+if (opsServer) assert.equal(Object.keys(opsServer.targets).length, Object.keys(targets).length);
 
 const shipCommands = JSON.parse(run(["commands", "--phase", "ship", "--json"]));
 assert.equal(shipCommands.commands.every((command) => command.phase === "ship"), true);
 assert.equal(shipCommands.commands.every((command) => command.model_invocation === false), true);
+
+// A packaged copy can live under a consumer Git checkout whose node_modules/ is
+// ignored. The enclosing repository must not make agent-surface drop its own
+// committed manual commands.
+const consumerRoot = mkdtempSync(path.join(tmpdir(), "agent-surface-consumer-"));
+try {
+  execFileSync("git", ["init", "-q"], { cwd: consumerRoot });
+  writeFileSync(path.join(consumerRoot, ".gitignore"), "node_modules/\n");
+  const packed = JSON.parse(execFileSync(
+    "npm",
+    ["pack", "--json", "--pack-destination", consumerRoot],
+    { cwd: root, encoding: "utf8" },
+  ));
+  const modulesRoot = path.join(consumerRoot, "node_modules");
+  mkdirSync(modulesRoot);
+  execFileSync("tar", ["-xzf", path.join(consumerRoot, packed[0].filename), "-C", modulesRoot]);
+  const packagedRoot = path.join(modulesRoot, "agent-surface");
+  renameSync(path.join(modulesRoot, "package"), packagedRoot);
+  symlinkSync(path.join(root, "node_modules"), path.join(packagedRoot, "node_modules"), "dir");
+  const packagedCheck = await import(pathToFileURL(
+    path.join(packagedRoot, "scripts", "agent-surface", "check.mjs"),
+  ));
+  const packagedCommands = await packagedCheck.exportableCommands();
+  assert.deepEqual(
+    packagedCommands.map((command) => command.name).sort(),
+    ["boot-facade", "ops-nuke", "ship-commit", "ship-deploy", "ship-release"],
+  );
+} finally {
+  rmSync(consumerRoot, { recursive: true, force: true });
+}
 
 const escapeVictim = "/tmp/agent-surface-build-escape-victim";
 rmSync(escapeVictim, { recursive: true, force: true });

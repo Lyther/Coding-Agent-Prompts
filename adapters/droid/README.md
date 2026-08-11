@@ -4,6 +4,7 @@ Droid support targets Factory's current `.factory/` project/user surfaces.
 
 ## Outputs
 
+- `skills/*/SKILL.md` -> `.factory/skills/<name>/SKILL.md`
 - `commands/*.md` -> `.factory/commands/<command>.md`
 - always-on `rules/*.mdc` -> `AGENTS.md` for project installs, `.factory/AGENTS.md` for user installs
 - scoped language rules -> `.factory/references/rules/<rule>.md`
@@ -12,9 +13,7 @@ Droid support targets Factory's current `.factory/` project/user surfaces.
 - optional external MCP wiring -> `.factory/mcp.json` only when explicitly requested
 - optional external skill packs -> `.factory/skills/<skill>/...`
 
-Commands stay commands. They are intentionally not converted to skills because
-agent-surface commands use a flat prefixed namespace such as `ops-flow` and
-`workflow-boss`.
+Canonical skills use Droid's automatic skill discovery. Available high-impact workflows stay commands.
 
 ## External Packs
 

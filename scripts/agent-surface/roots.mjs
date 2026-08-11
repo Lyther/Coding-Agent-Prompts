@@ -66,7 +66,7 @@ export function installRootDroid(scope) {
 
 export function installRootAntigravity(scope) {
   if (scope !== "user") fail("antigravity install supports --scope user only unless --dest is supplied");
-  return path.join(os.homedir(), ".gemini", "antigravity");
+  return path.join(os.homedir(), ".gemini");
 }
 
 export function installRootAntigravityCli(scope) {
@@ -76,16 +76,12 @@ export function installRootAntigravityCli(scope) {
 
 export function installRootVsCode(scope) {
   if (scope !== "user") fail("vscode install supports --scope user only unless --dest is supplied");
-  if (process.platform === "darwin") return path.join(os.homedir(), "Library", "Application Support", "Code", "User");
-  if (process.platform === "win32") return path.join(process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"), "Code", "User");
-  return path.join(os.homedir(), ".config", "Code", "User");
+  return os.homedir();
 }
 
 export function installRootVscodium(scope) {
   if (scope !== "user") fail("vscodium install supports --scope user only unless --dest is supplied");
-  if (process.platform === "darwin") return path.join(os.homedir(), "Library", "Application Support", "VSCodium", "User");
-  if (process.platform === "win32") return path.join(process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"), "VSCodium", "User");
-  return path.join(os.homedir(), ".config", "VSCodium", "User");
+  return os.homedir();
 }
 
 export function installRootWindsurf(scope) {
@@ -118,6 +114,10 @@ export function gooseRecipeOutputName(source) {
 
 export function codexSkillOutputName(source) {
   return path.join(source.name, "SKILL.md");
+}
+
+export function codexPrivateSkillRoot() {
+  return path.join(".codex", "skills");
 }
 
 export function claudeMcpPath(context) {
@@ -251,6 +251,10 @@ export function kiloWorkflowRoot(context) {
   return context.scope === "user" ? path.join(".config", "kilo", "commands") : path.join(".kilo", "commands");
 }
 
+export function kiloSkillRoot() {
+  return path.join(".kilo", "skills");
+}
+
 export function kiloConfigPath(scope) {
   return scope === "user" ? path.join(".config", "kilo", "kilo.jsonc") : "kilo.jsonc";
 }
@@ -315,6 +319,10 @@ export function opencodeCommandRoot(context) {
   return context.scope === "user" ? path.join(".config", "opencode", "commands") : path.join(".opencode", "commands");
 }
 
+export function opencodeSkillRoot(context) {
+  return context.scope === "user" ? path.join(".config", "opencode", "skills") : path.join(".opencode", "skills");
+}
+
 export function opencodeAgentRoot(context) {
   return context.scope === "user" ? path.join(".config", "opencode", "agents") : path.join(".opencode", "agents");
 }
@@ -369,6 +377,44 @@ export function windsurfRulePath(context) {
 
 export function windsurfSkillRoot(context) {
   return context.scope === "user" ? path.join(".codeium", "windsurf", "skills") : path.join(".windsurf", "skills");
+}
+
+export function gooseSkillRoot(context) {
+  return path.join(".agents", "skills");
+}
+
+export function antigravitySkillRoot(context) {
+  return context.scope === "user" ? path.join("config", "skills") : path.join(".agents", "skills");
+}
+
+export function antigravityWorkflowRoot() {
+  return path.join("antigravity", "global_workflows");
+}
+
+export function cursorSkillRoot() {
+  return path.join(".cursor", "skills");
+}
+
+export function droidSkillRoot() {
+  return path.join(".factory", "skills");
+}
+
+export function traeSkillRoot() {
+  return path.join(".trae", "skills");
+}
+
+export function copilotSkillRoot() {
+  return path.join(".copilot", "skills");
+}
+
+export function sharedAgentSkillRoot() {
+  return path.join(".agents", "skills");
+}
+
+export function vsCodeUserRoot(product, context = {}) {
+  const platform = context.platform ?? process.platform;
+  const pathApi = platform === "win32" ? path.win32 : path;
+  return pathApi.join(ideUserDataRoot(product, { ...context, relocateExternalRoutes: true }), "User");
 }
 
 export function zedSkillRoot() {

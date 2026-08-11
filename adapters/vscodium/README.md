@@ -1,12 +1,14 @@
 # VSCodium Adapter
 
-Generates VS Code-compatible prompt and instruction files for VSCodium user profiles.
+Generates Agent Skills plus VS Code-compatible manual prompts and instruction files for VSCodium user profiles.
 
 ## Outputs
 
 - `instructions/agent-surface.instructions.md`
 - `instructions/references/rules/<rule>.md`
-- `prompts/agent-surface.prompt.md`
+- `prompts/<manual-command>.md`
+- `~/.agents/skills/<name>/SKILL.md`
+- reviewed external packs under `~/.agents/skills/`
 
 ## Notes
 

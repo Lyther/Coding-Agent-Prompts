@@ -95,10 +95,7 @@
         "external/sanyuan-skills/skills/*"
       ],
       "local_wiring": [
-        "Codex/agent skills: ~/.agents/skills/{book-study,code-review-expert,sigma,skill-forge,skill-review,wiki-ingest}",
-        "Claude skills: ~/.claude/skills mirrors those ~/.agents/skills entries",
-        "Cline/Kimi Code/Antigravity CLI/OpenCode skills: mirrored into each target's native skill directory",
-        "Droid skills: ~/.factory/skills/{book-study,code-review-expert,sigma,skill-forge,skill-review,wiki-ingest}"
+        "All supported Agent Skills runtimes: mirror the reviewed skills into each target's native skill directory."
       ],
       "notes": [
         "Optional production-grade skills for review, tutoring, skill creation, wiki ingestion, and book study."
@@ -115,10 +112,7 @@
         "external/andrej-karpathy-skills/skills/karpathy-guidelines"
       ],
       "local_wiring": [
-        "Codex/agent skill: ~/.agents/skills/karpathy-guidelines",
-        "Claude skill: ~/.claude/skills/karpathy-guidelines",
-        "Cline/Kimi Code/Antigravity CLI/OpenCode skill: mirrored into each target's native skill directory",
-        "Droid skill: ~/.factory/skills/karpathy-guidelines"
+        "All supported Agent Skills runtimes: mirror karpathy-guidelines into each target's native skill directory."
       ],
       "notes": [
         "Optional coding-behavior guideline skill focused on assumptions, simplicity, surgical changes, and verification."
@@ -135,10 +129,7 @@
         "external/ctf-skills/*"
       ],
       "local_wiring": [
-        "Codex/agent skills: ~/.agents/skills/ctf-* plus solve-challenge",
-        "Claude skills: ~/.claude/skills/ctf-* plus solve-challenge",
-        "Cline/Kimi Code/Antigravity CLI/OpenCode skills: mirrored into each target's native skill directory",
-        "Droid skills: ~/.factory/skills/ctf-* plus ~/.factory/skills/solve-challenge"
+        "All supported Agent Skills runtimes: mirror ctf-* plus solve-challenge into each target's native skill directory."
       ],
       "notes": [
         "Already wired locally before this optional submodule was added.",

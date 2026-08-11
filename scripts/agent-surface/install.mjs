@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-import { exportableCommands, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
+import { exportableCatalog, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
 import { readFileIfExists, readJsonIfExists, removeTree } from "./io.mjs";
 import { mergeKiloInstructionJsonc, parseJsoncResult, setJsoncRootProperty } from "./jsonc.mjs";
 import { YAML_MCP_FORMATS, mergeCodexMcpToml, mergeJsonMcpConfig, mergeYamlMcpConfig, optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
@@ -27,7 +27,7 @@ export async function build(args) {
   }
 
   const selected = target === "all" ? Object.keys(targets) : [target];
-  const commandFiles = await exportableCommands();
+  const catalog = await exportableCatalog();
 
   if (!dryRun) {
     await removeTree(path.join(root, "dist", target === "all" ? "" : target));
@@ -36,7 +36,7 @@ export async function build(args) {
   for (const item of selected) {
     const adapter = targets[item];
     const sourceKindsConfig = await readSourceKinds();
-    const outputs = await targetOutputs(adapter, commandFiles, { target: item, scope: "user", mode: "build" });
+    const outputs = await targetOutputs(adapter, catalog, { target: item, scope: "user", mode: "build" });
     const sourceKindErrors = [];
     for (const output of outputs) {
       requireKnownSourceKind(output, sourceKindsConfig, sourceKindErrors);
@@ -190,7 +190,7 @@ function optionalServiceFilter(args) {
 async function installPlan(target, adapter, installRoot, scope, rootSource, options = {}) {
   const categoryFilter = options.categoryFilter ?? null;
   const optionalServices = options.optionalServices ?? null;
-  const commandFiles = await exportableCommands();
+  const catalog = await exportableCatalog();
   const sourceKindsConfig = await readSourceKinds();
   const version = await packageVersion();
   const generatedAt = new Date().toISOString();
@@ -200,7 +200,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   if (manifestRouteError) blocked.push(manifestRouteError);
   const previousManifest = manifestRouteError ? null : await readJsonIfExists(manifestPath);
   const legacyOwnership = await readLegacyOwnership(target);
-  const outputs = (await targetOutputs(adapter, commandFiles, {
+  const outputs = (await targetOutputs(adapter, catalog, {
     target,
     scope,
     mode: "install",

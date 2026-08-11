@@ -11,18 +11,25 @@ import { readCommands } from "./commands.mjs";
 import { approximateTokens } from "./format.mjs";
 import { directDirectories, directories, files, filesUnder } from "./fs-tree.mjs";
 import { readFileIfExists } from "./io.mjs";
-import { gitStagedGitlinkMap, gitSubmoduleStatusMap } from "./proc.mjs";
+import { gitIgnoredPaths, gitStagedGitlinkMap, gitSubmoduleStatusMap } from "./proc.mjs";
 import { readOptionalServices, readSourceKinds, relative, root } from "./registry.mjs";
+import { vsCodeUserRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
+import { readSkills } from "./skills.mjs";
 import { subagentValidationErrors } from "./source-primitives.mjs";
 import { generatedOutputMinimums, producerEmitsFor, sourceKindPolicy, targetOutputs, targetProducers, targets } from "./targets.mjs";
 import { argValue, exists, fail, globMatches, isPathInside, isSafeTargetName, sha256 } from "./util.mjs";
 
-export const commandMetadataFields = new Set(["name", "aliases", "phase", "description", "model_invocation"]);
+export const commandMetadataFields = new Set(["name", "aliases", "phase", "description"]);
+export const skillMetadataFields = new Set(["name", "description", "license", "compatibility", "metadata", "allowed-tools"]);
 
 export const commandPrefixes = new Set(["arch", "boot", "dev", "lint", "ops", "qa", "ship", "stellaris", "verify", "workflow"]);
 
 export const commandPhases = new Set(["observe", "decide", "build", "verify", "review", "arbitrate", "ship", "improve", "bootstrap", "game", "misc"]);
+
+// This private operator command is intentionally excluded from Git and npm, but a
+// maintainer checkout may still distribute its local copy to generated targets.
+export const localCommandOverlays = new Set(["commands/ops-server.md"]);
 
 export const workflowSchemaFiles = [
   "workflow.run.schema.json",
@@ -147,6 +154,7 @@ export const ruleScenarios = {
 export async function check() {
   const errors = [];
   const commands = await readCommands();
+  const skills = await readSkills();
   const commandFiles = commands.map((command) => command.file);
   const ruleFiles = await files("rules", [".md", ".mdc"]);
   const targetsConfig = JSON.parse(await readFile(path.join(root, "registry", "targets.json"), "utf8"));
@@ -155,6 +163,7 @@ export async function check() {
   const banned = new Set(targetsConfig.out_of_scope);
 
   if (commandFiles.length === 0) errors.push("commands/ is empty");
+  if (skills.length === 0) errors.push("skills/ is empty");
   if (ruleFiles.length === 0) errors.push("rules/ is empty");
 
   for (const name of ["AGENTS.md", "GEMINI.md"]) {
@@ -222,6 +231,12 @@ export async function check() {
   await checkServedBy(errors);
   errors.push(...await subagentValidationErrors());
   checkCommandMetadata(commands, errors);
+  checkSkillMetadata(skills, errors);
+  const procedureNames = new Set();
+  for (const procedure of [...skills, ...commands]) {
+    if (procedureNames.has(procedure.name)) errors.push(`duplicate procedure name across skills/ and commands/: ${procedure.name}`);
+    procedureNames.add(procedure.name);
+  }
 
   if (errors.length > 0) {
     for (const error of errors) console.error(`ERROR: ${error}`);
@@ -268,11 +283,24 @@ export function checkBossArtifactCoherence(data, source, errors) {
 // use this instead of readCommands directly so every generated surface starts
 // from a validated command set.
 export async function exportableCommands() {
-  const commands = await readCommands();
+  const allCommands = await readCommands();
+  const ignored = gitIgnoredPaths(allCommands.map((command) => command.relativePath));
+  const commands = allCommands.filter(
+    (command) => !ignored.has(command.relativePath) || localCommandOverlays.has(command.relativePath),
+  );
   const errors = [];
   checkCommandMetadata(commands, errors);
   if (errors.length > 0) fail(`command metadata invalid:\n${errors.join("\n")}`);
   return commands;
+}
+
+export async function exportableCatalog() {
+  const commands = await exportableCommands();
+  const skills = await readSkills();
+  const errors = [];
+  checkSkillMetadata(skills, errors);
+  if (errors.length > 0) fail(`skill metadata invalid:\n${errors.join("\n")}`);
+  return { commands, skills };
 }
 
 export function checkCommandMetadata(commands, errors) {
@@ -293,22 +321,43 @@ export function checkCommandMetadata(commands, errors) {
     if (command.metadata.description !== null && typeof command.metadata.description !== "string") {
       errors.push(`${command.relativePath}: description must be a string`);
     }
-    if (typeof command.metadata.model_invocation !== "boolean") {
-      errors.push(`${command.relativePath}: model_invocation must be a boolean`);
-    }
     for (const alias of command.metadata.aliases ?? []) {
       if (!isSafeTargetName(alias)) errors.push(`${command.relativePath}: unsafe alias: ${alias}`);
     }
   }
 }
 
+export function checkSkillMetadata(skills, errors) {
+  const names = new Set();
+  for (const skill of skills) {
+    for (const error of skill.frontmatterErrors) errors.push(`${skill.relativePath}: ${error}`);
+    if (!skill.hasFrontmatter) errors.push(`${skill.relativePath}: skill frontmatter missing`);
+    if (names.has(skill.metadata.name)) errors.push(`duplicate skill metadata name: ${skill.metadata.name}`);
+    names.add(skill.metadata.name);
+    for (const field of Object.keys(skill.metadata)) {
+      if (!skillMetadataFields.has(field)) errors.push(`${skill.relativePath}: unsupported metadata field: ${field}`);
+    }
+    if (typeof skill.metadata.name !== "string") errors.push(`${skill.relativePath}: name must be a string`);
+    if (skill.metadata.name !== skill.name) errors.push(`${skill.relativePath}: metadata name must match directory name`);
+    if (!isSafeTargetName(skill.metadata.name) || skill.metadata.name.length > 64) {
+      errors.push(`${skill.relativePath}: invalid Agent Skill name`);
+    }
+    if (typeof skill.metadata.description !== "string" || skill.metadata.description.trim().length === 0) {
+      errors.push(`${skill.relativePath}: description must be a non-empty string`);
+    } else if (skill.metadata.description.length > 1024) {
+      errors.push(`${skill.relativePath}: description exceeds 1024 characters`);
+    }
+  }
+}
+
 export async function checkCommands(_args) {
   const commands = await readCommands();
+  const skills = await readSkills();
   const metadataErrors = [];
   const referenceErrors = [];
 
   checkCommandMetadata(commands, metadataErrors);
-  collectCommandReferenceFindings(commands, referenceErrors);
+  collectCommandReferenceFindings([...skills, ...commands], referenceErrors);
 
   console.log("commands:");
   console.log(`  files: ${commands.length}`);
@@ -329,6 +378,31 @@ export async function checkCommands(_args) {
   }
 
   console.log("commands check: ok");
+}
+
+export async function checkSkills(_args) {
+  const skills = await readSkills();
+  const commands = await readCommands();
+  const metadataErrors = [];
+  const referenceErrors = [];
+  checkSkillMetadata(skills, metadataErrors);
+  collectCommandReferenceFindings([...skills, ...commands], referenceErrors);
+
+  console.log("skills:");
+  console.log(`  files: ${skills.length}`);
+  console.log(`  metadata: ${metadataErrors.length > 0 ? "failed" : "ok"}`);
+  console.log(`  references: ${referenceErrors.length > 0 ? "failed" : "ok"}`);
+  const errors = [
+    ...metadataErrors.map((error) => `metadata: ${error}`),
+    ...referenceErrors.map((error) => `reference: ${error}`),
+  ];
+  if (errors.length > 0) {
+    console.log("errors:");
+    for (const error of errors) console.log(`  ${error}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log("skills check: ok");
 }
 
 export async function checkExternalServicePins(errors) {
@@ -365,7 +439,7 @@ export async function checkExternalServicePins(errors) {
 export async function checkGenerated(args) {
   const target = argValue(args, "--target") ?? "all";
   const selected = target === "all" ? Object.keys(targets) : [target];
-  const commandFiles = await exportableCommands();
+  const catalog = await exportableCatalog();
   const sourceKindsConfig = await readSourceKinds();
   const errors = [];
 
@@ -376,7 +450,7 @@ export async function checkGenerated(args) {
 
   for (const item of selected) {
     const adapter = targets[item];
-    const outputs = await targetOutputs(adapter, commandFiles, { target: item, scope: "user", mode: "check" });
+    const outputs = await targetOutputs(adapter, catalog, { target: item, scope: "user", mode: "check" });
     const targetErrors = validateGeneratedTarget(item, outputs);
     const countErrors = validateGeneratedOutputCount(item, outputs);
     const sourceKindErrors = validateGeneratedSourceKinds(item, outputs, sourceKindsConfig);
@@ -429,7 +503,10 @@ export async function checkRules(args) {
   const scenario = argValue(args, "--scenario");
   const selectedScenarios = scenario ? [scenario] : Object.keys(ruleScenarios);
   const rules = await readRules();
-  const commandNames = new Set((await files("commands", [".md"])).map((file) => path.basename(file, ".md")));
+  const commandNames = new Set([
+    ...(await readCommands()).map((command) => command.name),
+    ...(await readSkills()).map((skill) => skill.name),
+  ]);
   const errors = [];
   const warnings = [];
 
@@ -707,16 +784,29 @@ export function validateGeneratedTarget(target, outputs) {
     const output = requirePath(relativeOutput);
     if (output && !pattern.test(output.content)) errors.push(`${relativeOutput} missing ${pattern}`);
   };
+  const requireNotContains = (relativeOutput, pattern) => {
+    const output = requirePath(relativeOutput);
+    if (output && pattern.test(output.content)) errors.push(`${relativeOutput} unexpectedly contains ${pattern}`);
+  };
   const skillFrontmatter = /^(?:\uFEFF)?---\r?\n/;
 
   if (outputs.length === 0) errors.push("no outputs generated");
+  for (const optionalPack of ["external/andrej-karpathy-skills/", "external/sanyuan-skills/"]) {
+    if (!outputs.some((output) => output.source.startsWith(optionalPack))) {
+      errors.push(`optional skill pack is not distributed: ${optionalPack}`);
+    }
+  }
 
   if (target === "claude-code") {
-    requireContains(path.join(".claude", "skills", "ops-flow", "SKILL.md"), /disable-model-invocation: true/);
+    requireContains(path.join(".claude", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\ndescription: "[^"]+"\n---\n/);
+    requireNotContains(path.join(".claude", "skills", "ops-flow", "SKILL.md"), /disable-model-invocation/);
+    requireContains(path.join(".claude", "skills", "ops-nuke", "SKILL.md"), /disable-model-invocation: true/);
     requireContains(path.join(".claude", "skills", "ops-ask", "SKILL.md"), /^---\nname: ops-ask\ndescription: "[^"]+"\n---\n/);
   } else if (target === "codex") {
     requireContains(path.join(".agents", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
-    requireContains(path.join(".agents", "skills", "ops-flow", "agents", "openai.yaml"), /allow_implicit_invocation: false/);
+    requireContains(path.join(".agents", "skills", "ops-flow", "agents", "openai.yaml"), /allow_implicit_invocation: true/);
+    requireContains(path.join(".codex", "skills", "ops-nuke", "SKILL.md"), /^---\nname: ops-nuke\n/);
+    requireContains(path.join(".codex", "skills", "ops-nuke", "agents", "openai.yaml"), /allow_implicit_invocation: false/);
     requireContains(path.join(".agents", "skills", "ops-ask", "agents", "openai.yaml"), /allow_implicit_invocation: true/);
     requireContains(path.join(".codex", "agents", "boss.toml"), /^name = "boss"\n/);
     requireContains(path.join(".codex", "AGENTS.md"), /agent-surface global Codex rules/);
@@ -728,8 +818,8 @@ export function validateGeneratedTarget(target, outputs) {
       errors.push("Deep Agents must not emit read-only subagents as unrestricted AGENTS.md subagents");
     }
   } else if (target === "goose") {
-    requireContains(path.join("recipes", "ops-flow.yaml"), /^version: "1\.0\.0"\n/);
-    requireContains(path.join("recipes", "ops-flow.yaml"), /^instructions: \|$/m);
+    requireContains(path.join(".agents", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
+    requireContains(path.join(".agents", "skills", "ops-nuke", "SKILL.md"), /disable-model-invocation: true/);
   } else if (target === "grok-build") {
     requireContains(path.join(".grok", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".grok", "skills", "red-team-command-doctrine", "SKILL.md"), skillFrontmatter);
@@ -742,7 +832,8 @@ export function validateGeneratedTarget(target, outputs) {
     requireContains(path.join(".config", "poolside", ".poolside"), /agent-surface Poolside rules/);
     requireContains(path.join(".config", "poolside", "skills", "redteam-web-detail-pack", "SKILL.md"), skillFrontmatter);
   } else if (target === "cline") {
-    requirePath(path.join("Documents", "Cline", "Workflows", "ops-flow.md"));
+    requirePath(path.join(".cline", "skills", "ops-flow", "SKILL.md"));
+    requirePath(path.join("Documents", "Cline", "Workflows", "ops-nuke.md"));
     requireContains(path.join("Documents", "Cline", "Rules", "agent-surface.md"), /agent-surface Cline global rules/);
     requireContains(path.join(".cline", "agents", "boss.yaml"), /^---\nname: boss\n/);
     requireContains(path.join(".cline", "skills", "karpathy-guidelines", "SKILL.md"), skillFrontmatter);
@@ -755,7 +846,8 @@ export function validateGeneratedTarget(target, outputs) {
     }
     requireContains(".clineignore", /agent-surface canonical AI-tool ignore baseline/);
   } else if (target === "kilo") {
-    requirePath(path.join(".config", "kilo", "commands", "ops-flow.md"));
+    requirePath(path.join(".kilo", "skills", "ops-flow", "SKILL.md"));
+    requirePath(path.join(".config", "kilo", "commands", "ops-nuke.md"));
     requireContains(path.join(".config", "kilo", "agents", "boss.md"), /^---\ndescription: "/);
     requireContains(path.join(".config", "kilo", "kilo.jsonc"), /"\.\/rules\/00-precedence-and-safety\.md"/);
     requireContains(path.join(".config", "kilo", "rules", "00-precedence-and-safety.md"), /Precedence and Safety/);
@@ -765,13 +857,15 @@ export function validateGeneratedTarget(target, outputs) {
     }
     requireContains(".kilocodeignore", /agent-surface canonical AI-tool ignore baseline/);
   } else if (target === "kimi-code") {
-    requireContains(path.join("skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\ndescription: "[^"]+"\ntype: prompt\ndisableModelInvocation: true\n---\n/);
-    requireContains(path.join("skills", "ops-ask", "SKILL.md"), /^---\nname: ops-ask\ndescription: "[^"]+"\ntype: prompt\ndisableModelInvocation: false\n---\n/);
+    requireContains(path.join("skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\ndescription: "[^"]+"\n---\n/);
+    requireNotContains(path.join("skills", "ops-flow", "SKILL.md"), /disableModelInvocation/);
+    requireContains(path.join("skills", "ops-nuke", "SKILL.md"), /type: flow\ndisableModelInvocation: true/);
     requireContains("AGENTS.md", /agent-surface Kimi Code rules/);
     requireContains(path.join("agents", "boss.md"), /^---\nname: boss\n/);
     requireContains(path.join("agents", "boss.md"), /^ {2}- "Read"$/m);
     requireContains(path.join("agents", "worker.md"), /^ {2}- "\*"$/m);
     requireContains("config.toml", /^default_permission_mode = "auto"$/m);
+    requireContains("config.toml", /^merge_all_available_skills = true$/m);
     const mcp = requireJson("mcp.json");
     if (mcp && mcp.mcpServers?.synapse?.command !== "~/.local/bin/synapse-bridge") {
       errors.push("Kimi Code synapse MCP must use the first-party local bridge binary");
@@ -783,21 +877,24 @@ export function validateGeneratedTarget(target, outputs) {
       requireContains(path.join("skills", "karpathy-guidelines", "SKILL.md"), skillFrontmatter);
     }
   } else if (target === "antigravity") {
-    requireContains(path.join("global_workflows", "ops-flow.md"), /^---\ndescription: "/);
+    requireContains(path.join("config", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
+    requireContains(path.join("antigravity", "global_workflows", "ops-nuke.md"), /^---\ndescription: "/);
   } else if (target === "antigravity-cli") {
     const plugin = requireJson(path.join("config", "plugins", "agent-surface", "plugin.json"));
     if (plugin && plugin.name !== "agent-surface") errors.push("Antigravity CLI plugin name must be agent-surface");
-    requireContains(path.join("config", "plugins", "agent-surface", "skills", "ops-flow.md"), /^---\nname: ops-flow\n/);
+    requireContains(path.join("config", "plugins", "agent-surface", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join("config", "plugins", "agent-surface", "agents", "boss.md"), /^---\nname: boss\n/);
     requireContains(path.join("config", "plugins", "agent-surface", "rules", "00-precedence-and-safety.md"), /Antigravity CLI plugin rule/);
     requireContains(path.join("config", "plugins", "agent-surface", "references", "rules", "10-python.md"), /Scoped agent-surface reference/);
   } else if (target === "cursor") {
-    requirePath(path.join(".cursor", "commands", "ops-flow.md"));
+    requirePath(path.join(".cursor", "skills", "ops-flow", "SKILL.md"));
+    requirePath(path.join(".cursor", "commands", "ops-nuke.md"));
     requireContains(path.join(".cursor", "agents", "boss.md"), /^---\nname: boss\n/);
     requirePath(path.join(".cursor", "rules", "00-precedence-and-safety.mdc"));
     requireContains(".cursorignore", /agent-surface canonical AI-tool ignore baseline/);
   } else if (target === "droid") {
-    requirePath(path.join(".factory", "commands", "ops-flow.md"));
+    requirePath(path.join(".factory", "skills", "ops-flow", "SKILL.md"));
+    requirePath(path.join(".factory", "commands", "ops-nuke.md"));
     requireContains(path.join(".factory", "droids", "boss.md"), /^---\nname: boss\n/);
     requireContains(path.join(".factory", "AGENTS.md"), /agent-surface Droid rules/);
     const mcp = requireJson(path.join(".factory", "mcp.json"));
@@ -811,21 +908,30 @@ export function validateGeneratedTarget(target, outputs) {
       requireContains(path.join(".factory", "skills", "karpathy-guidelines", "SKILL.md"), skillFrontmatter);
     }
   } else if (target === "copilot") {
-    requireContains(path.join("instructions", "agent-surface-copilot.instructions.md"), /^---\ndescription: "agent-surface Copilot global instructions"\napplyTo: "\*\*"/);
+    const userRoot = vsCodeUserRoot("Code", { scope: "user" });
+    requirePath(path.join(".copilot", "skills", "ops-flow", "SKILL.md"));
+    requireContains(path.join(userRoot, "instructions", "agent-surface-copilot.instructions.md"), /^---\ndescription: "agent-surface Copilot global instructions"\napplyTo: "\*\*"/);
   } else if (target === "vscode") {
-    requireContains(path.join("instructions", "agent-surface.instructions.md"), /^---\ndescription: "agent-surface VS Code instructions"\napplyTo: "\*\*"/);
-    requireContains(path.join("prompts", "agent-surface.prompt.md"), /^---\ndescription: "Route a task to the lightest safe agent-surface path"/);
+    const userRoot = vsCodeUserRoot("Code", { scope: "user" });
+    requirePath(path.join(".agents", "skills", "ops-flow", "SKILL.md"));
+    requireContains(path.join(userRoot, "instructions", "agent-surface.instructions.md"), /^---\ndescription: "agent-surface VS Code instructions"\napplyTo: "\*\*"/);
+    requireContains(path.join(userRoot, "prompts", "ops-nuke.md"), /^---\ndescription: "Respawn an unmaintainable project/);
   } else if (target === "vscodium") {
-    requireContains(path.join("instructions", "agent-surface.instructions.md"), /^---\ndescription: "agent-surface VSCodium instructions"\napplyTo: "\*\*"/);
-    requireContains(path.join("prompts", "agent-surface.prompt.md"), /^---\ndescription: "Route a task to the lightest safe agent-surface path"/);
+    const userRoot = vsCodeUserRoot("VSCodium", { scope: "user" });
+    requirePath(path.join(".agents", "skills", "ops-flow", "SKILL.md"));
+    requireContains(path.join(userRoot, "instructions", "agent-surface.instructions.md"), /^---\ndescription: "agent-surface VSCodium instructions"\napplyTo: "\*\*"/);
+    requireContains(path.join(userRoot, "prompts", "ops-nuke.md"), /^---\ndescription: "Respawn an unmaintainable project/);
   } else if (target === "opencode") {
     requireContains(path.join(".config", "opencode", "AGENTS.md"), /agent-surface global OpenCode rules/);
-    requirePath(path.join(".config", "opencode", "commands", "ops-flow.md"));
+    requirePath(path.join(".config", "opencode", "skills", "ops-flow", "SKILL.md"));
+    requirePath(path.join(".config", "opencode", "commands", "ops-nuke.md"));
     requireContains(path.join(".config", "opencode", "agents", "boss.md"), /^---\ndescription: "/);
   } else if (target === "trae") {
     requireContains(path.join(".trae", "user_rules.md"), /agent-surface Trae user rules/);
+    requirePath(path.join(".trae", "skills", "ops-flow", "SKILL.md"));
   } else if (target === "windsurf") {
-    requirePath(path.join(".codeium", "windsurf", "global_workflows", "ops-flow.md"));
+    requirePath(path.join(".codeium", "windsurf", "skills", "ops-flow", "SKILL.md"));
+    requirePath(path.join(".codeium", "windsurf", "global_workflows", "ops-nuke.md"));
     requireContains(path.join(".codeium", "windsurf", "memories", "global_rules.md"), /agent-surface Windsurf rules/);
     requireContains(path.join(".codeium", "windsurf", "skills", "ctf-osint", "SKILL.md"), skillFrontmatter);
   } else if (target === "zed") {
@@ -955,7 +1061,7 @@ export function collectRuleReferenceFindings(rule, commandNames, errors, warning
 
   for (const match of rule.text.matchAll(commandRefPattern)) {
     if (!commandNames.has(match[1])) {
-      warnings.push(`${rule.file}: command reference not present in commands/: ${match[1]}`);
+      warnings.push(`${rule.file}: procedure reference not present in skills/ or commands/: ${match[1]}`);
     }
   }
 }

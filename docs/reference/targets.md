@@ -1,35 +1,37 @@
 # Target matrix (reference)
 
-Every host `agent-surface` renders into, and how much of the source model each represents. Compatibility is 1–5: how much of the source model maps to native or close-native surfaces. Build-file counts are from the default user-scope `npm run build -- --target all` on the committed command set; ignored local commands add target-specific outputs. Project-only or install-only surfaces are noted. First-party MCP services (Synapse, Grimoire) auto-wire (non-destructive merge) into all 19 MCP-capable hosts — JSON, TOML, and YAML config families alike.
+Every host `agent-surface` renders into, and how much of the source model each represents. Compatibility is 1–5: how much of the source model maps to native or close-native surfaces. Build-file counts are from the publishable user-scope `npm run build -- --target all` on 60 canonical skills and five committed manual commands. Ignored local command overlays are also rendered when present but are excluded from these counts and from npm packages. Project-only or install-only surfaces are noted. First-party MCP services (Synapse, Grimoire) auto-wire (non-destructive merge) into all 19 MCP-capable hosts - JSON, TOML, and YAML config families alike.
 
-| Target | Build files | Commands / workflows | Rules / instructions | Agents / subagents | Skills / external packs | Config / MCP / ignores | Compat |
+| Target | Build files | Auto-invocable skills | Manual-only workflows | Rules / instructions | Agents / subagents | External / MCP / ignores | Compat |
 |---|---:|---|---|---|---|---|---:|
-| Claude Code | 282 | 65 workflow skills in `.claude/skills/*` with per-workflow invocation policy | None | 6 `.claude/agents/*.md` | External `.claude/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.claude.json` | 4 |
-| Codex | 354 | 65 command skills in `.agents/skills/*` with per-workflow invocation policy | `.codex/AGENTS.md` + 6 scoped refs | 6 `.codex/agents/*.toml` | External `.agents/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.codex/config.toml` | 5 |
-| Deep Agents Code | 284 | 65 command skills in `.deepagents/agent/skills/*` | `.deepagents/agent/AGENTS.md` + 6 scoped refs | Worker only at `.deepagents/agent/agents/worker/AGENTS.md` | External `.deepagents/agent/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.deepagents/.mcp.json` | 4 |
-| Cursor | 85 | 65 native `.cursor/commands/*.md` | 12 native scoped `.cursor/rules/*.mdc` | 6 `.cursor/agents/*.md` | None | Synapse + Grimoire MCP in `.cursor/mcp.json`; `.cursorignore` | 5 |
-| Droid | 289 | 65 native `.factory/commands/*.md` | `.factory/AGENTS.md` + 6 scoped refs | 6 `.factory/droids/*.md` | External `.factory/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.factory/mcp.json` | 5 |
-| Cline | 290 | 65 workflows in `~/Documents/Cline/Workflows/*.md` | `~/Documents/Cline/Rules/agent-surface.md` + 6 scoped refs | 6 `.cline/agents/*.yaml` | External `.cline/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in CLI settings and VS Code/Cursor/Windsurf extension global storage; `.clineignore` | 5 |
-| Kilo | 85 | 65 workflows in `.config/kilo/commands/*.md` | 6 always-on `.config/kilo/rules/*.md` + 6 scoped refs | 6 `.config/kilo/agents/*.md` | None | Synapse + Grimoire MCP, full access, and auto-share disabled in `kilo.jsonc`; `.kilocodeignore` | 5 |
-| Kimi Code | 290 | 65 prompt skills in `$KIMI_CODE_HOME/skills/*` with per-workflow invocation policy | `$KIMI_CODE_HOME/AGENTS.md` + 6 scoped refs | 6 `$KIMI_CODE_HOME/agents/*.md` custom agents | External `$KIMI_CODE_HOME/skills/*` (Anthropic excluded) | Synapse + Grimoire in `mcp.json`; terminal Auto in `config.toml`; VS Code/Cursor extension YOLO on install | 5 |
-| Antigravity CLI | 296 | 65 plugin skills in `config/plugins/agent-surface/skills/*.md` | 6 always-on rules + 6 scoped refs | 6 `config/plugins/agent-surface/agents/*.md` | External plugin skills (Anthropic excluded) | `plugin.json`; Synapse + Grimoire MCP in `config/plugins/agent-surface/mcp_config.json` | 5 |
-| Antigravity (legacy workflows) | 65 | 65 `global_workflows/*.md` | None | None | None | None | 2 |
-| GitHub Copilot | 7 | None | `instructions/agent-surface-copilot.instructions.md` + 6 scoped refs | None | None | None | 2 |
-| VS Code | 9 | None | `instructions/agent-surface.instructions.md` + 6 scoped refs | None | None | Synapse + Grimoire MCP in `mcp.json`; `prompts/agent-surface.prompt.md` | 2 |
-| VSCodium | 9 | None | `instructions/agent-surface.instructions.md` + 6 scoped refs | None | None | Synapse + Grimoire MCP in `mcp.json`; `prompts/agent-surface.prompt.md` | 2 |
-| OpenCode | 79 | 65 native `.config/opencode/commands/*.md` | `.config/opencode/AGENTS.md` + 6 scoped refs | 6 `.config/opencode/agents/*.md` | None | Synapse + Grimoire MCP, full access, and auto-share disabled in `.config/opencode/opencode.json` | 5 |
-| OpenHands | 283 | 65 AgentSkills in `.agents/skills/*` | User legacy `.openhands/skills/agent-surface-rules.md`; project `AGENTS.md`; 6 scoped refs | None | External `.agents/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.openhands/mcp.json` (user-scope) | 4 |
-| Trae | 8 | None | `.trae/user_rules.md` + 6 scoped refs | None | None | Synapse + Grimoire MCP in `.trae/mcp.json` | 2 |
-| Goose | 66 | 65 recipes in `recipes/*.yaml` | None | None | None | Synapse + Grimoire MCP in `~/.config/goose/config.yaml` (`extensions`, user-scope) | 3 |
-| Grok Build | 276 | 65 command skills in `.grok/skills/*` | Project install emits `AGENTS.md`; default user build emits none | None | External `.grok/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.grok/settings.json` | 4 |
-| Pi | 282 | 65 command skills in `.pi/agent/skills/*` | `.pi/agent/AGENTS.md` + 6 scoped refs | None | External `.pi/agent/skills/*` (Anthropic excluded) | None | 4 |
-| Poolside | 283 | 65 command skills in `.config/poolside/skills/*` | `.config/poolside/.poolside` + 6 scoped refs | None | External `.config/poolside/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `settings.yaml` (`mcp_servers`) | 4 |
-| Windsurf | 283 | 65 workflows in `.codeium/windsurf/global_workflows/*.md` | `.codeium/windsurf/memories/global_rules.md` + 6 scoped refs | None | External `.codeium/windsurf/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.codeium/windsurf/mcp_config.json` | 4 |
-| Zed | 283 | 65 command skills in `.agents/skills/*` | `.config/zed/AGENTS.md` + 6 scoped refs | None | External `.agents/skills/*` (Anthropic excluded) | Synapse + Grimoire MCP in `.config/zed/settings.json` | 4 |
+| Claude Code | 282 | 60 `.claude/skills/*/SKILL.md` | 5 explicit-only skills | None | 6 `.claude/agents/*.md` | External skills; Synapse + Grimoire in `.claude.json` | 5 |
+| Codex | 354 | 60 `.agents/skills/*/SKILL.md` with implicit sidecars | 5 explicit-only `.codex/skills/*/SKILL.md` with non-implicit sidecars | `.codex/AGENTS.md` + 6 scoped refs | 6 `.codex/agents/*.toml` | External skills; Synapse + Grimoire in `.codex/config.toml` | 5 |
+| Deep Agents Code | 284 | 60 `.deepagents/agent/skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | `.deepagents/agent/AGENTS.md` + 6 scoped refs | Worker only | External skills; Synapse + Grimoire in `.deepagents/.mcp.json` | 4 |
+| Cursor | 295 | 60 `.cursor/skills/*/SKILL.md` | 5 `.cursor/commands/*.md` | 12 native `.cursor/rules/*.mdc` | 6 `.cursor/agents/*.md` | External skills; Synapse + Grimoire; `.cursorignore` | 5 |
+| Droid | 289 | 60 `.factory/skills/*/SKILL.md` | 5 `.factory/commands/*.md` | `.factory/AGENTS.md` + 6 scoped refs | 6 `.factory/droids/*.md` | External skills; Synapse + Grimoire | 5 |
+| Cline | 290 | 60 `.cline/skills/*/SKILL.md` | 5 `~/Documents/Cline/Workflows/*.md` | Cline rules + 6 scoped refs | 6 `.cline/agents/*.yaml` | External skills; Synapse + Grimoire; `.clineignore` | 5 |
+| Kilo | 295 | 60 `~/.kilo/skills/*/SKILL.md` | 5 `.config/kilo/commands/*.md` | 6 always-on rules + 6 scoped refs | 6 `.config/kilo/agents/*.md` | External skills; Synapse + Grimoire; `.kilocodeignore` | 5 |
+| Kimi Code | 290 | 60 `$KIMI_CODE_HOME/skills/*/SKILL.md` | 5 explicit-only flow skills | `AGENTS.md` + 6 scoped refs | 6 custom agents | External skills; Synapse + Grimoire; auto permissions | 5 |
+| Antigravity CLI | 296 | 60 plugin `skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | 6 always-on rules + 6 scoped refs | 6 plugin agents | External plugin skills; Synapse + Grimoire | 5 |
+| Antigravity | 275 | 60 `~/.gemini/config/skills/*/SKILL.md` | 5 legacy workflows | None | None | External skills | 4 |
+| GitHub Copilot | 282 | 60 `~/.copilot/skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | VS Code instructions + 6 scoped refs | None | External skills | 4 |
+| VS Code | 283 | 60 shared `~/.agents/skills/*/SKILL.md` | 5 prompt files | VS Code instructions + 6 scoped refs | None | External skills; Synapse + Grimoire in the VS Code user profile | 4 |
+| VSCodium | 283 | 60 shared `~/.agents/skills/*/SKILL.md` | 5 prompt files | VSCodium instructions + 6 scoped refs | None | External skills; Synapse + Grimoire in the VSCodium user profile | 4 |
+| OpenCode | 289 | 60 `.config/opencode/skills/*/SKILL.md` | 5 `.config/opencode/commands/*.md` | `AGENTS.md` + 6 scoped refs | 6 agents | External skills; Synapse + Grimoire; full access; sharing disabled | 5 |
+| OpenHands | 283 | 60 `.agents/skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | User rules or project `AGENTS.md`; 6 scoped refs | None | External skills; Synapse + Grimoire | 4 |
+| Trae | 283 | 60 `.trae/skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | `.trae/user_rules.md` + 6 scoped refs | None | External skills; Synapse + Grimoire | 4 |
+| Goose | 276 | 60 `.agents/skills/*/SKILL.md` | 5 compatibility skills in user builds; project installs use `recipes/*.yaml` | None | None | External skills; Synapse + Grimoire in user config | 4 |
+| Grok Build | 276 | 60 `.grok/skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | Project `AGENTS.md` only | None | External skills; Synapse + Grimoire | 4 |
+| Pi | 282 | 60 `.pi/agent/skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | `.pi/agent/AGENTS.md` + 6 scoped refs | None | External skills | 4 |
+| Poolside | 283 | 60 `.config/poolside/skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | `.poolside` instructions + 6 scoped refs | None | External skills; Synapse + Grimoire | 4 |
+| Windsurf | 283 | 60 `.codeium/windsurf/skills/*/SKILL.md` | 5 global workflows | Global rules + 6 scoped refs | None | External skills; Synapse + Grimoire | 5 |
+| Zed | 283 | 60 `.agents/skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | `.config/zed/AGENTS.md` + 6 scoped refs | None | External skills; Synapse + Grimoire | 4 |
 
 Bundled instruction targets inline only `alwaysApply: true` rules. Cybersecurity (`04`) and language rules (`10`–`14`) ship as separate reference files under each target's config tree for explicit or project-aware selection. Cursor keeps all 12 as native `.mdc`; Kilo config-merges the 6 always-on rules and keeps the 6 scoped policies as references.
 
 Generated-file presence proves only distribution. `workflow-runtime` separately grades host discovery, native invocation, authentication, full-autonomy execution, exact materialized world state, output contract, and MCP tool calls. A target may therefore be generated while its installed CLI is `BLOCKED`, `PARTIAL`, or `UNREACHABLE` on a particular machine.
+
+Targets with a native command, workflow, prompt, recipe, or explicit-only skill surface use it. The compatibility-skill targets receive `disable-model-invocation: true` plus an explicit-invocation instruction, but runtime enforcement of that metadata is host-dependent and is not claimed by generated-file checks.
 
 ## Cline Notes
 
@@ -47,7 +49,7 @@ Cline's built-in `spawn_agent` delegation is runtime behavior and needs no gener
 
 Kimi Code's TUI, web runtime, and official VS Code-compatible extension share `config.toml`, `mcp.json`, login state, skills, custom agents, and sessions when they resolve the same `KIMI_CODE_HOME` (default `~/.kimi-code`). The extension has no separate home-path setting. Remote extension hosts use the remote machine's home, and the same session must not be opened concurrently because the session store has no cross-process lock.
 
-The target uses Kimi-specific roots rather than generic `.agents` roots so user and project installs remain isolated from other hosts. Command sources become directory-form `type: prompt` skills invoked explicitly as `/skill:<name>`. A small `model_invocation` allowlist renders `disableModelInvocation: false`; other workflows remain explicit-only. Subagent sources become native custom-agent Markdown with access-specific tool allowlists.
+The target uses Kimi-specific roots rather than generic `.agents` roots so user and project installs remain isolated from other hosts. Canonical `skills/*/SKILL.md` files are emitted unchanged and remain model-invocable. The five committed high-impact commands and any ignored local command overlays become explicit-only `type: flow` skills with `disableModelInvocation: true`. Subagent sources become native custom-agent Markdown with access-specific tool allowlists.
 
 Permission configuration is deliberately split. Full installs merge `default_permission_mode = "auto"` into Kimi's TOML config for unattended terminal/web execution. The official extension exposes only the persistent `kimi.yoloMode` toggle, so user installs set that to `true` in VS Code and Cursor settings while preserving sibling settings. YOLO approves regular tool calls but is not mislabeled as Auto; category-only MCP installs leave both host-wide permission controls untouched.
 

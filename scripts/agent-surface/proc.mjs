@@ -1,6 +1,7 @@
 // Subprocess helpers: version probes + git queries. Thin wrappers over spawnSync so callers
 // don't repeat encoding/cwd/error handling.
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 import process from "node:process";
 import { root } from "./registry.mjs";
 import { fail } from "./util.mjs";
@@ -55,4 +56,22 @@ export function gitOutput(args, env = process.env) {
 
 export async function gitLines(args) {
   return gitOutput(args).split(/\r?\n/).filter(Boolean);
+}
+
+export function gitIgnoredPaths(paths) {
+  if (paths.length === 0) return new Set();
+  const topLevel = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  if (topLevel.status !== 0 || path.resolve(topLevel.stdout.trim()) !== path.resolve(root)) {
+    return new Set();
+  }
+  const result = spawnSync("git", ["check-ignore", "--stdin", "-z"], {
+    cwd: root,
+    encoding: "utf8",
+    input: `${paths.join("\0")}\0`,
+  });
+  if (![0, 1].includes(result.status)) return new Set();
+  return new Set(result.stdout.split("\0").filter(Boolean));
 }

@@ -12,6 +12,7 @@
     "build": "node scripts/agent-surface.mjs build",
     "check": "node scripts/agent-surface.mjs check",
     "check:commands": "node scripts/agent-surface.mjs check commands",
+    "check:skills": "node scripts/agent-surface.mjs check skills",
     "check:generated": "node scripts/agent-surface.mjs check generated",
     "check:rules": "node scripts/agent-surface.mjs check rules",
     "check:subagents": "node scripts/agent-surface.mjs check subagents",
@@ -30,6 +31,6 @@
     "ajv-formats": "^3.0.1"
   },
   "overrides": {
-    "fast-uri": "3.1.4"
+    "fast-uri": "3.1.5"
   }
 }

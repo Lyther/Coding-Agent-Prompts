@@ -1,7 +1,3 @@
-# Optional external submodules are git checkout aids, not core npm payload.
-external/*
-!external/README.md
-
 # Generated and local-only artifacts. The root package is private, but `npm pack`
 # is still useful as a packaging sanity check and should not bundle rendered output.
 node_modules/

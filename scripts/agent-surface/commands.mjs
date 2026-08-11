@@ -1,6 +1,4 @@
-// Command sources: load commands/*.md and parse their minimal frontmatter into a metadata
-// object (name, aliases, phase, description) + body. Parsing only — validation of that
-// metadata lives in the check layer.
+// Manual-only command sources: load commands/*.md and parse their minimal frontmatter.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { files } from "./fs-tree.mjs";
@@ -25,7 +23,6 @@ export function parseCommand(file, text) {
     aliases: [],
     phase: commandPhaseFromName(name),
     description: null,
-    model_invocation: false,
   };
   const frontmatterErrors = [];
   let body = text;
@@ -54,6 +51,7 @@ export function parseCommand(file, text) {
     metadata,
     hasFrontmatter,
     frontmatterErrors,
+    sourceKind: "commands",
   };
 }
 
@@ -98,6 +96,8 @@ export function parseFrontmatterScalar(value) {
 }
 
 export function commandPhaseFromName(name) {
+  if (name === "boot-concept") return "bootstrap";
+  if (name === "ops-flow") return "decide";
   const prefix = name.split("-")[0];
   const map = {
     arch: "decide",

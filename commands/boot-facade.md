@@ -7,7 +7,7 @@ description: "Generate labeled synthetic enterprise fixtures."
 
 **CRITICAL**: This command generates clearly labeled synthetic enterprise fixtures for security research, classifier training, and robustness testing.
 **The Goal**: Create intentionally messy but explicitly synthetic project fixtures. The output must never be presented as a real organization, real research artifact, real compliance evidence, or real production system.
-**Export Policy**: This command is quarantined from default target exports.
+**Invocation Policy**: This workflow may be distributed only through an explicit manual surface. It must never be selected automatically by a model.
 
 ## STRATEGY: "THE INTEGRATION NIGHTMARE"
 

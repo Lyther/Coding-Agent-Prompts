@@ -27,14 +27,14 @@ The `install` step wires each host's MCP *config* to point at `~/.local/bin/syna
 
 ## What it does
 
-- **Compiles source primitives** — `commands/`, `rules/`, `subagents/`, external packs, `ignores/` → per-target outputs via explicit producers.
+- **Compiles source primitives** — `skills/`, manual-only `commands/`, `rules/`, `subagents/`, external packs, and `ignores/` become per-target outputs via explicit producers.
 - **Speaks each host natively** — each target gets the surfaces it understands: commands, workflows, skills, instructions, plugins, rules, subagents, MCP config, or ignore files.
 - **Wires first-party MCP** — Synapse (shared memory) and Grimoire (just-in-time skill retrieval) auto-merge, secretlessly and non-destructively, into all 19 MCP-capable hosts (JSON, TOML, and YAML config families).
 - **Installs deterministically** — dry-run previews, project-scope gating, manifest tracking, generated-file strict-sync, and non-destructive config merges that preserve unknown sibling entries.
 
 ## Supported targets
 
-Twenty-two targets, ranked 1–5 by how much of the source model maps to native surfaces. Seven score 5/5 (Codex, Cursor, Droid, Kilo, Kimi Code, Antigravity CLI, OpenCode); instruction-only hosts (Copilot, VS Code, Trae) score 2/5.
+Twenty-two targets, ranked 1–5 by how much of the source model maps to native surfaces. Every supported agent runtime receives the canonical skill catalog, all configured external skill packs, and every high-impact manual command. Commands use a native explicit surface where one exists and an explicit-invocation compatibility skill otherwise.
 
 **Full matrix — per-target surfaces, file counts, and MCP wiring: [docs/reference/targets.md](docs/reference/targets.md).**
 
@@ -43,7 +43,8 @@ Out of scope: Gemini CLI (EoL — use Antigravity CLI), Roo Code (EoL), Xcode.
 ## Project layout
 
 ```text
-commands/    Reusable workflow procedures with per-workflow invocation policy
+skills/      Vanilla Agent Skills, model-invocable by default
+commands/    High-impact workflows that require explicit user invocation
 rules/       Always-on or scoped behavior policy
 subagents/   Normalized subagent definitions
 mcps/        First-party MCP services (synapse, grimoire)
@@ -61,9 +62,10 @@ Local IDE overlays (`.cursor/`, `.claude/`, `.kilo/`, …) stay gitignored on ma
 
 ```bash
 node scripts/agent-surface.mjs inventory          # source counts
-node scripts/agent-surface.mjs check              # full validation (commands, rules, generated, registry)
+node scripts/agent-surface.mjs check              # full validation (skills, manual commands, rules, generated, registry)
 node scripts/agent-surface.mjs doctor             # repo health summary
-node scripts/agent-surface.mjs commands --json    # registry inspection (add --phase <phase> to filter)
+node scripts/agent-surface.mjs skills --json      # auto-invocable skill catalog (add --phase <phase> to filter)
+node scripts/agent-surface.mjs commands --json    # explicit-only command catalog
 node scripts/agent-surface.mjs build --target <t> --dry-run
 node scripts/agent-surface.mjs install --target <t> --scope user --dry-run
 ```
@@ -92,7 +94,7 @@ Built from `mcps/`, installed once, then auto-wired (non-destructive merge) into
 
 `ops-flow` chooses the lightest safe profile: direct, standard single-owner development, writer-plus-reviewer, formal orchestration, or release proof. Only orchestrated/release profiles use the durable ledger under `.agent-surface/workflows/<run_id>/`; `workflow-runtime` qualifies external/native runtimes, `workflow-doctor` rejects schema, task-state, and liveness drift, and `verify-readiness` gates production-ready claims on real evidence.
 
-`workflow-runtime` treats generated artifacts, command discovery, provider authentication, permission mode, tool execution, world-state materialization, output shape, and MCP calls as separate gates. This user distribution launches writable workers with each host's full-access equivalent while preserving read-only tool profiles for reviewer and analysis roles. Kilo and OpenCode config explicitly disables automatic session sharing. Kimi Code uses terminal Auto mode and the extension's highest persistent mode, YOLO. Codex source commands compile to `$name` Agent Skills with per-workflow implicit-invocation policy; they are not advertised as a separate native workflow surface.
+`workflow-runtime` treats generated artifacts, skill discovery, provider authentication, permission mode, tool execution, world-state materialization, output shape, and MCP calls as separate gates. This user distribution launches writable workers with each host's full-access equivalent while preserving read-only tool profiles for reviewer and analysis roles. Kilo and OpenCode config explicitly disables automatic session sharing. Kimi Code uses terminal Auto mode and the extension's highest persistent mode, YOLO. Codex receives unchanged canonical skills with implicit invocation enabled; the five committed high-impact workflows and any ignored local command overlays are private skills with implicit invocation disabled and remain available through explicit `$<name>` invocation.
 
 ## More
 
