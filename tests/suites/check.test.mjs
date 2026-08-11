@@ -1,7 +1,20 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { targets } from "../../scripts/agent-surface/targets.mjs";
 import {
   expectedCommandCount,
@@ -173,6 +186,36 @@ if (opsServer) assert.equal(Object.keys(opsServer.targets).length, Object.keys(t
 const shipCommands = JSON.parse(run(["commands", "--phase", "ship", "--json"]));
 assert.equal(shipCommands.commands.every((command) => command.phase === "ship"), true);
 assert.equal(shipCommands.commands.every((command) => command.model_invocation === false), true);
+
+// A packaged copy can live under a consumer Git checkout whose node_modules/ is
+// ignored. The enclosing repository must not make agent-surface drop its own
+// committed manual commands.
+const consumerRoot = mkdtempSync(path.join(tmpdir(), "agent-surface-consumer-"));
+try {
+  execFileSync("git", ["init", "-q"], { cwd: consumerRoot });
+  writeFileSync(path.join(consumerRoot, ".gitignore"), "node_modules/\n");
+  const packed = JSON.parse(execFileSync(
+    "npm",
+    ["pack", "--json", "--pack-destination", consumerRoot],
+    { cwd: root, encoding: "utf8" },
+  ));
+  const modulesRoot = path.join(consumerRoot, "node_modules");
+  mkdirSync(modulesRoot);
+  execFileSync("tar", ["-xzf", path.join(consumerRoot, packed[0].filename), "-C", modulesRoot]);
+  const packagedRoot = path.join(modulesRoot, "agent-surface");
+  renameSync(path.join(modulesRoot, "package"), packagedRoot);
+  symlinkSync(path.join(root, "node_modules"), path.join(packagedRoot, "node_modules"), "dir");
+  const packagedCheck = await import(pathToFileURL(
+    path.join(packagedRoot, "scripts", "agent-surface", "check.mjs"),
+  ));
+  const packagedCommands = await packagedCheck.exportableCommands();
+  assert.deepEqual(
+    packagedCommands.map((command) => command.name).sort(),
+    ["boot-facade", "ops-nuke", "ship-commit", "ship-deploy", "ship-release"],
+  );
+} finally {
+  rmSync(consumerRoot, { recursive: true, force: true });
+}
 
 const escapeVictim = "/tmp/agent-surface-build-escape-victim";
 rmSync(escapeVictim, { recursive: true, force: true });
