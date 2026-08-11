@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-import { exportableCatalog, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
+import { exportableCatalog, localCommandOverlays, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
 import { readFileIfExists, readJsonIfExists, removeTree } from "./io.mjs";
 import { mergeKiloInstructionJsonc, parseJsoncResult, setJsoncRootProperty } from "./jsonc.mjs";
 import { YAML_MCP_FORMATS, mergeCodexMcpToml, mergeJsonMcpConfig, mergeYamlMcpConfig, optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
@@ -262,9 +262,17 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const partialInstall = categoryFilter !== null || optionalServices !== null;
   const liveOutputs = new Set(managed.map((item) => item.output));
   const previousFileEntries = manifestFileEntries(previousManifest, target);
+  const liveCommandSources = new Set(catalog.commands.map((command) => command.relativePath));
+  // Public packages intentionally omit private local command overlays. Their
+  // absence is not a de-scoping signal: retain prior ownership and files until
+  // a checkout that actually carries the overlay updates them.
+  const retainedLocalOverlayEntries = previousFileEntries.filter(
+    (item) => localCommandOverlays.has(item.source) && !liveCommandSources.has(item.source),
+  );
+  const retainedLocalOverlayOutputs = new Set(retainedLocalOverlayEntries.map((item) => item.output));
   const staleManaged = !partialInstall
     ? [...previousFileEntries, ...legacyOwnership.files]
-      .filter((item) => !liveOutputs.has(item.output))
+      .filter((item) => !liveOutputs.has(item.output) && !retainedLocalOverlayOutputs.has(item.output))
       .sort((left, right) => left.output.localeCompare(right.output))
     : [];
   const staleRemovalActions = [];
@@ -359,7 +367,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const retainedManaged = partialInstall
     ? previousFileEntries
       .filter((item) => !liveOutputs.has(item.output))
-    : [];
+    : retainedLocalOverlayEntries;
   const manifestManaged = [...retainedManaged, ...managed].sort((left, right) => left.output.localeCompare(right.output));
   const nextConfigEntries = mergedManifestConfigEntries(
     previousConfigEntries,

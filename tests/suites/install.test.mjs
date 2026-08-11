@@ -898,6 +898,79 @@ for (const required of [
 }
 assert.equal(packedPaths.has("commands/ops-server.md"), false, "npm package leaked private ops-server command");
 
+// A public package cannot carry the ignored private command overlay. Installing
+// that package later must not interpret the absent private source as a request
+// to delete a locally installed overlay that the maintainer checkout owns.
+{
+  const dest = mkdtempSync(path.join(os.tmpdir(), "agent-surface-private-overlay-dest-"));
+  const packageDir = mkdtempSync(path.join(os.tmpdir(), "agent-surface-public-package-"));
+  try {
+    // SUBSTITUTE_JUSTIFICATION
+    // - substitute: representative private skill and policy bytes in this temporary install root
+    // - replaces: the ignored commands/ops-server.md source, which is intentionally unavailable in public CI
+    // - necessity: the deletion regression requires prior manifest-owned private files without publishing the secret source
+    // - real-option: installing the real overlay is exercised by the maintainer-only all-target local distribution audit
+    // - proof-limit: this setup does not prove rendering from the private source; it proves package reinstall preservation
+    // - real-proof: node scripts/agent-surface.mjs install --target all --scope user --allow-scope-root
+    const privateSkillRel = path.join(".codex", "skills", "ops-server", "SKILL.md");
+    const privatePolicyRel = path.join(".codex", "skills", "ops-server", "agents", "openai.yaml");
+    const privateSkill = path.join(dest, privateSkillRel);
+    const privatePolicy = path.join(dest, privatePolicyRel);
+    mkdirSync(path.dirname(privateSkill), { recursive: true });
+    mkdirSync(path.dirname(privatePolicy), { recursive: true });
+    writeFileSync(privateSkill, "private local skill\n");
+    writeFileSync(privatePolicy, "private local policy\n");
+    mkdirSync(path.join(dest, ".agent-surface"), { recursive: true });
+    writeFileSync(
+      path.join(dest, ".agent-surface", "codex-manifest.json"),
+      `${JSON.stringify({
+        target: "codex",
+        scope: "user",
+        managed: [
+          { target: "codex", source: "commands/ops-server.md", output: privateSkillRel, version: "private-local" },
+          { target: "codex", source: "commands/ops-server.md", output: privatePolicyRel, version: "private-local" },
+        ],
+        config_entries: [],
+      }, null, 2)}\n`,
+    );
+    const privateSkillBefore = readFileSync(privateSkill);
+    const privatePolicyBefore = readFileSync(privatePolicy);
+
+    const packageInfo = JSON.parse(execFileSync(
+      "npm",
+      ["pack", "--json", "--pack-destination", packageDir, "--loglevel=silent"],
+      { cwd: root, encoding: "utf8" },
+    ));
+    const packagedRoot = path.join(packageDir, "source");
+    mkdirSync(packagedRoot);
+    execFileSync(
+      "tar",
+      ["-xzf", path.join(packageDir, packageInfo[0].filename), "-C", packagedRoot, "--strip-components=1"],
+    );
+    symlinkSync(path.join(root, "node_modules"), path.join(packagedRoot, "node_modules"), "dir");
+    assert.equal(existsSync(path.join(packagedRoot, "commands", "ops-server.md")), false);
+
+    execFileSync(
+      process.execPath,
+      [path.join(packagedRoot, "scripts", "agent-surface.mjs"), "install", "--target", "codex", "--dest", dest],
+      { cwd: packagedRoot, encoding: "utf8" },
+    );
+
+    assert.deepEqual(readFileSync(privateSkill), privateSkillBefore);
+    assert.deepEqual(readFileSync(privatePolicy), privatePolicyBefore);
+    const manifest = JSON.parse(
+      readFileSync(path.join(dest, ".agent-surface", "codex-manifest.json"), "utf8"),
+    );
+    assert.equal(
+      manifest.managed.filter((item) => item.source === "commands/ops-server.md").length,
+      2,
+    );
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+    rmSync(packageDir, { recursive: true, force: true });
+  }
+}
+
 const allTargetsDest = mkdtempSync(path.join(os.tmpdir(), "agent-surface-all-targets-"));
 try {
   run(["install", "--target", "all", "--scope", "user", "--dest", allTargetsDest]);
