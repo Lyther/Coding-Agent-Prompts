@@ -1,6 +1,6 @@
 # Claude Code adapter
 
-Canonical skills are emitted unchanged to Claude Code. The five high-impact commands use the same skill surface with `disable-model-invocation: true`; normalized subagents use Claude Code subagent files.
+Canonical skills are emitted unchanged to Claude Code. Available high-impact commands use the same skill surface with `disable-model-invocation: true`; normalized subagents use Claude Code subagent files.
 
 Implemented target paths:
 

@@ -13,4 +13,4 @@ First-party MCP wiring (Synapse and Grimoire) is generated and safely merged. Ex
 
 The current subagent batch emits `subagents/{boss,researcher,analyzer,adversary,reviewer,worker}.md` to `.cursor/agents/*.md` with Cursor's documented Markdown frontmatter shape (`name`, `description`, `model`, `readonly`, `is_background`). Runtime launch probes must call `cursor agent ...`; do not use a bare `agent` command because Grok Build also has an `agent`-named surface.
 
-Canonical skills remain available for Cursor's automatic skill discovery. Only the five high-impact workflows remain native commands.
+Canonical skills remain available for Cursor's automatic skill discovery. Only available high-impact workflows remain native commands.

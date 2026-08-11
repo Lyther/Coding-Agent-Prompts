@@ -33,7 +33,7 @@ An explicit `--dest` relocates the selected scope, including conventional VS Cod
 
 ## Runtime contracts
 
-Kimi Code discovers directory-form skills from the Kimi-specific user and project roots. Canonical skills are emitted unchanged and remain model-invocable. The five high-impact commands declare `type: flow` and `disableModelInvocation: true`, so they require explicit `/skill:<name>` invocation. Full installs also set `merge_all_available_skills = true`.
+Kimi Code discovers directory-form skills from the Kimi-specific user and project roots. Canonical skills are emitted unchanged and remain model-invocable. Available high-impact commands declare `type: flow` and `disableModelInvocation: true`, so they require explicit `/skill:<name>` invocation. Full installs also set `merge_all_available_skills = true`.
 
 Custom agent files contain Kimi's `name`, `description`, and `tools` frontmatter plus the source prompt. Read-only roles allow Kimi's inspection, search, web, todo, question, and skill tools; read-write roles add file editing; shell workers allow the full tool surface. The files are intended for Kimi's native sub-agent delegation. Current main-agent selection through `--agent` or `--agent-file` is limited to experimental print mode and is not claimed by this adapter.
 

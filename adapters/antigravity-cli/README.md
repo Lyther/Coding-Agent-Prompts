@@ -1,6 +1,6 @@
 # Antigravity CLI plugin adapter
 
-Package canonical Agent Skills, always-on rules, scoped rule references, and normalized subagents. High-impact manual commands are omitted because this plugin surface does not enforce explicit-only invocation.
+Package canonical Agent Skills, all available high-impact commands, always-on rules, scoped rule references, and normalized subagents. Commands use explicit-invocation compatibility skills with `disable-model-invocation: true`; Antigravity CLI enforcement remains unproven.
 
 Default user install target:
 

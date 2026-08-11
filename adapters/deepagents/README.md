@@ -26,7 +26,7 @@ Deep Agents Code subagent files support `name`, `description`, optional `model`,
 
 External skill packs render only when the optional-service entry declares `skill_roots`. `anthropic-cybersecurity-skills` is kept as a pinned source asset but is not emitted into Deep Agents Code skill roots by default.
 
-High-impact manual commands are omitted because this target has no enforced explicit-only procedure surface.
+Available high-impact commands use explicit-invocation compatibility skills with `disable-model-invocation: true`; Deep Agents Code enforcement remains unproven.
 
 Generated instruction files bundle only `alwaysApply: true` rules, including cybersecurity policy. Scoped language policies are reference files for project-aware commands such as `boot-new`.
 

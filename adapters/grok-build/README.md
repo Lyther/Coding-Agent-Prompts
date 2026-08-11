@@ -15,4 +15,4 @@ Generates Grok Build skills, project instructions, and external Agent Skills.
 - External skill packs render only when the optional-service entry declares `skill_roots`. `anthropic-cybersecurity-skills` is kept as a pinned source asset but is not emitted into Grok Build skill roots by default.
 - Project instructions use the `AGENTS.md` family. User-scope installs only emit skill folders.
 - Project instruction files bundle only always-on rules. Scoped language policies are reference files for project-aware commands.
-- High-impact manual commands are omitted without a proven explicit-only control.
+- Available high-impact commands use explicit-invocation compatibility skills with `disable-model-invocation: true`; Grok Build enforcement remains unproven.

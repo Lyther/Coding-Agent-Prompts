@@ -6,6 +6,7 @@ import { vsCodeUserRoot } from "../../scripts/agent-surface/roots.mjs";
 import {
   assertCodexAgentTomlParses,
   files,
+  hasLocalOpsServerCommand,
   root, run, status,
 } from "../lib/helpers.mjs";
 
@@ -67,7 +68,49 @@ assert.equal(generated.some((file) => file.includes(`${path.sep}verify-spec${pat
 assert.equal(generated.some((file) => file.includes(`${path.sep}arch-api${path.sep}`) || file.endsWith(`${path.sep}arch-api.md`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}arch-model${path.sep}`) || file.endsWith(`${path.sep}arch-model.md`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}.claude${path.sep}commands${path.sep}`)), false);
-assert.equal(generated.some((file) => file.includes(`${path.sep}ops-server${path.sep}`) || file.endsWith(`${path.sep}ops-server.md`)), false);
+for (const target of [
+  "antigravity",
+  "antigravity-cli",
+  "claude-code",
+  "cline",
+  "codex",
+  "copilot",
+  "cursor",
+  "deepagents",
+  "droid",
+  "goose",
+  "grok-build",
+  "kilo",
+  "kimi-code",
+  "opencode",
+  "openhands",
+  "pi",
+  "pool",
+  "trae",
+  "vscode",
+  "vscodium",
+  "windsurf",
+  "zed",
+]) {
+  const targetFiles = generated.filter((file) => file.includes(`${path.sep}dist${path.sep}${target}${path.sep}`));
+  if (hasLocalOpsServerCommand) {
+    assert.equal(
+      targetFiles.some((file) => file.includes(`${path.sep}ops-server${path.sep}`) || file.endsWith(`${path.sep}ops-server.md`)),
+      true,
+      `${target}: local ops-server command missing`,
+    );
+  }
+  assert.equal(
+    targetFiles.some((file) => file.includes(`${path.sep}karpathy-guidelines${path.sep}SKILL.md`)),
+    true,
+    `${target}: optional andrej-karpathy-skills pack missing`,
+  );
+  assert.equal(
+    targetFiles.some((file) => file.includes(`${path.sep}book-study${path.sep}SKILL.md`)),
+    true,
+    `${target}: optional sanyuan-skills pack missing`,
+  );
+}
 
 const claudeOpsAsk = readFileSync(path.join(root, "dist", "claude-code", ".claude", "skills", "ops-ask", "SKILL.md"), "utf8");
 const claudeOpsNuke = readFileSync(path.join(root, "dist", "claude-code", ".claude", "skills", "ops-nuke", "SKILL.md"), "utf8");
@@ -81,7 +124,10 @@ assert.equal(existsSync(path.join(root, "dist", "codex", ".agents", "skills", "o
 const canonicalOpsAsk = readFileSync(path.join(root, "skills", "ops-ask", "SKILL.md"), "utf8");
 assert.equal(claudeOpsAsk, canonicalOpsAsk);
 assert.equal(readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-ask", "SKILL.md"), "utf8"), canonicalOpsAsk);
-assert.equal(existsSync(path.join(root, "dist", "deepagents", ".deepagents", "agent", "skills", "ops-nuke", "SKILL.md")), false);
+assert.match(
+  readFileSync(path.join(root, "dist", "deepagents", ".deepagents", "agent", "skills", "ops-nuke", "SKILL.md"), "utf8"),
+  /^disable-model-invocation: true$/m,
+);
 
 // Substitute-policy contract lands in always-on Codex instructions + verify-test skill.
 const codexInstructions = readFileSync(path.join(root, "dist", "codex", ".codex", "AGENTS.md"), "utf8");

@@ -1,6 +1,6 @@
 # Goose Adapter
 
-Generates native Agent Skills for safe reusable procedures and Goose recipes for the five high-impact manual commands.
+Generates native Agent Skills for safe reusable procedures. Available high-impact manual commands become Goose recipes in project scope and explicit-invocation compatibility skills in user scope, so recipes are never written directly into `$HOME`.
 
 ## Outputs
 

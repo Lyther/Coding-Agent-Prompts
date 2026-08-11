@@ -19,6 +19,6 @@ Generates Windsurf workflows, rules, and local skills.
 
 ## Notes
 
-- Canonical skills remain auto-discoverable. Only the five high-impact commands render as manual workflows.
+- Canonical skills remain auto-discoverable. Only available high-impact commands render as manual workflows.
 - First-party MCP wiring (Synapse and Grimoire) is generated and safely merged. External or secret-bearing MCPs remain opt-in.
 - Generated rules bundle only always-on policy. Scoped language policies are reference files for project-aware commands.

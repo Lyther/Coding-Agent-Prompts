@@ -13,4 +13,4 @@ Generates Pi Agent Skills and instruction files.
 - Pi supports the Agent Skills format and reads `AGENTS.md`.
 - Subagents are not generated because Pi does not enable sub-agent behavior by default.
 - Generated instructions bundle only always-on rules. Scoped language policies are reference files for project-aware commands.
-- High-impact manual commands are omitted without a proven explicit-only control.
+- Available high-impact commands use explicit-invocation compatibility skills with `disable-model-invocation: true`; Pi enforcement remains unproven.

@@ -13,7 +13,7 @@ Generates Poolside local skills and instruction files.
 - Poolside scans local Agent Skills directories including `~/.config/poolside/skills/`, `.poolside/skills/`, and `.agents/skills/`.
 - External skill packs render only when the optional-service entry declares `skill_roots`. `anthropic-cybersecurity-skills` is kept as a pinned source asset but is not emitted into Poolside skill roots by default.
 - Generated instructions bundle only always-on rules. Scoped language policies are reference files for project-aware commands.
-- High-impact manual commands are omitted without a proven explicit-only control.
+- Available high-impact commands use explicit-invocation compatibility skills with `disable-model-invocation: true`; Poolside enforcement remains unproven.
 
 ## First-party MCP (generated)
 

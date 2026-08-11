@@ -230,6 +230,14 @@ export async function renderManualCodexSkill(source) {
   });
 }
 
+export async function renderManualPortableSkill(source) {
+  return renderSkillMarkdown(source, {
+    generatedFor: "compatible Agent Skills hosts",
+    frontmatter: ["disable-model-invocation: true"],
+    hostInstruction: "This manual workflow must be selected explicitly.",
+  });
+}
+
 export async function renderGooseRecipe(source) {
   const description = yamlString(source.metadata.description ?? firstHeading(source.body) ?? `Run ${source.name.replaceAll("-", " ")}.`);
   return [

@@ -34,7 +34,7 @@ The `install` step wires each host's MCP *config* to point at `~/.local/bin/syna
 
 ## Supported targets
 
-Twenty-two targets, ranked 1–5 by how much of the source model maps to native surfaces. Every supported agent runtime receives the canonical skill catalog through a native skill root; high-impact manual commands are emitted only where the host has an explicit-only surface.
+Twenty-two targets, ranked 1–5 by how much of the source model maps to native surfaces. Every supported agent runtime receives the canonical skill catalog, all configured external skill packs, and every high-impact manual command. Commands use a native explicit surface where one exists and an explicit-invocation compatibility skill otherwise.
 
 **Full matrix — per-target surfaces, file counts, and MCP wiring: [docs/reference/targets.md](docs/reference/targets.md).**
 
@@ -94,7 +94,7 @@ Built from `mcps/`, installed once, then auto-wired (non-destructive merge) into
 
 `ops-flow` chooses the lightest safe profile: direct, standard single-owner development, writer-plus-reviewer, formal orchestration, or release proof. Only orchestrated/release profiles use the durable ledger under `.agent-surface/workflows/<run_id>/`; `workflow-runtime` qualifies external/native runtimes, `workflow-doctor` rejects schema, task-state, and liveness drift, and `verify-readiness` gates production-ready claims on real evidence.
 
-`workflow-runtime` treats generated artifacts, skill discovery, provider authentication, permission mode, tool execution, world-state materialization, output shape, and MCP calls as separate gates. This user distribution launches writable workers with each host's full-access equivalent while preserving read-only tool profiles for reviewer and analysis roles. Kilo and OpenCode config explicitly disables automatic session sharing. Kimi Code uses terminal Auto mode and the extension's highest persistent mode, YOLO. Codex receives unchanged canonical skills with implicit invocation enabled; the five high-impact workflows are private skills with implicit invocation disabled and remain available through explicit `$<name>` invocation.
+`workflow-runtime` treats generated artifacts, skill discovery, provider authentication, permission mode, tool execution, world-state materialization, output shape, and MCP calls as separate gates. This user distribution launches writable workers with each host's full-access equivalent while preserving read-only tool profiles for reviewer and analysis roles. Kilo and OpenCode config explicitly disables automatic session sharing. Kimi Code uses terminal Auto mode and the extension's highest persistent mode, YOLO. Codex receives unchanged canonical skills with implicit invocation enabled; the five committed high-impact workflows and any ignored local command overlays are private skills with implicit invocation disabled and remain available through explicit `$<name>` invocation.
 
 ## More
 

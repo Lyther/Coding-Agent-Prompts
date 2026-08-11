@@ -6,7 +6,7 @@ import path from "node:path";
 import { readCommands } from "../../scripts/agent-surface/commands.mjs";
 import { readSkills } from "../../scripts/agent-surface/skills.mjs";
 import { targetOutputs, targetProducers, targets } from "../../scripts/agent-surface/targets.mjs";
-import { root } from "../lib/helpers.mjs";
+import { hasLocalOpsServerCommand, root } from "../lib/helpers.mjs";
 
 const publishableCommandPaths = new Set(
   execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "--", "commands/*.md"], {
@@ -24,23 +24,10 @@ const publishableSkillPaths = new Set(
 const publishableSkills = (await readSkills()).filter((skill) => publishableSkillPaths.has(skill.relativePath));
 assert.equal(publishableCommands.length, 5, "manual command count must match publishable Git inputs");
 assert.equal(publishableSkills.length, 60, "canonical skill count must match publishable Git inputs");
+const allCommands = await readCommands();
 const catalog = { commands: publishableCommands, skills: publishableSkills };
+const localCatalog = { commands: allCommands, skills: publishableSkills };
 const canonicalOpsFlow = publishableSkills.find((skill) => skill.name === "ops-flow").text;
-const manualTargets = new Set([
-  "antigravity",
-  "claude-code",
-  "cline",
-  "codex",
-  "cursor",
-  "droid",
-  "goose",
-  "kilo",
-  "kimi-code",
-  "opencode",
-  "vscode",
-  "vscodium",
-  "windsurf",
-]);
 const targetMatrixRows = new Map(
   readFileSync(path.join(root, "docs", "reference", "targets.md"), "utf8")
     .split(/\r?\n/)
@@ -94,8 +81,30 @@ for (const [target, adapter] of Object.entries(targets)) {
   assert.equal(safeOutput.content, canonicalOpsFlow, `${target}: canonical skill remains unchanged`);
   assert.equal(
     outputs.some((output) => output.source === "commands/ops-nuke.md"),
-    manualTargets.has(target),
-    `${target}: manual command projection policy`,
+    true,
+    `${target}: manual commands are distributed`,
   );
+  if (hasLocalOpsServerCommand) {
+    const localOutputs = await targetOutputs(adapter, localCatalog, {
+      target,
+      scope: "user",
+      mode: "build",
+      agentName: "agent",
+      categoryFilter: null,
+      optionalServices: null,
+    });
+    assert.equal(
+      localOutputs.some((output) => output.source === "commands/ops-server.md"),
+      true,
+      `${target}: private local ops-server command is distributed`,
+    );
+  }
+  for (const optionalPack of ["external/andrej-karpathy-skills/", "external/sanyuan-skills/"]) {
+    assert.equal(
+      outputs.some((output) => output.source.startsWith(optionalPack)),
+      true,
+      `${target}: optional pack ${optionalPack} is distributed`,
+    );
+  }
 }
 console.log("matrix: ok");

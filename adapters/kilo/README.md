@@ -1,6 +1,6 @@
 # Kilo adapter
 
-Canonical skills use Kilo's native skill root. The five high-impact commands remain custom command files; rules and subagents retain their native surfaces.
+Canonical skills use Kilo's native skill root. Available high-impact commands remain custom command files; rules and subagents retain their native surfaces.
 
 Implemented target paths:
 

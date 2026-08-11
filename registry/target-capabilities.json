@@ -35,7 +35,7 @@
             "~/.claude/skills/<name>/SKILL.md",
             ".claude/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged and may be selected automatically. Five high-impact commands use the same native surface with disable-model-invocation: true."
+          "notes": "Canonical skills are emitted unchanged and may be selected automatically. Available high-impact commands use the same native surface with disable-model-invocation: true."
         },
         "subagents": {
           "support": "native",
@@ -114,7 +114,7 @@
             ".agents/skills/<name>/SKILL.md",
             "~/.codex/skills/<manual>/SKILL.md"
           ],
-          "notes": "Canonical skills use the shared Agent Skills root with allow_implicit_invocation: true. Five high-impact workflows use the private Codex skill root with allow_implicit_invocation: false and require explicit $<name> invocation."
+          "notes": "Canonical skills use the shared Agent Skills root with allow_implicit_invocation: true. Available high-impact workflows use the private Codex skill root with allow_implicit_invocation: false and require explicit $<name> invocation."
         },
         "subagents": {
           "support": "native",
@@ -205,7 +205,7 @@
             "~/.deepagents/<agent>/skills/<name>/SKILL.md",
             ".deepagents/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted because this target has no enforced manual-only procedure surface."
+          "notes": "Canonical skills are emitted unchanged. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
         "rules": {
           "support": "native",
@@ -262,7 +262,7 @@
       }
     },
     "goose": {
-      "summary": "Goose supports reusable recipe YAML files; agent-surface renders canonical skills plus five manual project recipes.",
+      "summary": "Goose supports reusable recipe YAML files and Agent Skills; agent-surface renders canonical skills plus available manual commands as project recipes or user compatibility skills.",
       "generated_render_tokens": [
         "skills",
         "recipes",
@@ -285,7 +285,7 @@
           "paths": [
             "recipes/<command>.yaml"
           ],
-          "notes": "Five high-impact commands render as project-oriented recipes; safe reusable procedures are native skills."
+          "notes": "Available high-impact commands render as project-oriented recipes; user-scope distribution uses explicit-invocation compatibility skills instead of writing recipes into HOME."
         },
         "mcp": {
           "support": "native",
@@ -309,7 +309,7 @@
             "~/.agents/skills/<name>/SKILL.md",
             ".agents/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills use Goose native Agent Skills discovery. High-impact commands remain project recipes."
+          "notes": "Canonical skills use Goose native Agent Skills discovery. User-scope high-impact commands share this root with disable-model-invocation: true; host enforcement remains unproven."
         },
         "external": {
           "support": "native",
@@ -356,7 +356,7 @@
             "~/.grok/skills/<name>/SKILL.md",
             ".grok/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted without a proven explicit-only control."
+          "notes": "Canonical skills are emitted unchanged. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
         "rules": {
           "support": "native",
@@ -430,7 +430,7 @@
             "~/.pi/agent/skills/<name>/SKILL.md",
             ".pi/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted without a proven explicit-only control."
+          "notes": "Canonical skills are emitted unchanged. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
         "rules": {
           "support": "native",
@@ -503,7 +503,7 @@
             "~/.config/poolside/skills/<name>/SKILL.md",
             ".poolside/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted without a proven explicit-only control."
+          "notes": "Canonical skills are emitted unchanged. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
         "rules": {
           "support": "native",
@@ -623,7 +623,7 @@
             "~/Documents/Cline/Workflows/*.md",
             ".clinerules/workflows/*.md"
           ],
-          "notes": "Five high-impact commands render as manual workflows; safe reusable procedures are native skills."
+          "notes": "Available high-impact commands render as manual workflows; safe reusable procedures are native skills."
         },
         "rules": {
           "support": "native",
@@ -673,7 +673,7 @@
             "~/.cline/skills/<name>/SKILL.md",
             ".cline/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged for model selection through Cline use_skill. Five high-impact commands remain native workflows."
+          "notes": "Canonical skills are emitted unchanged for model selection through Cline use_skill. Available high-impact commands remain native workflows."
         },
         "mcp": {
           "support": "native",
@@ -821,7 +821,7 @@
             "~/.config/kilo/commands/*.md",
             ".kilo/commands/*.md"
           ],
-          "notes": "Five high-impact commands render as manual custom commands; safe reusable procedures are native skills. Automatic session sharing remains disabled."
+          "notes": "Available high-impact commands render as manual custom commands; safe reusable procedures are native skills. Automatic session sharing remains disabled."
         },
         "rules": {
           "support": "native",
@@ -887,7 +887,7 @@
             "~/.kilo/skills/<name>/SKILL.md",
             ".kilo/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged for Kilo use_skill discovery. Five high-impact commands remain native custom commands."
+          "notes": "Canonical skills are emitted unchanged for Kilo use_skill discovery. Available high-impact commands remain native custom commands."
         },
         "external": {
           "support": "native",
@@ -947,7 +947,7 @@
             "$KIMI_CODE_HOME/skills/<name>/SKILL.md",
             ".kimi-code/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged and model-invocable. Five high-impact commands render as explicit-only type: flow skills with disableModelInvocation: true."
+          "notes": "Canonical skills are emitted unchanged and model-invocable. Available high-impact commands render as explicit-only type: flow skills with disableModelInvocation: true."
         },
         "rules": {
           "support": "native",
@@ -1087,7 +1087,7 @@
           "paths": [
             "~/.gemini/antigravity/global_workflows/*.md"
           ],
-          "notes": "Five high-impact commands remain manual legacy workflows; safe reusable procedures are native skills."
+          "notes": "Available high-impact commands remain manual legacy workflows; safe reusable procedures are native skills."
         },
         "mcp": {
           "support": "manual-only",
@@ -1107,7 +1107,7 @@
           "paths": [
             "~/.gemini/config/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged for Antigravity discovery. Five high-impact commands remain legacy manual workflows."
+          "notes": "Canonical skills are emitted unchanged for Antigravity discovery. Available high-impact commands remain legacy manual workflows."
         },
         "external": {
           "support": "native",
@@ -1163,7 +1163,7 @@
           "paths": [
             "~/.gemini/config/plugins/agent-surface/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are packaged in directory-form Agent Skills. High-impact manual commands are omitted."
+          "notes": "Canonical skills are packaged in directory-form Agent Skills. Available high-impact commands are packaged as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
         "subagents": {
           "support": "native",
@@ -1249,7 +1249,7 @@
             "~/.config/opencode/commands/*.md",
             ".opencode/commands/*.md"
           ],
-          "notes": "Five high-impact commands remain native custom commands; safe reusable procedures are native skills. Automatic sharing remains disabled."
+          "notes": "Available high-impact commands remain native custom commands; safe reusable procedures are native skills. Automatic sharing remains disabled."
         },
         "subagents": {
           "support": "native",
@@ -1288,7 +1288,7 @@
             "~/.config/opencode/skills/<name>/SKILL.md",
             ".opencode/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged for OpenCode skill-tool discovery. Five high-impact commands remain native custom commands."
+          "notes": "Canonical skills are emitted unchanged for OpenCode skill-tool discovery. Available high-impact commands remain native custom commands."
         },
         "mcp": {
           "support": "native",
@@ -1366,7 +1366,7 @@
             "~/.agents/skills/<name>/SKILL.md",
             ".agents/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted because this target has no enforced manual-only procedure surface."
+          "notes": "Canonical skills are emitted unchanged. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
         "rules": {
           "support": "native",
@@ -1491,7 +1491,7 @@
           "paths": [
             "~/.agents/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills use VS Code Agent Skills discovery. Five high-impact commands remain user prompt files."
+          "notes": "Canonical skills use VS Code Agent Skills discovery. Available high-impact commands remain user prompt files."
         },
         "external": {
           "support": "native",
@@ -1568,7 +1568,7 @@
           "paths": [
             "~/.agents/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills use the same Agent Skills compatibility root. Five high-impact commands remain user prompt files."
+          "notes": "Canonical skills use the same Agent Skills compatibility root. Available high-impact commands remain user prompt files."
         },
         "external": {
           "support": "native",
@@ -1629,7 +1629,7 @@
           "paths": [
             "~/.cursor/commands/*.md"
           ],
-          "notes": "Five high-impact commands remain native Cursor commands; safe reusable procedures are native skills."
+          "notes": "Available high-impact commands remain native Cursor commands; safe reusable procedures are native skills."
         },
         "subagents": {
           "support": "native",
@@ -1675,7 +1675,7 @@
           "paths": [
             "~/.cursor/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged for Cursor automatic skill discovery. Five high-impact commands remain native commands."
+          "notes": "Canonical skills are emitted unchanged for Cursor automatic skill discovery. Available high-impact commands remain native commands."
         },
         "external": {
           "support": "native",
@@ -1717,7 +1717,7 @@
           "paths": [
             ".factory/commands/<command>.md"
           ],
-          "notes": "Five high-impact commands remain native commands; safe reusable procedures are native skills."
+          "notes": "Available high-impact commands remain native commands; safe reusable procedures are native skills."
         },
         "rules": {
           "support": "native",
@@ -1779,7 +1779,7 @@
             "~/.factory/skills/<name>/SKILL.md",
             ".factory/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged for Droid automatic skill discovery. Five high-impact commands remain native commands."
+          "notes": "Canonical skills are emitted unchanged for Droid automatic skill discovery. Available high-impact commands remain native commands."
         }
       }
     },
@@ -1830,7 +1830,7 @@
           "paths": [
             "~/.copilot/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills use GitHub Copilot Agent Skills discovery. High-impact manual commands are omitted; VS Code and VSCodium targets provide prompt files."
+          "notes": "Canonical skills use GitHub Copilot Agent Skills discovery. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
         "external": {
           "support": "native",
@@ -1896,7 +1896,7 @@
           "paths": [
             "~/.trae/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged for the installed Trae native skill root. High-impact manual commands are omitted."
+          "notes": "Canonical skills are emitted unchanged for the installed Trae native skill root. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
         "external": {
           "support": "native",
@@ -1946,7 +1946,7 @@
             "~/.codeium/windsurf/global_workflows/<command>.md",
             ".windsurf/workflows/<command>.md"
           ],
-          "notes": "Five high-impact commands remain native workflows; safe reusable procedures are native skills."
+          "notes": "Available high-impact commands remain native workflows; safe reusable procedures are native skills."
         },
         "rules": {
           "support": "native",
@@ -1997,7 +1997,7 @@
             "~/.codeium/windsurf/skills/<name>/SKILL.md",
             ".windsurf/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged for automatic skill discovery. Five high-impact commands remain native workflows."
+          "notes": "Canonical skills are emitted unchanged for automatic skill discovery. Available high-impact commands remain native workflows."
         }
       }
     },
@@ -2035,7 +2035,7 @@
             "~/.agents/skills/<name>/SKILL.md",
             ".agents/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged. High-impact manual commands are omitted because this target has no enforced manual-only procedure surface."
+          "notes": "Canonical skills are emitted unchanged. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
         "rules": {
           "support": "native",

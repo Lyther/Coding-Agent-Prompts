@@ -27,6 +27,10 @@ export const commandPrefixes = new Set(["arch", "boot", "dev", "lint", "ops", "q
 
 export const commandPhases = new Set(["observe", "decide", "build", "verify", "review", "arbitrate", "ship", "improve", "bootstrap", "game", "misc"]);
 
+// This private operator command is intentionally excluded from Git and npm, but a
+// maintainer checkout may still distribute its local copy to generated targets.
+export const localCommandOverlays = new Set(["commands/ops-server.md"]);
+
 export const workflowSchemaFiles = [
   "workflow.run.schema.json",
   "workflow.boss.schema.json",
@@ -281,7 +285,9 @@ export function checkBossArtifactCoherence(data, source, errors) {
 export async function exportableCommands() {
   const allCommands = await readCommands();
   const ignored = gitIgnoredPaths(allCommands.map((command) => command.relativePath));
-  const commands = allCommands.filter((command) => !ignored.has(command.relativePath));
+  const commands = allCommands.filter(
+    (command) => !ignored.has(command.relativePath) || localCommandOverlays.has(command.relativePath),
+  );
   const errors = [];
   checkCommandMetadata(commands, errors);
   if (errors.length > 0) fail(`command metadata invalid:\n${errors.join("\n")}`);
@@ -785,6 +791,11 @@ export function validateGeneratedTarget(target, outputs) {
   const skillFrontmatter = /^(?:\uFEFF)?---\r?\n/;
 
   if (outputs.length === 0) errors.push("no outputs generated");
+  for (const optionalPack of ["external/andrej-karpathy-skills/", "external/sanyuan-skills/"]) {
+    if (!outputs.some((output) => output.source.startsWith(optionalPack))) {
+      errors.push(`optional skill pack is not distributed: ${optionalPack}`);
+    }
+  }
 
   if (target === "claude-code") {
     requireContains(path.join(".claude", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\ndescription: "[^"]+"\n---\n/);
@@ -808,8 +819,7 @@ export function validateGeneratedTarget(target, outputs) {
     }
   } else if (target === "goose") {
     requireContains(path.join(".agents", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
-    requireContains(path.join("recipes", "ops-nuke.yaml"), /^version: "1\.0\.0"\n/);
-    requireContains(path.join("recipes", "ops-nuke.yaml"), /^instructions: \|$/m);
+    requireContains(path.join(".agents", "skills", "ops-nuke", "SKILL.md"), /disable-model-invocation: true/);
   } else if (target === "grok-build") {
     requireContains(path.join(".grok", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".grok", "skills", "red-team-command-doctrine", "SKILL.md"), skillFrontmatter);

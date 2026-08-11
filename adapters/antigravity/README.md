@@ -1,6 +1,6 @@
 # Antigravity adapter
 
-Render canonical skills to Antigravity's user skill root and keep the five high-impact commands as legacy manual workflows.
+Render canonical skills to Antigravity's user skill root and keep the available high-impact commands as legacy manual workflows.
 
 Default user install target:
 

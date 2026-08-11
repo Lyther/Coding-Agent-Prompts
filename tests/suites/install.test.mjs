@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, 
 import os from "node:os";
 import path from "node:path";
 import { kimiCodeCursorSettingsPath, kimiCodeVsCodeSettingsPath } from "../../scripts/agent-surface/roots.mjs";
+import { targets } from "../../scripts/agent-surface/targets.mjs";
 import {
   clineIdeUserDataRoot,
   clineUserMcpRoutes,
@@ -87,10 +88,13 @@ for (const [target, patterns] of [
 // OpenHands MCP is user-scope only on project dry-run.
 planLacks(dryRun("openhands"), [/\.openhands\/mcp\.json MCP/], "openhands project");
 
-// Goose user-scope: MCP only, no project recipes into $HOME.
+// Goose user-scope: commands use Agent Skills; project recipes never land in $HOME.
 const gooseUserPlan = run(["install", "--target", "goose", "--scope", "user", "--allow-scope-root", "--dry-run"]);
 assert.match(gooseUserPlan, /\.config\/goose\/config\.yaml MCP/);
 assert.doesNotMatch(gooseUserPlan, /recipes\//);
+if (hasLocalOpsServerCommand) {
+  assert.match(gooseUserPlan, /\.agents\/skills\/ops-server\/SKILL\.md <- commands\/ops-server\.md/);
+}
 
 // --category mcps across all targets must succeed; non-MCP hosts report non-applicable.
 {
@@ -102,8 +106,8 @@ assert.doesNotMatch(gooseUserPlan, /recipes\//);
 const piCopilotStatus = status(["install", "--target", "pi,copilot", "--scope", "user", "--allow-scope-root", "--category", "mcps", "--dry-run"]);
 assert.notEqual(piCopilotStatus.status, 0);
 
-// Manual Codex workflows stay out of the shared Agent Skills root. A stale
-// shared copy must be removed while the explicit-only private Codex skill is written.
+// Codex keeps manual workflows private and non-implicit. A target using the
+// shared Agent Skills root may independently own the compatibility copy.
 const sharedRootHome = "/tmp/agent-surface-shared-root-home";
 rmSync(sharedRootHome, { recursive: true, force: true });
 const sharedManualRel = path.join(".agents", "skills", "ops-nuke", "SKILL.md");
@@ -122,7 +126,7 @@ writeFileSync(
 run(["install", "--target", "codex,openhands", "--scope", "user", "--allow-scope-root"], {
   env: { ...process.env, HOME: sharedRootHome },
 });
-assert.equal(existsSync(sharedManualPath), false);
+assert.match(readFileSync(sharedManualPath, "utf8"), /^disable-model-invocation: true$/m);
 const privateManualPath = path.join(sharedRootHome, ".codex", "skills", "ops-nuke", "SKILL.md");
 assert.match(readFileSync(privateManualPath, "utf8"), /^---\nname: ops-nuke\n/);
 assert.match(
@@ -875,9 +879,52 @@ for (const fx of mergeFixtures) {
 }
 
 assert.match(readFileSync(path.join(root, ".gitignore"), "utf8"), /^commands\/ops-server\.md$/m);
-if (hasLocalOpsServerCommand) {
-  execFileSync("git", ["check-ignore", "commands/ops-server.md"], { cwd: root, encoding: "utf8" });
+assert.equal(
+  execFileSync("git", ["check-ignore", "commands/ops-server.md"], { cwd: root, encoding: "utf8" }).trim(),
+  "commands/ops-server.md",
+);
+assert.doesNotMatch(readFileSync(path.join(root, ".npmignore"), "utf8"), /^external\/\*$/m);
+assert.match(readFileSync(path.join(root, ".npmignore"), "utf8"), /^commands\/ops-server\.md$/m);
+const packed = JSON.parse(execFileSync("npm", ["pack", "--dry-run", "--json", "--loglevel=silent"], {
+  cwd: root,
+  encoding: "utf8",
+}));
+const packedPaths = new Set(packed[0].files.map((file) => file.path));
+for (const required of [
+  "external/andrej-karpathy-skills/skills/karpathy-guidelines/SKILL.md",
+  "external/sanyuan-skills/skills/book-study/SKILL.md",
+]) {
+  assert.equal(packedPaths.has(required), true, `npm package missing ${required}`);
 }
-assert.match(readFileSync(path.join(root, ".npmignore"), "utf8"), /^external\/\*$/m);
+assert.equal(packedPaths.has("commands/ops-server.md"), false, "npm package leaked private ops-server command");
+
+const allTargetsDest = mkdtempSync(path.join(os.tmpdir(), "agent-surface-all-targets-"));
+try {
+  run(["install", "--target", "all", "--scope", "user", "--dest", allTargetsDest]);
+  const manifestRoot = path.join(allTargetsDest, ".agent-surface");
+  for (const target of Object.keys(targets)) {
+    const manifest = JSON.parse(
+      readFileSync(path.join(manifestRoot, `${target}-manifest.json`), "utf8"),
+    );
+    const sources = manifest.managed.map((item) => item.source);
+    assert.equal(
+      sources.includes("commands/ops-server.md"),
+      hasLocalOpsServerCommand,
+      `${target}: local ops-server overlay`,
+    );
+    for (const optionalPack of [
+      "external/andrej-karpathy-skills/",
+      "external/sanyuan-skills/",
+    ]) {
+      assert.equal(
+        sources.some((source) => source.startsWith(optionalPack)),
+        true,
+        `${target}: ${optionalPack}`,
+      );
+    }
+  }
+} finally {
+  rmSync(allTargetsDest, { recursive: true, force: true });
+}
 
 console.log("install: ok");

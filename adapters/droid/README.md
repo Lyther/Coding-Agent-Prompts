@@ -13,7 +13,7 @@ Droid support targets Factory's current `.factory/` project/user surfaces.
 - optional external MCP wiring -> `.factory/mcp.json` only when explicitly requested
 - optional external skill packs -> `.factory/skills/<skill>/...`
 
-Canonical skills use Droid's automatic skill discovery. The five high-impact workflows stay commands.
+Canonical skills use Droid's automatic skill discovery. Available high-impact workflows stay commands.
 
 ## External Packs
 

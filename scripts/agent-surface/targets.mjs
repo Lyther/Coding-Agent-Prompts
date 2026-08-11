@@ -8,7 +8,7 @@ import { directDirectories, filesUnder } from "./fs-tree.mjs";
 import { optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { normalizeExternalSkillFile } from "./postprocess.mjs";
 import { readOptionalServices, relative, root } from "./registry.mjs";
-import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityWorkflow, renderClaudeSubagent, renderClineSubagent, renderClineWorkflow, renderCodexSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGeminiSubagent, renderGooseRecipe, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderKimiCodeSubagent, renderManualClaudeSkill, renderManualCodexSkill, renderManualKimiCodeSkill, renderOpenCodeCommand, renderOpenCodeSubagent, renderScopedRuleReferenceDocument, renderVanillaSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
+import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityWorkflow, renderClaudeSubagent, renderClineSubagent, renderClineWorkflow, renderCodexSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGeminiSubagent, renderGooseRecipe, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderKimiCodeSubagent, renderManualClaudeSkill, renderManualCodexSkill, renderManualKimiCodeSkill, renderManualPortableSkill, renderOpenCodeCommand, renderOpenCodeSubagent, renderScopedRuleReferenceDocument, renderVanillaSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
 import { antigravitySkillRoot, antigravityWorkflowRoot, claudeMcpPath, clineAgentRoot, clineCursorExtensionMcpPath, clineMcpPath, clineRuleRoot, clineSkillRoot, clineVsCodeExtensionMcpPath, clineWindsurfExtensionMcpPath, clineWorkflowRoot, codexPrivateSkillRoot, codexSkillOutputName, copilotSkillRoot, cursorSkillRoot, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, droidSkillRoot, flatMarkdownCommandOutputName, gooseRecipeOutputName, gooseSkillRoot, grokBuildSkillRoot, installRootAntigravity, installRootAntigravityCli, installRootClaude, installRootCline, installRootCodex, installRootDeepagents, installRootDroid, installRootGoose, installRootGrokBuild, installRootHomeOnly, installRootKilo, installRootKimiCode, installRootOpencode, installRootOpenHands, installRootPi, installRootPool, installRootVsCode, installRootVscodium, installRootWindsurf, installRootZed, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloSkillRoot, kiloWorkflowRoot, kimiCodeAgentRoot, kimiCodeConfigPath, kimiCodeConfigRoot, kimiCodeCursorSettingsPath, kimiCodeInstructionPath, kimiCodeMcpPath, kimiCodeSkillRoot, kimiCodeVsCodeSettingsPath, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, opencodeSkillRoot, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, sharedAgentSkillRoot, traeSkillRoot, vsCodeUserRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
 import { ignoreOutputs, subagentOutputs } from "./source-primitives.mjs";
@@ -70,6 +70,7 @@ export const targets = {
   },
   deepagents: {
     label: "Deep Agents Code skills, instructions, subagents, and MCP",
+    commandRenders: ["skills"],
     subagentRenders: ["subagents"],
     subagentTarget: "deepagents",
     subagentOutputRoot: deepagentsAgentRoot,
@@ -80,6 +81,9 @@ export const targets = {
     skillOutputRoot: deepagentsSkillRoot,
     skillOutputName: codexSkillOutputName,
     renderSkill: renderVanillaSkill,
+    commandOutputRoot: deepagentsSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualPortableSkill,
     renderSubagent: renderDeepAgentsSubagent,
     installRoot: installRootDeepagents,
     staticOutputs: deepagentsStaticOutputs,
@@ -91,21 +95,18 @@ export const targets = {
   },
   goose: {
     label: "Goose reusable recipes and MCP",
-    commandRenders: ["recipes"],
+    commandRenders: ["recipes", "skills"],
     skillRenders: ["skills"],
     skillOutputRoot: gooseSkillRoot,
     skillOutputName: codexSkillOutputName,
     renderSkill: renderVanillaSkill,
-    commandOutputRoot: "recipes",
-    commandOutputName: gooseRecipeOutputName,
-    renderCommand: renderGooseRecipe,
+    commandOutputRoot: (context) => context.scope === "user" ? gooseSkillRoot(context) : "recipes",
+    commandOutputName: (source, context) => context.scope === "user" ? codexSkillOutputName(source) : gooseRecipeOutputName(source),
+    renderCommand: (source, context) => context.scope === "user" ? renderManualPortableSkill(source, context) : renderGooseRecipe(source),
     installRoot: installRootGoose,
-    // Recipes are project-oriented (./recipes) and must never land in $HOME on a user
-    // install; user scope installs only the user-global MCP config. Build still emits recipes.
-    commandInstallScopes: ["project"],
     mcpConfig: {
       // Goose MCP lives in the user-global config.yaml (`extensions:`), so it is user-scope
-      // only; recipes stay project-oriented. Use `--category mcps` for a clean user wire.
+      // only. Project commands remain recipes; user commands use Agent Skills.
       relativeOutput: () => path.join(".config", "goose", "config.yaml"),
       format: "goose-extensions",
       defaultEnabled: true,
@@ -114,12 +115,16 @@ export const targets = {
   },
   "grok-build": {
     label: "Grok Build skills and project instructions",
+    commandRenders: ["skills"],
     staticRenders: ["rules"],
     skillRenders: ["skills"],
     skillOutputRoot: grokBuildSkillRoot,
     skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: grokBuildSkillRoot,
     renderSkill: renderVanillaSkill,
+    commandOutputRoot: grokBuildSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualPortableSkill,
     installRoot: installRootGrokBuild,
     staticOutputs: grokBuildStaticOutputs,
     mcpConfig: {
@@ -130,23 +135,31 @@ export const targets = {
   },
   pi: {
     label: "Pi skills and instructions",
+    commandRenders: ["skills"],
     staticRenders: ["rules"],
     skillRenders: ["skills"],
     skillOutputRoot: piSkillRoot,
     skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: piSkillRoot,
     renderSkill: renderVanillaSkill,
+    commandOutputRoot: piSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualPortableSkill,
     installRoot: installRootPi,
     staticOutputs: piStaticOutputs,
   },
   pool: {
     label: "Poolside skills and instructions",
+    commandRenders: ["skills"],
     staticRenders: ["rules"],
     skillRenders: ["skills"],
     skillOutputRoot: poolSkillRoot,
     skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: poolSkillRoot,
     renderSkill: renderVanillaSkill,
+    commandOutputRoot: poolSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualPortableSkill,
     installRoot: installRootPool,
     staticOutputs: poolStaticOutputs,
     mcpConfig: {
@@ -310,6 +323,7 @@ export const targets = {
   },
   "antigravity-cli": {
     label: "Antigravity CLI plugin",
+    commandRenders: ["skills"],
     subagentRenders: ["subagents"],
     subagentTarget: "antigravity-cli",
     subagentOutputRoot: path.join("config", "plugins", "agent-surface", "agents"),
@@ -319,6 +333,9 @@ export const targets = {
     skillOutputRoot: path.join("config", "plugins", "agent-surface", "skills"),
     skillOutputName: codexSkillOutputName,
     renderSkill: renderVanillaSkill,
+    commandOutputRoot: path.join("config", "plugins", "agent-surface", "skills"),
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualPortableSkill,
     renderSubagent: renderGeminiSubagent,
     installRoot: installRootAntigravityCli,
     staticOutputs: antigravityCliStaticOutputs,
@@ -376,10 +393,14 @@ export const targets = {
   },
   copilot: {
     label: "GitHub Copilot skills and global instructions",
+    commandRenders: ["skills"],
     skillRenders: ["skills"],
     skillOutputRoot: copilotSkillRoot,
     skillOutputName: codexSkillOutputName,
     renderSkill: renderVanillaSkill,
+    commandOutputRoot: copilotSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualPortableSkill,
     staticRenders: ["instructions"],
     installRoot: installRootVsCode,
     staticOutputs: copilotStaticOutputs,
@@ -450,12 +471,16 @@ export const targets = {
   },
   openhands: {
     label: "OpenHands AgentSkills, instructions, and MCP",
+    commandRenders: ["skills"],
     staticRenders: ["rules"],
     skillRenders: ["skills"],
     skillOutputRoot: openhandsSkillRoot,
     skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: openhandsSkillRoot,
     renderSkill: renderVanillaSkill,
+    commandOutputRoot: openhandsSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualPortableSkill,
     installRoot: installRootOpenHands,
     staticOutputs: openhandsStaticOutputs,
     mcpConfig: {
@@ -467,10 +492,14 @@ export const targets = {
   },
   trae: {
     label: "Trae global user rules",
+    commandRenders: ["skills"],
     skillRenders: ["skills"],
     skillOutputRoot: traeSkillRoot,
     skillOutputName: codexSkillOutputName,
     renderSkill: renderVanillaSkill,
+    commandOutputRoot: traeSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualPortableSkill,
     staticRenders: ["rules"],
     installRoot: installRootHomeOnly,
     staticOutputs: traeStaticOutputs,
@@ -502,12 +531,16 @@ export const targets = {
   },
   zed: {
     label: "Zed skills and instructions",
+    commandRenders: ["skills"],
     staticRenders: ["rules"],
     skillRenders: ["skills"],
     skillOutputRoot: zedSkillRoot,
     skillOutputName: codexSkillOutputName,
     externalSkillOutputRoot: zedSkillRoot,
     renderSkill: renderVanillaSkill,
+    commandOutputRoot: zedSkillRoot,
+    commandOutputName: codexSkillOutputName,
+    renderCommand: renderManualPortableSkill,
     installRoot: installRootZed,
     staticOutputs: zedStaticOutputs,
     mcpConfig: {
@@ -616,9 +649,8 @@ export function producerDefaultRenderKind(producer) {
 }
 
 export async function produceCommandOutputs(adapter, commands, context) {
-  // Some adapters restrict where their command artifacts may be *installed* (e.g. Goose
-  // recipes are project-only) even though the adapter also has a user-global surface (MCP).
-  // Build (dist inspection) is never gated; only live install writes are.
+  // Some adapters restrict where their command artifacts may be installed. Build
+  // (dist inspection) is never gated; only live install writes are.
   if (adapter.commandInstallScopes && context.mode === "install" && !adapter.commandInstallScopes.includes(context.scope)) {
     return [];
   }
@@ -669,28 +701,22 @@ export async function externalSkillOutputs(adapter, context) {
   const textExtensions = [".md", ".mdx", ".json", ".yaml", ".yml", ".toml", ".txt", ".sh", ".py", ".js", ".ts", ".ps1"];
 
   let totalBytes = 0;
-  for (const { root: sourceRoot, serviceName, required } of roots) {
+  for (const { root: sourceRoot, serviceName } of roots) {
     const skillName = path.basename(sourceRoot);
     const skillFiles = await filesUnder(sourceRoot, textExtensions);
     for (const file of skillFiles) {
       if (outputs.length >= MAX_EXTERNAL_FILES) {
         const detail = `external skill output cap reached (${MAX_EXTERNAL_FILES} files)`;
-        if (required) fail(`${detail}; required pack ${serviceName} would be truncated`);
-        console.error(`warning: ${detail}; further files skipped`);
-        return outputs;
+        fail(`${detail}; pack ${serviceName} would be truncated`);
       }
       const size = (await stat(file)).size;
       if (size > MAX_EXTERNAL_FILE_BYTES) {
         const detail = `oversized external file (${size} bytes): ${relative(file)}`;
-        if (required) fail(`required pack ${serviceName}: ${detail}`);
-        console.error(`warning: skipping ${detail}`);
-        continue;
+        fail(`pack ${serviceName}: ${detail}`);
       }
       if (totalBytes + size > MAX_EXTERNAL_TOTAL_BYTES) {
         const detail = `external skill total-size cap reached (${MAX_EXTERNAL_TOTAL_BYTES} bytes)`;
-        if (required) fail(`${detail}; required pack ${serviceName} would be truncated`);
-        console.error(`warning: ${detail}; remaining files skipped`);
-        return outputs;
+        fail(`${detail}; pack ${serviceName} would be truncated`);
       }
       totalBytes += size;
       const relativeFile = path.relative(sourceRoot, file);
@@ -767,10 +793,12 @@ export async function selectedMcpServiceEntries(defaultEnabled, context) {
 export async function externalSkillRoots() {
   const registry = await readOptionalServices();
   const candidates = [];
+  const declaredPacks = [];
 
   for (const [serviceName, service] of Object.entries(registry.services)) {
     if (!["skill-pack", "behavior-pack"].includes(service.kind)) continue;
     const required = service.optional === false || service.status === "required";
+    declaredPacks.push(serviceName);
     for (const item of service.skill_roots ?? []) {
       for (const dir of await expandSkillRoot(item)) {
         candidates.push({ root: dir, serviceName, required });
@@ -786,6 +814,13 @@ export async function externalSkillRoots() {
     if (await exists(path.join(candidate.root, "SKILL.md"))) {
       seen.add(rel);
       existing.push(candidate);
+    }
+  }
+  for (const serviceName of declaredPacks) {
+    if (!existing.some((candidate) => candidate.serviceName === serviceName)) {
+      fail(
+        `external skill pack ${serviceName} is unavailable; initialize every registered pack with git submodule update --init --recursive`,
+      );
     }
   }
   // Required packs first so a total-size cap can never silently drop a required

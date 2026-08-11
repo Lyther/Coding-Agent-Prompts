@@ -85,7 +85,7 @@ MCP services declared `first_party kind:"mcp"` in `optional-services.json` are a
 
 - **Registry-driven, schema-validated** — behaviour lives in data, not code branches; `check` makes the three registries agree with the producers.
 - **Zero-dependency ES modules** — portability and auditability with no runtime deps; the former single ~4k-line script was decomposed into cohesive modules (CLI entry + engine + emit + command domains + foundations), verified byte-identical against the pre-refactor `build` output.
-- **Skills first** — safe reusable procedures are vanilla `skills/<name>/SKILL.md` sources and remain model-invocable on every skill-capable host. Only five high-impact workflows remain commands; they use an explicit-only native surface or are omitted.
+- **Skills first** — safe reusable procedures are vanilla `skills/<name>/SKILL.md` sources and remain model-invocable on every skill-capable host. Committed high-impact workflows and ignored local command overlays remain commands; every target receives available commands through a native explicit surface or an explicit-invocation compatibility skill.
 - **Merge, never clobber** — host configs are shared/secret-bearing; the compiler owns only its own keys and blocks on ambiguous shapes.
 - **Strict-sync via manifest** — de-scoped assets self-prune on the next full install without tracking deletions by hand.
 - **First-party MCP on shared rails** — synapse and grimoire ride the same generate+merge path; adding a service is a registry entry, not new plumbing.

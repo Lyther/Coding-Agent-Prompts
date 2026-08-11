@@ -2,11 +2,13 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { targets } from "../../scripts/agent-surface/targets.mjs";
 import {
   expectedCommandCount,
   expectedSkillCount,
   expectedSourceCommandCount,
   files,
+  hasLocalOpsServerCommand,
   root,
   run, status,
 } from "../lib/helpers.mjs";
@@ -160,11 +162,13 @@ assert.equal(skillRegistry.skills.find((skill) => skill.name === "dev-spec")?.ph
 
 const registry = JSON.parse(run(["commands", "--json"]));
 assert.equal(registry.count, expectedCommandCount);
-assert.deepEqual(registry.commands.map((command) => command.name).sort(), [
-  "boot-facade", "ops-nuke", "ship-commit", "ship-deploy", "ship-release",
-]);
+const expectedCommands = ["boot-facade", "ops-nuke", "ship-commit", "ship-deploy", "ship-release"];
+if (hasLocalOpsServerCommand) expectedCommands.push("ops-server");
+assert.deepEqual(registry.commands.map((command) => command.name).sort(), expectedCommands.sort());
 assert.equal(registry.commands.every((command) => command.model_invocation === false), true);
-assert.equal(registry.commands.find((command) => command.name === "ops-server"), undefined);
+const opsServer = registry.commands.find((command) => command.name === "ops-server");
+assert.equal(Boolean(opsServer), hasLocalOpsServerCommand);
+if (opsServer) assert.equal(Object.keys(opsServer.targets).length, Object.keys(targets).length);
 
 const shipCommands = JSON.parse(run(["commands", "--phase", "ship", "--json"]));
 assert.equal(shipCommands.commands.every((command) => command.phase === "ship"), true);

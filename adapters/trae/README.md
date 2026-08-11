@@ -14,6 +14,6 @@ Known project-level surfaces:
 - `.trae/project_rules.md`
 - `.trae/mcp.json`
 
-First-party MCP wiring (Synapse and Grimoire) is generated and safely merged. External or secret-bearing MCPs remain opt-in. Canonical and reviewed external skills use the installed Trae version's native global skill root; high-impact commands are omitted.
+First-party MCP wiring (Synapse and Grimoire) is generated and safely merged. External or secret-bearing MCPs remain opt-in. Canonical and reviewed external skills use the installed Trae version's native global skill root; available high-impact commands use explicit-invocation compatibility skills with `disable-model-invocation: true`, whose enforcement remains host-dependent.
 
 Generated Trae rules bundle only always-on rules. Scoped language policies are distributed as references for project-aware commands.

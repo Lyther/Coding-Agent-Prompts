@@ -8,8 +8,8 @@ export const cli = path.join(root, "scripts", "agent-surface.mjs");
 export const stripAiAttributionHook = path.join(root, "hooks", "strip-ai-attribution.sh");
 export const opsServerCommandPath = path.join(root, "commands", "ops-server.md");
 export const hasLocalOpsServerCommand = existsSync(opsServerCommandPath);
-export const expectedCommandCount = 5;
-export const expectedSourceCommandCount = hasLocalOpsServerCommand ? 6 : 5;
+export const expectedCommandCount = 5 + Number(hasLocalOpsServerCommand);
+export const expectedSourceCommandCount = expectedCommandCount;
 export const expectedSkillCount = 60;
 
 export function clineIdeUserDataRoot(product) {

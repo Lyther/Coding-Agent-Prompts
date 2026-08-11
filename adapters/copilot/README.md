@@ -19,6 +19,6 @@ Instruction paths, under the VS Code user data directory:
 
 Repository-level `.github/` files remain project-specific and are not written by user-scope installs.
 
-High-impact manual commands are omitted; the VS Code and VSCodium targets provide explicit prompt files for those editor hosts.
+Available high-impact commands use explicit-invocation compatibility skills with `disable-model-invocation: true`; Copilot enforcement remains unproven. VS Code and VSCodium use explicit prompt files instead.
 
 The instruction file bundles only always-on rules. Scoped language policies are distributed as references for project-aware commands.

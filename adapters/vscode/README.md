@@ -1,6 +1,6 @@
 # VS Code adapter
 
-VS Code uses native Agent Skills for safe reusable procedures and prompt files for the five high-impact manual workflows.
+VS Code uses native Agent Skills for safe reusable procedures and prompt files for available high-impact manual workflows.
 
 Implemented user-profile surfaces:
 

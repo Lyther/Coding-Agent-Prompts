@@ -32,7 +32,7 @@ Project scope:
 
 ## Runtime contracts
 
-Safe reusable procedures are native Agent Skills and can be selected through Cline's skill tool. Only the five high-impact commands remain workflows; invoke those by stem and do not add the `.md` suffix.
+Safe reusable procedures are native Agent Skills and can be selected through Cline's skill tool. Only available high-impact commands remain workflows; invoke those by stem and do not add the `.md` suffix.
 
 `registry/targets.json` records normalized render classes, not Cline product labels. The Cline mappings are:
 

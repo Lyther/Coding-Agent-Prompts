@@ -1,6 +1,6 @@
 # OpenCode adapter
 
-Canonical skills use OpenCode's native skill root. The five high-impact commands remain custom commands; normalized subagents and rules use their native OpenCode surfaces.
+Canonical skills use OpenCode's native skill root. Available high-impact commands remain custom commands; normalized subagents and rules use their native OpenCode surfaces.
 
 Implemented target paths:
 
