@@ -5,7 +5,7 @@ Every host `agent-surface` renders into, and how much of the source model each r
 | Target | Build files | Auto-invocable skills | Manual-only workflows | Rules / instructions | Agents / subagents | External / MCP / ignores | Compat |
 |---|---:|---|---|---|---|---|---:|
 | Claude Code | 282 | 60 `.claude/skills/*/SKILL.md` | 5 explicit-only skills | None | 6 `.claude/agents/*.md` | External skills; Synapse + Grimoire in `.claude.json` | 5 |
-| Codex | 354 | 60 `.agents/skills/*/SKILL.md` with implicit sidecars | 5 explicit-only `.codex/skills/*/SKILL.md` with non-implicit sidecars | `.codex/AGENTS.md` + 6 scoped refs | 6 `.codex/agents/*.toml` | External skills; Synapse + Grimoire in `.codex/config.toml` | 5 |
+| Codex | 354 | 60 `.agents/skills/*/SKILL.md` with implicit sidecars | 5 explicit-only `.agents/skills/*/SKILL.md` with non-implicit sidecars | `.codex/AGENTS.md` + 6 scoped refs | 6 `.codex/agents/*.toml` | External skills; Synapse + Grimoire in `.codex/config.toml` | 5 |
 | Deep Agents Code | 284 | 60 `.deepagents/agent/skills/*/SKILL.md` | 5 explicit-invocation compatibility skills | `.deepagents/agent/AGENTS.md` + 6 scoped refs | Worker only | External skills; Synapse + Grimoire in `.deepagents/.mcp.json` | 4 |
 | Cursor | 295 | 60 `.cursor/skills/*/SKILL.md` | 5 `.cursor/commands/*.md` | 12 native `.cursor/rules/*.mdc` | 6 `.cursor/agents/*.md` | External skills; Synapse + Grimoire; `.cursorignore` | 5 |
 | Droid | 289 | 60 `.factory/skills/*/SKILL.md` | 5 `.factory/commands/*.md` | `.factory/AGENTS.md` + 6 scoped refs | 6 `.factory/droids/*.md` | External skills; Synapse + Grimoire | 5 |

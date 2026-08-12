@@ -106,8 +106,9 @@ if (hasLocalOpsServerCommand) {
 const piCopilotStatus = status(["install", "--target", "pi,copilot", "--scope", "user", "--allow-scope-root", "--category", "mcps", "--dry-run"]);
 assert.notEqual(piCopilotStatus.status, 0);
 
-// Codex keeps manual workflows private and non-implicit. A target using the
-// shared Agent Skills root may independently own the compatibility copy.
+// Codex keeps manual workflows non-implicit in the shared Agent Skills root.
+// Other targets may own the same compatibility file, but Codex must not create
+// a second discoverable copy under its private skill root.
 const sharedRootHome = "/tmp/agent-surface-shared-root-home";
 rmSync(sharedRootHome, { recursive: true, force: true });
 const sharedManualRel = path.join(".agents", "skills", "ops-nuke", "SKILL.md");
@@ -127,12 +128,11 @@ run(["install", "--target", "codex,openhands", "--scope", "user", "--allow-scope
   env: { ...process.env, HOME: sharedRootHome },
 });
 assert.match(readFileSync(sharedManualPath, "utf8"), /^disable-model-invocation: true$/m);
-const privateManualPath = path.join(sharedRootHome, ".codex", "skills", "ops-nuke", "SKILL.md");
-assert.match(readFileSync(privateManualPath, "utf8"), /^---\nname: ops-nuke\n/);
 assert.match(
-  readFileSync(path.join(sharedRootHome, ".codex", "skills", "ops-nuke", "agents", "openai.yaml"), "utf8"),
+  readFileSync(path.join(sharedRootHome, ".agents", "skills", "ops-nuke", "agents", "openai.yaml"), "utf8"),
   /^  allow_implicit_invocation: false$/m,
 );
+assert.equal(existsSync(path.join(sharedRootHome, ".codex", "skills", "ops-nuke", "SKILL.md")), false);
 assert.equal(existsSync(path.join(sharedRootHome, ".agents", "skills", "ops-flow", "SKILL.md")), true);
 rmSync(sharedRootHome, { recursive: true, force: true });
 
