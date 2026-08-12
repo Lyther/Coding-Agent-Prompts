@@ -6,8 +6,8 @@ Implemented target paths:
 
 - user: `~/.agents/skills/<name>/SKILL.md`
 - user: `~/.agents/skills/<name>/agents/openai.yaml`
-- explicit-only skills: `~/.codex/skills/<name>/SKILL.md`
-- explicit-only policy: `~/.codex/skills/<name>/agents/openai.yaml`
+- explicit-only skills: `~/.agents/skills/<name>/SKILL.md`
+- explicit-only policy: `~/.agents/skills/<name>/agents/openai.yaml`
 - user/project: `.codex/agents/<name>.toml`
 - user: `~/.codex/AGENTS.md` for always-on rules
 - user: `~/.codex/references/rules/<rule>.md` for scoped language references

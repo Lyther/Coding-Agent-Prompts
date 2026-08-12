@@ -79,7 +79,7 @@
       }
     },
     "codex": {
-      "summary": "Codex supports Agent Skills, custom agent TOML files, AGENTS.md instructions, and MCP config; agent-surface generates canonical auto-invocable skills, five explicit-only private skills, custom agents, global instructions, first-party MCP wiring (Synapse + Grimoire), and external skills.",
+      "summary": "Codex supports Agent Skills, custom agent TOML files, AGENTS.md instructions, and MCP config; agent-surface generates canonical auto-invocable skills, explicit-only manual skills, custom agents, global instructions, first-party MCP wiring (Synapse + Grimoire), and external skills.",
       "generated_render_tokens": [
         "skills",
         "subagents",
@@ -112,9 +112,9 @@
           "paths": [
             "~/.agents/skills/<name>/SKILL.md",
             ".agents/skills/<name>/SKILL.md",
-            "~/.codex/skills/<manual>/SKILL.md"
+            "~/.agents/skills/<manual>/SKILL.md"
           ],
-          "notes": "Canonical skills use the shared Agent Skills root with allow_implicit_invocation: true. Available high-impact workflows use the private Codex skill root with allow_implicit_invocation: false and require explicit $<name> invocation."
+          "notes": "Canonical and manual workflows use the shared Agent Skills root. Canonical skills set allow_implicit_invocation: true; available high-impact workflows set it to false and require explicit $<name> invocation."
         },
         "subagents": {
           "support": "native",

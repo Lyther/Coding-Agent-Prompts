@@ -805,8 +805,8 @@ export function validateGeneratedTarget(target, outputs) {
   } else if (target === "codex") {
     requireContains(path.join(".agents", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".agents", "skills", "ops-flow", "agents", "openai.yaml"), /allow_implicit_invocation: true/);
-    requireContains(path.join(".codex", "skills", "ops-nuke", "SKILL.md"), /^---\nname: ops-nuke\n/);
-    requireContains(path.join(".codex", "skills", "ops-nuke", "agents", "openai.yaml"), /allow_implicit_invocation: false/);
+    requireContains(path.join(".agents", "skills", "ops-nuke", "SKILL.md"), /^---\nname: ops-nuke\n/);
+    requireContains(path.join(".agents", "skills", "ops-nuke", "agents", "openai.yaml"), /allow_implicit_invocation: false/);
     requireContains(path.join(".agents", "skills", "ops-ask", "agents", "openai.yaml"), /allow_implicit_invocation: true/);
     requireContains(path.join(".codex", "agents", "boss.toml"), /^name = "boss"\n/);
     requireContains(path.join(".codex", "AGENTS.md"), /agent-surface global Codex rules/);

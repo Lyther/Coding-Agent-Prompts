@@ -223,13 +223,6 @@ export async function renderManualKimiCodeSkill(source) {
   ].join("\n");
 }
 
-export async function renderManualCodexSkill(source) {
-  return renderSkillMarkdown(source, {
-    generatedFor: "Codex",
-    hostInstruction: "This manual workflow must be selected explicitly.",
-  });
-}
-
 export async function renderManualPortableSkill(source) {
   return renderSkillMarkdown(source, {
     generatedFor: "compatible Agent Skills hosts",

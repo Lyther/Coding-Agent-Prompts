@@ -116,10 +116,6 @@ export function codexSkillOutputName(source) {
   return path.join(source.name, "SKILL.md");
 }
 
-export function codexPrivateSkillRoot() {
-  return path.join(".codex", "skills");
-}
-
 export function claudeMcpPath(context) {
   return context.scope === "user" ? ".claude.json" : ".mcp.json";
 }
