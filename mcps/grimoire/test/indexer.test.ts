@@ -128,11 +128,11 @@ test("ignored files included in the index mark Git provenance dirty", () => {
 });
 
 // SUBSTITUTE_JUSTIFICATION
-// - substitute: onSourceRead callback controlling only when the real source file is restored
-// - replaces: nondeterministic child-process scheduling around the post-read interleaving
-// - necessity: the exact read-then-restore order cannot be made deterministic with wall-clock delays
+// - substitute: onSourceRead callback controlling the exact source-change interleaving in the two tests below
+// - replaces: nondeterministic child-process scheduling around post-read restoration and a concurrent Git commit
+// - necessity: the exact read-then-change order cannot be made deterministic with wall-clock delays
 // - real-option: a real child process with a fixed delay was used and failed nondeterministically under load
-// - proof-limit: proves snapshot re-verification for this interleaving, not detection of every transient filesystem write
+// - proof-limit: proves snapshot and HEAD re-verification for these interleavings, not atomic exclusion of source writes
 // - real-proof: the adjacent real-Git dirty and ignored-file cases exercise normal buildIndex provenance behavior
 test("source restored after an indexed read is still marked dirty", () => {
   const dir = join(tmpdir(), `grimoire-race-${process.pid}-${Date.now()}`);
@@ -160,6 +160,58 @@ test("source restored after an indexed read is still marked dirty", () => {
     assert.equal(restored, true, "the source was restored immediately after its indexed read");
     assert.equal(readFileSync(skillPath, "utf8"), clean, "source was restored before the build completed");
     assert.equal(result.manifest.packs[0]!.commit, "fixturecommit-dirty");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a clean HEAD change while indexing is not attributed to the initial commit", () => {
+  const dir = join(tmpdir(), `grimoire-head-race-${process.pid}-${Date.now()}`);
+  const pack = join(dir, "pack");
+  const out = join(dir, "out");
+  const skillDir = join(pack, "skills", "useful-skill");
+  const skillPath = join(skillDir, "SKILL.md");
+  const referencePath = join(skillDir, "reference.md");
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(skillPath, "---\nname: useful-skill\ndescription: Useful test skill.\n---\nUse reference.md.\n");
+  writeFileSync(referencePath, "Initial procedure.\n");
+  execFileSync("git", ["init", "-q", pack]);
+  execFileSync("git", ["-C", pack, "add", "."]);
+  execFileSync("git", ["-C", pack, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "initial"]);
+  const initialHead = execFileSync("git", ["-C", pack, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+
+  try {
+    let committed = false;
+    const result = buildIndex({
+      packs: [{ serviceId: "fixture", path: pack }],
+      outDir: out,
+      onSourceRead: (file: string) => {
+        if (file !== skillPath || committed) return;
+        writeFileSync(referencePath, "Committed while indexing.\n");
+        execFileSync("git", ["-C", pack, "add", "skills"]);
+        execFileSync("git", ["-C", pack, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "change reference"]);
+        committed = true;
+      },
+    });
+    const finalHead = execFileSync("git", ["-C", pack, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    assert.equal(committed, true);
+    assert.notEqual(finalHead, initialHead);
+    assert.equal(execFileSync("git", ["-C", pack, "status", "--porcelain"], { encoding: "utf8" }), "");
+    assert.equal(result.manifest.packs[0]!.commit, `${initialHead}-dirty`);
+
+    const store = new Store({ dir: out });
+    try {
+      const indexed = store.get("fixture:useful-skill");
+      assert.equal(indexed.status, "ok");
+      if (indexed.status === "ok") {
+        assert.equal(indexed.skill.provenance.sourceCommit, `${initialHead}-dirty`);
+      }
+      const reference = store.fileGet("fixture:useful-skill", "reference.md");
+      assert.equal(reference.status, "ok");
+      if (reference.status === "ok") assert.equal(reference.file.content, "Committed while indexing.\n");
+    } finally {
+      store.close();
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

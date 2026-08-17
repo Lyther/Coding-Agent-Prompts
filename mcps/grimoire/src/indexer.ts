@@ -114,7 +114,8 @@ export function buildIndex(opts: {
     const updateSourceCommit = db.prepare("UPDATE skills SET source_commit=? WHERE pack=?");
 
     for (const pack of opts.packs) {
-      const baseCommit = pack.commit ?? gitHead(pack.path) ?? "uncommitted";
+      const initialHead = gitHead(pack.path);
+      const baseCommit = pack.commit ?? initialHead ?? "uncommitted";
       let commit = baseCommit;
       const skillsDir = join(pack.path, "skills");
       // A pack was explicitly requested: a missing skills/ dir is a hard error, not a skip.
@@ -167,7 +168,8 @@ export function buildIndex(opts: {
         fingerprints.push(`${id}|${bodySha}|${fileDigests.join(",")}`);
       }
       if (baseCommit !== "uncommitted" && !baseCommit.endsWith("-dirty")
-        && (indexedSourceIsDirty(pack.path) || indexedSourceChanged(sourceSnapshots))) {
+        && (indexedSourceIsDirty(pack.path) || indexedSourceChanged(sourceSnapshots)
+          || (initialHead !== undefined && gitHead(pack.path) !== initialHead))) {
         commit = `${baseCommit}-dirty`;
         updateSourceCommit.run(commit, pack.serviceId);
       }
