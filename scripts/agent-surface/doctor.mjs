@@ -57,8 +57,16 @@ async function grimoireIndexStatus() {
   const registry = await readOptionalServices();
   for (const pack of manifest.packs ?? []) {
     const pin = registry.services?.[pack.serviceId]?.commit;
+    const installed = String(pack.commit ?? "");
+    if (pin && installed.endsWith("-dirty")) {
+      const builtFrom = installed.slice(0, -"-dirty".length);
+      const revision = builtFrom === pin
+        ? `pinned ${String(pin).slice(0, 8)}`
+        : `${builtFrom.slice(0, 8)} while repo pins ${String(pin).slice(0, 8)}`;
+      return `stale: ${pack.serviceId} built from a dirty worktree of ${revision}; clean or commit external/${pack.serviceId}, then run npm run install:grimoire`;
+    }
     if (pin && pack.commit !== pin) {
-      return `stale: ${pack.serviceId} installed ${String(pack.commit).slice(0, 8)} but repo pins ${String(pin).slice(0, 8)} (npm run install:grimoire)`;
+      return `stale: ${pack.serviceId} installed ${installed.slice(0, 8)} but repo pins ${String(pin).slice(0, 8)} (npm run install:grimoire)`;
     }
   }
   return `ok (${String(manifest.packs?.[0]?.commit ?? "").slice(0, 8) || "no packs"})`;

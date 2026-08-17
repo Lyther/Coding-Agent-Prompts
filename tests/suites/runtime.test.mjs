@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { files, run, status } from "../lib/helpers.mjs";
+import { files, root, run, status } from "../lib/helpers.mjs";
 
 const evidenceDest = "/tmp/agent-surface-evidence";
 rmSync(evidenceDest, { recursive: true, force: true });
@@ -94,6 +95,18 @@ const argvRedactionCases = [
     args: ["--token", `--${SENTINEL}`],
     expectTail: ["--token", "[REDACTED]"],
   },
+  {
+    name: "prefixed AWS secret assignment",
+    args: [`AWS_SECRET_ACCESS_KEY=${SENTINEL}`],
+    expectTail: ["AWS_SECRET_ACCESS_KEY=[REDACTED]"],
+    expectPattern: "secret-assignment",
+  },
+  {
+    name: "prefixed GitHub token assignment",
+    args: [`GITHUB_TOKEN=${SENTINEL}`],
+    expectTail: ["GITHUB_TOKEN=[REDACTED]"],
+    expectPattern: "secret-assignment",
+  },
 ];
 
 for (const testCase of argvRedactionCases) {
@@ -126,7 +139,11 @@ for (const testCase of argvRedactionCases) {
         false,
         `${testCase.name}: sentinel leaked in cmd`,
       );
-      assert.equal(evidence.redaction.patterns.includes("secret-flag"), true, testCase.name);
+      assert.equal(
+        evidence.redaction.patterns.includes(testCase.expectPattern ?? "secret-flag"),
+        true,
+        testCase.name,
+      );
     }
     assert.deepEqual(
       evidence.cmd.slice(-testCase.expectTail.length),
@@ -166,5 +183,36 @@ assert.deepEqual(fullConsentEvidence.execution_consent, {
 });
 assert.equal(Object.hasOwn(fullConsentEvidence, "approval"), false);
 rmSync(fullConsentClassDest, { recursive: true, force: true });
+
+// SUBSTITUTE_JUSTIFICATION
+// - substitute: dirtyDoctorHome
+// - replaces: the operator's user-level ~/.grimoire index and manifest
+// - necessity: the dirty-manifest diagnostic requires exact state that a test cannot safely create in the operator's live index
+// - real-option: the installed index was checked live, but its state is mutable and must not be overwritten by the suite
+// - proof-limit: this test proves doctor output only, not index installation or Grimoire runtime behavior
+// - real-proof: npm run install:grimoire, then node scripts/agent-surface.mjs doctor against the installed index
+const dirtyDoctorHome = mkdtempSync(path.join(tmpdir(), "agent-surface-doctor-dirty-"));
+try {
+  const grimoireDir = path.join(dirtyDoctorHome, ".grimoire");
+  mkdirSync(grimoireDir, { recursive: true });
+  writeFileSync(path.join(grimoireDir, "index.sqlite"), "present");
+  const registry = JSON.parse(readFileSync(path.join(root, "registry", "optional-services.json"), "utf8"));
+  const serviceId = "anthropic-cybersecurity-skills";
+  const pin = registry.services[serviceId].commit;
+  writeFileSync(path.join(grimoireDir, "manifest.json"), JSON.stringify({
+    schemaVersion: 1,
+    packs: [{ serviceId, commit: `${pin}-dirty` }],
+  }));
+
+  const result = status(["doctor"], { env: { ...process.env, HOME: dirtyDoctorHome } });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, new RegExp(
+    `grimoire-index: stale: ${serviceId} built from a dirty worktree of pinned ${pin.slice(0, 8)}`,
+  ));
+  assert.match(result.stdout, new RegExp(`clean or commit external/${serviceId}, then run npm run install:grimoire`));
+  assert.doesNotMatch(result.stdout, new RegExp(`installed ${pin.slice(0, 8)} but repo pins ${pin.slice(0, 8)}`));
+} finally {
+  rmSync(dirtyDoctorHome, { recursive: true, force: true });
+}
 
 console.log("runtime: ok");
