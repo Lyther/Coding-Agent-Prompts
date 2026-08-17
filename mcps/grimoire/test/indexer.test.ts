@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { buildIndex, parseFrontmatter } from "../src/indexer.js";
@@ -66,4 +68,99 @@ test("sourceHash is stable across identical rebuilds (drift detection)", () => {
   try {
     assert.equal(a.res.manifest.packs[0]!.sourceHash, b.res.manifest.packs[0]!.sourceHash);
   } finally { a.cleanup(); b.cleanup(); }
+});
+
+test("a dirty Git pack is not attributed to its clean HEAD commit", () => {
+  const dir = join(tmpdir(), `grimoire-dirty-${process.pid}-${Date.now()}`);
+  const pack = join(dir, "pack");
+  const out = join(dir, "out");
+  const skillDir = join(pack, "skills", "useful-skill");
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(join(skillDir, "SKILL.md"), "---\nname: useful-skill\ndescription: Useful test skill.\n---\nUse the clean procedure.\n");
+  execFileSync("git", ["init", "-q", pack]);
+  execFileSync("git", ["-C", pack, "add", "."]);
+  execFileSync("git", ["-C", pack, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "initial"]);
+  const cleanHead = execFileSync("git", ["-C", pack, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  writeFileSync(join(skillDir, "SKILL.md"), "---\nname: useful-skill\ndescription: Useful changed skill.\n---\nUse the changed procedure.\n");
+
+  try {
+    const result = buildIndex({ packs: [{ serviceId: "fixture", path: pack }], outDir: out });
+    assert.notEqual(result.manifest.packs[0]!.commit, cleanHead);
+    assert.equal(result.manifest.packs[0]!.commit, `${cleanHead}-dirty`);
+    const store = new Store({ dir: out });
+    try {
+      assert.deepEqual(store.indexStatus(), { status: "ok" });
+      const indexed = store.get("fixture:useful-skill");
+      assert.equal(indexed.status, "ok");
+      if (indexed.status === "ok") {
+        assert.equal(indexed.skill.provenance.sourceCommit, `${cleanHead}-dirty`);
+      }
+    } finally {
+      store.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("ignored files included in the index mark Git provenance dirty", () => {
+  const dir = join(tmpdir(), `grimoire-ignored-${process.pid}-${Date.now()}`);
+  const pack = join(dir, "pack");
+  const out = join(dir, "out");
+  const skillDir = join(pack, "skills", "useful-skill");
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(join(pack, ".gitignore"), "skills/*/references/ignored.md\n");
+  writeFileSync(join(skillDir, "SKILL.md"), "---\nname: useful-skill\ndescription: Useful test skill.\n---\nUse references/ignored.md.\n");
+  execFileSync("git", ["init", "-q", pack]);
+  execFileSync("git", ["-C", pack, "add", "."]);
+  execFileSync("git", ["-C", pack, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "initial"]);
+  const cleanHead = execFileSync("git", ["-C", pack, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  mkdirSync(join(skillDir, "references"));
+  writeFileSync(join(skillDir, "references", "ignored.md"), "Local ignored procedure.\n");
+
+  try {
+    const result = buildIndex({ packs: [{ serviceId: "fixture", path: pack }], outDir: out });
+    assert.equal(result.files, 1, "ignored supporting file was part of the indexed bytes");
+    assert.equal(result.manifest.packs[0]!.commit, `${cleanHead}-dirty`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// SUBSTITUTE_JUSTIFICATION
+// - substitute: onSourceRead callback controlling only when the real source file is restored
+// - replaces: nondeterministic child-process scheduling around the post-read interleaving
+// - necessity: the exact read-then-restore order cannot be made deterministic with wall-clock delays
+// - real-option: a real child process with a fixed delay was used and failed nondeterministically under load
+// - proof-limit: proves snapshot re-verification for this interleaving, not detection of every transient filesystem write
+// - real-proof: the adjacent real-Git dirty and ignored-file cases exercise normal buildIndex provenance behavior
+test("source restored after an indexed read is still marked dirty", () => {
+  const dir = join(tmpdir(), `grimoire-race-${process.pid}-${Date.now()}`);
+  const pack = join(dir, "pack");
+  const out = join(dir, "out");
+  const skillDir = join(pack, "skills", "useful-skill");
+  const skillPath = join(skillDir, "SKILL.md");
+  const clean = "---\nname: useful-skill\ndescription: Clean skill.\n---\nUse the clean procedure.\n";
+  const mutated = "---\nname: useful-skill\ndescription: Mutated skill.\n---\nUse the transient procedure.\n";
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(skillPath, mutated);
+
+  try {
+    let restored = false;
+    const result = buildIndex({
+      packs: [{ serviceId: "fixture", path: pack, commit: "fixturecommit" }],
+      outDir: out,
+      onSourceRead: (file: string) => {
+        if (file === skillPath) {
+          writeFileSync(skillPath, clean);
+          restored = true;
+        }
+      },
+    });
+    assert.equal(restored, true, "the source was restored immediately after its indexed read");
+    assert.equal(readFileSync(skillPath, "utf8"), clean, "source was restored before the build completed");
+    assert.equal(result.manifest.packs[0]!.commit, "fixturecommit-dirty");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

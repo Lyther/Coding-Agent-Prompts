@@ -18,10 +18,29 @@ export interface BuildResult { manifest: IndexedManifest; skills: number; files:
 
 const sha256 = (s: string): string => createHash("sha256").update(s, "utf8").digest("hex");
 
-function gitCommit(path: string): string | undefined {
+function gitHead(path: string): string | undefined {
   try {
     return execFileSync("git", ["-C", path, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || undefined;
   } catch { return undefined; }
+}
+
+function indexedSourceIsDirty(path: string): boolean {
+  try {
+    return Boolean(execFileSync(
+      "git",
+      ["-C", path, "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", "--", "skills"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    ).trim());
+  } catch { return false; }
+}
+
+function indexedSourceChanged(snapshots: Map<string, string>): boolean {
+  for (const [file, digest] of snapshots) {
+    try {
+      if (sha256(readFileSync(file, "utf8")) !== digest) return true;
+    } catch { return true; }
+  }
+  return false;
 }
 
 // Minimal YAML frontmatter reader: returns the raw scalar fields we need (name,
@@ -67,7 +86,12 @@ function listSupportingFiles(skillDir: string): string[] {
   return out.sort();
 }
 
-export function buildIndex(opts: { packs: PackSpec[]; outDir?: string; indexedAt?: string }): BuildResult {
+export function buildIndex(opts: {
+  packs: PackSpec[];
+  outDir?: string;
+  indexedAt?: string;
+  onSourceRead?: (path: string) => void;
+}): BuildResult {
   const { indexPath, manifestPath, dir } = resolvePaths(opts.outDir);
   const indexedAt = opts.indexedAt ?? new Date().toISOString();
   mkdirSync(dir, { recursive: true });
@@ -87,15 +111,18 @@ export function buildIndex(opts: { packs: PackSpec[]; outDir?: string; indexedAt
     const insFts = db.prepare("INSERT INTO skills_fts(rowid,name,description,body) VALUES(?,?,?,?)");
     const insFile = db.prepare("INSERT INTO skill_files(skill_id,rel_path,content,sha256,size) VALUES(?,?,?,?,?)");
     const insMeta = db.prepare("INSERT OR REPLACE INTO index_meta(key,value) VALUES(?,?)");
+    const updateSourceCommit = db.prepare("UPDATE skills SET source_commit=? WHERE pack=?");
 
     for (const pack of opts.packs) {
-      const commit = pack.commit ?? gitCommit(pack.path) ?? "uncommitted";
+      const baseCommit = pack.commit ?? gitHead(pack.path) ?? "uncommitted";
+      let commit = baseCommit;
       const skillsDir = join(pack.path, "skills");
       // A pack was explicitly requested: a missing skills/ dir is a hard error, not a skip.
       // Failing here (vs. quietly producing an empty index) prevents a broken/incomplete
       // checkout from clobbering a good index or shipping a contradictory manifest.
       if (!existsSync(skillsDir)) throw new Error(`pack ${pack.serviceId}: no skills/ directory at ${skillsDir}`);
       const fingerprints: string[] = []; // per-skill stable digests → pack sourceHash
+      const sourceSnapshots = new Map<string, string>();
 
       db.exec("BEGIN");
       for (const e of readdirSync(skillsDir, { withFileTypes: true })) {
@@ -104,6 +131,8 @@ export function buildIndex(opts: { packs: PackSpec[]; outDir?: string; indexedAt
         const skillMd = join(skillDir, "SKILL.md");
         if (!existsSync(skillMd)) { result.skipped.push({ dir: e.name, reason: "no SKILL.md" }); continue; }
         const raw = readFileSync(skillMd, "utf8");
+        sourceSnapshots.set(skillMd, sha256(raw));
+        opts.onSourceRead?.(skillMd);
         const parsed = parseFrontmatter(raw);
         if (!parsed) { result.skipped.push({ dir: e.name, reason: "no frontmatter" }); continue; }
         const name = (parsed.fields["name"]?.trim()) || e.name;
@@ -125,7 +154,10 @@ export function buildIndex(opts: { packs: PackSpec[]; outDir?: string; indexedAt
 
         const fileDigests: string[] = [];
         for (const rel of listSupportingFiles(skillDir)) {
-          const content = readFileSync(join(skillDir, rel), "utf8");
+          const file = join(skillDir, rel);
+          const content = readFileSync(file, "utf8");
+          sourceSnapshots.set(file, sha256(content));
+          opts.onSourceRead?.(file);
           const size = Buffer.byteLength(content, "utf8");
           const fsha = sha256(content);
           insFile.run(id, rel, content, fsha, size);
@@ -133,6 +165,11 @@ export function buildIndex(opts: { packs: PackSpec[]; outDir?: string; indexedAt
           fileDigests.push(`${rel}:${fsha}`);
         }
         fingerprints.push(`${id}|${bodySha}|${fileDigests.join(",")}`);
+      }
+      if (baseCommit !== "uncommitted" && !baseCommit.endsWith("-dirty")
+        && (indexedSourceIsDirty(pack.path) || indexedSourceChanged(sourceSnapshots))) {
+        commit = `${baseCommit}-dirty`;
+        updateSourceCommit.run(commit, pack.serviceId);
       }
       db.exec("COMMIT");
 
