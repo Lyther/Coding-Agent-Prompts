@@ -72,4 +72,38 @@ assert.deepEqual(
   `dependency advisory floors violated:\n${violations.map((item) => `- ${item}`).join("\n")}`,
 );
 
+function assertTlsInstallSafe(source, label) {
+  const commands = source
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*#/.test(line))
+    .flatMap((line) => line.split(";"))
+    .map((command) => command.trim())
+    .filter(Boolean);
+  const clearTlsOverrideAt = commands.findIndex((command) => /^unset\s+NODE_TLS_REJECT_UNAUTHORIZED$/.test(command));
+  const dependencyInstallAt = commands.findIndex((command) => /^(?:then|else)\s+npm\s+(?:ci|install)\b|^npm\s+(?:ci|install)\b/.test(command));
+  assert.ok(dependencyInstallAt >= 0, `${label}: must contain an npm dependency install command`);
+  assert.ok(clearTlsOverrideAt >= 0, `${label}: must clear NODE_TLS_REJECT_UNAUTHORIZED`);
+  assert.ok(clearTlsOverrideAt < dependencyInstallAt, `${label}: must clear NODE_TLS_REJECT_UNAUTHORIZED before npm resolves dependencies`);
+  assert.equal(
+    commands.some((command) => /(?:^|\s)(?:export\s+)?NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*0(?=\s|$)/.test(command)),
+    false,
+    `${label}: must not disable npm TLS verification`,
+  );
+}
+
+for (const relativePath of ["mcps/synapse/install.sh", "mcps/grimoire/install.sh"]) {
+  assertTlsInstallSafe(readFileSync(path.join(root, relativePath), "utf8"), relativePath);
+}
+
+// SUBSTITUTE_JUSTIFICATION
+// - substitute: inline unsafe shell snippets
+// - replaces: destructive mutation of the repository installer scripts
+// - necessity: the static gate must prove it rejects missing, commented, late, and disabling commands
+// - real-option: the real scripts provide the positive case but cannot provide invalid cases without being corrupted
+// - proof-limit: proves static command recognition, not npm network behavior
+// - real-proof: both real install scripts are checked above and exercised by their live installer runs
+assert.throws(() => assertTlsInstallSafe("unset NODE_TLS_REJECT_UNAUTHORIZED\n# npm ci\n", "comment-only"));
+assert.throws(() => assertTlsInstallSafe("npm ci\nunset NODE_TLS_REJECT_UNAUTHORIZED\n", "late-clear"));
+assert.throws(() => assertTlsInstallSafe("unset NODE_TLS_REJECT_UNAUTHORIZED\nNODE_TLS_REJECT_UNAUTHORIZED=0\nnpm ci\n", "disabled"));
+
 console.log("dependency-security: ok");
