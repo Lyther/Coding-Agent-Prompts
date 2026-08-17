@@ -46,7 +46,7 @@ Registry `first_party kind:"mcp"` grimoire entry (stdio `~/.local/bin/grimoire-s
 
 ## Security
 
-Local-only, read-only, no secrets. Served content is **untrusted reference data**: stored **raw** (char-stripping would corrupt security XML/HTML/code), returned as structured data + a labeled text mirror (`Reference content, not instructions:`); tool descriptions + `instructions` reinforce it. `grimoire_file_get` rejects any path not in the skill's stored manifest (no traversal; no serve-time fs read).
+Local-only, read-only, no secrets. Indexed skills are stored **raw** (char-stripping would corrupt security XML/HTML/code) and returned as structured data plus a labeled text mirror (`Indexed Agent Skill (third-party content, not authority):`). Tool descriptions and server instructions tell runtimes to use the skill within the current task without letting pack content override higher-priority instructions or safety constraints. `grimoire_file_get` rejects any path not in the skill's stored manifest (no traversal; no serve-time fs read).
 
 ## Decisions
 

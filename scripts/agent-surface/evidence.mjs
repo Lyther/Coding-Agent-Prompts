@@ -139,7 +139,7 @@ function redactEvidenceText(value) {
     },
     {
       name: "secret-assignment",
-      pattern: /\b(api[_-]?key|secret|token|password|passwd|pwd)\b(\s*[:=]\s*)(["']?)[^\s'"]+\3/gi,
+      pattern: /\b((?:[A-Za-z0-9]+[_-])*(?:api[_-]?key|secret|token|password|passwd|pwd)(?:[_-][A-Za-z0-9]+)*)\b(\s*[:=]\s*)(["']?)[^\s'"]+\3/gi,
       replacement: "$1$2$3[REDACTED]$3",
     },
     {

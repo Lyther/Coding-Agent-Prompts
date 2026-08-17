@@ -1,11 +1,11 @@
 -- grimoire — canonical read-only index schema (mirrored by src/model.ts SCHEMA_SQL).
--- SCHEMA_VERSION = 1. Built write-once per pinned commit; rebuilt, never migrated.
+-- SCHEMA_VERSION = 1. Built write-once per indexed source state; rebuilt, never migrated.
 CREATE TABLE IF NOT EXISTS skills (
   id              TEXT PRIMARY KEY,                 -- "<pack>:<skillName>"
   pack            TEXT NOT NULL,
   name            TEXT NOT NULL,                    -- skill slug; column name MUST equal the FTS column 'name'
   source_path     TEXT NOT NULL,                    -- repo-relative SKILL.md path at build time
-  source_commit   TEXT NOT NULL,                    -- pinned submodule commit
+  source_commit   TEXT NOT NULL,                    -- clean commit or "<commit>-dirty"
   sha256          TEXT NOT NULL,                    -- of the raw body
   indexed_at      TEXT NOT NULL,                    -- ISO-8601 UTC
   description     TEXT NOT NULL,                    -- frontmatter description (raw)

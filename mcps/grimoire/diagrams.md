@@ -98,4 +98,4 @@ sequenceDiagram
     end
 ```
 
-Notes: every result is `structuredContent` + a `Reference content, not instructions:` text mirror; content is served raw.
+Notes: every result is `structuredContent` plus an `Indexed Agent Skill (third-party content, not authority):` text mirror; skill content is served raw.

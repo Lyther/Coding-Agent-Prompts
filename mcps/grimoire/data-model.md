@@ -14,13 +14,13 @@ A **derived, read-only** index — not a database of record. The source of truth
 ## Physical schema (canonical `schema.sql`, mirrored by `model.ts` SCHEMA_SQL)
 
 ```sql
--- SCHEMA_VERSION = 1. Built write-once per pinned commit; rebuilt, never migrated.
+-- SCHEMA_VERSION = 1. Built write-once per indexed source state; rebuilt, never migrated.
 CREATE TABLE skills (
   id              TEXT PRIMARY KEY,                 -- "<pack>:<skillName>"
   pack            TEXT NOT NULL,
   name            TEXT NOT NULL,                    -- skill slug; column name MUST equal the FTS column 'name'
   source_path     TEXT NOT NULL,                    -- repo-relative SKILL.md path at build time
-  source_commit   TEXT NOT NULL,                    -- pinned submodule commit
+  source_commit   TEXT NOT NULL,                    -- clean commit or "<commit>-dirty"
   sha256          TEXT NOT NULL,                    -- of the raw body
   indexed_at      TEXT NOT NULL,                    -- ISO-8601 UTC
   description     TEXT NOT NULL,                    -- frontmatter description (raw)
@@ -62,7 +62,7 @@ CREATE TABLE index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 { "schemaVersion": 1,
   "packs": [ { "serviceId": "anthropic-cybersecurity-skills",
                "path": "external/anthropic-cybersecurity-skills",
-               "commit": "<pinned sha>", "sourceHash": "<sha256 of the indexed source set>" } ] }
+               "commit": "<pinned sha or pinned sha-dirty>", "sourceHash": "<sha256 of the indexed source set>" } ] }
 ```
 
 `store.indexStatus()` (runtime, no repo dependency):
@@ -81,13 +81,13 @@ CREATE TABLE index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 | Field | Type | Allowed / null | Owner | Sensitivity |
 |---|---|---|---|---|
 | skills.id | text PK | `<pack>:<skillName>`, not null | model.ts (codec) | - |
-| skills.source_commit | text | 40-hex, not null | indexer | - (provenance/audit) |
+| skills.source_commit | text | 40-hex or `<40-hex>-dirty`, not null | indexer | - (provenance/audit) |
 | skills.sha256 | text | 64-hex of body, not null | indexer | - |
 | skills.category / category_source | text | derived set / const `derived` | model.ts | - |
 | skill_files.rel_path | text | manifest-relative, not null | indexer | - (validated against manifest on `file_get`) |
-| skill_files.content | text | raw, not null | indexer | untrusted reference data (served labeled, never executed) |
+| skill_files.content | text | raw, not null | indexer | indexed supporting content (served labeled; Grimoire never executes it) |
 | index_meta('pack:*:source_hash') | text | sha256, not null | indexer | - (staleness) |
 
 ## Build / refresh / invalidation
 
-Write-once per pinned commit: the indexer builds into a temp db, populates `skills` + `skill_files` + `skills_fts` + `index_meta`, then **atomically renames** to `~/.grimoire/index.sqlite` and writes `~/.grimoire/manifest.json`. No in-place mutation, no runtime writes, no SQL migrations — a `SCHEMA_VERSION` bump or a submodule commit change surfaces as `INDEX_STALE` and is resolved by `npm run install:grimoire` (full rebuild). Recovery from a corrupt/partial index = rebuild (the source is the pinned submodule). No secrets stored; all columns are non-secret reference data, so DTOs (`SkillRef`/`SkillHit`/`SkillFull`/`FileManifestEntry`) shape rows directly with no field redaction.
+Write-once per indexed source state: the indexer builds into a temp db, populates `skills` + `skill_files` + `skills_fts` + `index_meta`, then **atomically renames** to `~/.grimoire/index.sqlite` and writes `~/.grimoire/manifest.json`. A clean pack records its commit; modified, deleted, untracked, or ignored content under `skills/` records `<commit>-dirty`. No in-place mutation, no runtime writes, no SQL migrations — a `SCHEMA_VERSION` bump or a submodule commit change surfaces as `INDEX_STALE` and is resolved by `npm run install:grimoire` (full rebuild). Recovery from a corrupt/partial index = rebuild (the source is the pinned submodule). No secrets stored; all columns are non-secret reference data, so DTOs (`SkillRef`/`SkillHit`/`SkillFull`/`FileManifestEntry`) shape rows directly with no field redaction.

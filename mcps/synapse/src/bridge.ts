@@ -14,6 +14,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { ensureSidecar } from "./bootstrap.js";
@@ -180,6 +181,21 @@ export async function startBridge(opts: BridgeOptions): Promise<{ server: Server
 }
 
 async function main(): Promise<void> {
+  const hostInput = new PassThrough();
+  process.stdin.pipe(hostInput);
+  let bridge: Awaited<ReturnType<typeof startBridge>> | undefined;
+  let closing = false;
+  const closeWhenHostLeaves = (): void => {
+    if (closing) return;
+    closing = true;
+    if (!bridge) process.exit(0);
+    void bridge.close()
+      .catch((e) => { process.stderr.write(`[synapse-bridge] close failed: ${e instanceof Error ? e.message : String(e)}\n`); })
+      .finally(() => { process.exit(0); });
+  };
+  process.stdin.once("end", closeWhenHostLeaves);
+  process.stdin.once("close", closeWhenHostLeaves);
+
   const dbDir = process.env["SYNAPSE_DB_DIR"] ?? join(homedir(), ".synapse");
   let url = process.env["SYNAPSE_URL"];
   let token = process.env["SYNAPSE_TOKEN"];
@@ -190,12 +206,12 @@ async function main(): Promise<void> {
     url = url ?? d.url;
     token = token ?? d.token;
   }
-  const opts: BridgeOptions = { url, token };
+  const opts: BridgeOptions = { url, token, downstream: new StdioServerTransport(hostInput, process.stdout) };
   const agent = process.env["SYNAPSE_AGENT_ID"];
   if (agent) opts.agentId = agent;
   const proj = process.env["SYNAPSE_PROJECT"];
   if (proj) opts.projectKeyValue = proj;
-  await startBridge(opts);
+  bridge = await startBridge(opts);
   process.stderr.write(`[synapse-bridge] relaying stdio <-> ${url}\n`);
 }
 

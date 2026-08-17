@@ -11,6 +11,7 @@ command -v node >/dev/null 2>&1 || { echo "node (>=22.17) required" >&2; exit 1;
 node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit((a>22||(a===22&&b>=17))?0:1)' \
   || { echo "grimoire needs Node >=22.17 for node:sqlite; found $(node -v)" >&2; exit 1; }
 
+unset NODE_TLS_REJECT_UNAUTHORIZED
 cd "$HERE"
 if [ -f package-lock.json ]; then npm ci; else npm install; fi
 npm run build
