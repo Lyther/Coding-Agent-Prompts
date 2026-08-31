@@ -201,7 +201,10 @@ try {
   const pin = registry.services[serviceId].commit;
   writeFileSync(path.join(grimoireDir, "manifest.json"), JSON.stringify({
     schemaVersion: 1,
-    packs: [{ serviceId, commit: `${pin}-dirty` }],
+    packs: [
+      { serviceId, commit: `${pin}-dirty` },
+      { serviceId: "rev-skills", commit: registry.services["rev-skills"].commit },
+    ],
   }));
 
   const result = status(["doctor"], { env: { ...process.env, HOME: dirtyDoctorHome } });
@@ -213,6 +216,30 @@ try {
   assert.doesNotMatch(result.stdout, new RegExp(`installed ${pin.slice(0, 8)} but repo pins ${pin.slice(0, 8)}`));
 } finally {
   rmSync(dirtyDoctorHome, { recursive: true, force: true });
+}
+
+// SUBSTITUTE_JUSTIFICATION
+// - substitute: missingPackHome
+// - replaces: an operator ~/.grimoire built before rev-skills was a served pack
+// - necessity: cannot delete rev-skills from the live index without destroying the just-built 875-skill proof
+// - real-option: a second disposable index would still be a substitute for the operator home
+// - proof-limit: proves doctor text for a missing required pack, not install:grimoire
+// - real-proof: npm run install:grimoire after adding the pack, then doctor
+const missingPackHome = mkdtempSync(path.join(tmpdir(), "agent-surface-doctor-missing-pack-"));
+try {
+  const grimoireDir = path.join(missingPackHome, ".grimoire");
+  mkdirSync(grimoireDir, { recursive: true });
+  writeFileSync(path.join(grimoireDir, "index.sqlite"), "present");
+  const registry = JSON.parse(readFileSync(path.join(root, "registry", "optional-services.json"), "utf8"));
+  writeFileSync(path.join(grimoireDir, "manifest.json"), JSON.stringify({
+    schemaVersion: 1,
+    packs: [{ serviceId: "anthropic-cybersecurity-skills", commit: registry.services["anthropic-cybersecurity-skills"].commit }],
+  }));
+  const result = status(["doctor"], { env: { ...process.env, HOME: missingPackHome } });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, /grimoire-index: stale: required pack rev-skills missing from index/);
+} finally {
+  rmSync(missingPackHome, { recursive: true, force: true });
 }
 
 console.log("runtime: ok");

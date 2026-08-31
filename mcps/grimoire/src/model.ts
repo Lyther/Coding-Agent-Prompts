@@ -24,9 +24,12 @@ export const CATEGORIES = new Set([
   "reverse", "hardening", "investigating", "monitoring", "responding", "scanning",
   "testing", "writing", "creating", "designing", "managing", "reviewing",
 ]);
+export const CATEGORY_ALIASES: Record<string, string> = { re: "reverse" };
+
 export function deriveCategory(name: string): { category: string; categorySource: "derived" } {
   const head = name.split("-", 1)[0] ?? "";
-  return { category: CATEGORIES.has(head) ? head : "other", categorySource: "derived" };
+  const mapped = CATEGORY_ALIASES[head] ?? head;
+  return { category: CATEGORIES.has(mapped) ? mapped : "other", categorySource: "derived" };
 }
 
 // Inlined so the compiled server needs no file lookup. Keep in sync with schema.sql.

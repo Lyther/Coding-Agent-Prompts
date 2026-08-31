@@ -68,6 +68,11 @@
               "pattern": "^[a-z0-9][a-z0-9-]*$"
             }
           },
+          "index_root": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$",
+            "minLength": 1
+          },
           "mcp": {
             "type": "object",
             "required": [

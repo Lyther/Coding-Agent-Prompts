@@ -1,6 +1,6 @@
 # Architecture — grimoire
 
-Status: IMPLEMENTED (v0.1) · Source: mcps/grimoire/concept-zero.md · Last updated: 2026-07-01
+Status: IMPLEMENTED (v0.1) · Source: mcps/grimoire/concept-zero.md · Last updated: 2026-08-31
 
 Thin, read-only MCP — a small script, not a platform. This doc is sized to match. Diagrams: [diagrams.md](diagrams.md) (containers · ERD · JIT flow).
 
@@ -15,7 +15,8 @@ mcps/grimoire/
   src/
     contract.ts  - zod tool I/O, DTOs, ErrorCode (INDEX_MISSING/INDEX_STALE/NOT_FOUND/INVALID_INPUT), SERVER_INSTRUCTIONS, id codec <pack>:<skillName>. Pure.
     model.ts     - SCHEMA_SQL (skills + skill_files + index_meta + FTS5), row mappers, deriveCategory(name)→categorySource:"derived". Pure.
-    indexer.ts   - build-time ONLY writer: walk pack roots → validate metadata (skip no-frontmatter/bad-slug/dup-id; truncate desc>1024 in metadata) → store body/files RAW → sqlite + index_meta + ~/.grimoire/manifest.json. Absent pack dir → throws; builds into a temp db + atomic-renames (non-destructive). Not imported by server.
+    indexer.ts   - build-time ONLY writer: walk pack roots (skillsRel, default skills/) → validate metadata (skip no-frontmatter/bad-slug/dup-id; truncate desc>1024 in metadata) → store body/files RAW → sqlite + index_meta + ~/.grimoire/manifest.json. Absent pack dir → throws; builds into a temp db + atomic-renames (non-destructive). Not imported by server.
+    served-packs.ts - install-time: read served_by grimoire packs + index_root from optional-services.json and invoke the indexer.
     store.ts     - runtime read-only reader: search(bm25)/list/get/fileGet/indexStatus. No writes, no MCP.
     tools.ts     - 4 tool specs + validated dispatcher (structuredContent + labeled text); readOnlyHint.
     server.ts    - stdio MCP Server (instructions); bin grimoire-server. Opens index read-only.
@@ -42,7 +43,7 @@ Full DDL, manifest shape, codecs, and data dictionary: [data-model.md](data-mode
 
 ## Distribution
 
-Registry `first_party kind:"mcp"` grimoire entry (stdio `~/.local/bin/grimoire-server`) → rendered/merged across the **full synapse MCP host set** (zero new infra). A `served_by:["grimoire"]` link on the `anthropic-cybersecurity-skills` source-pack tells the `check` rule which packs grimoire indexes. Invariant: `served_by` includes grimoire ⇒ `source-pack`, no `skill_roots`, pinned `commit`, present in the index. `check` fails if a served pack regains `skill_roots` or its skill names surface in any native catalog.
+Registry `first_party kind:"mcp"` grimoire entry (stdio `~/.local/bin/grimoire-server`) → rendered/merged across the **full synapse MCP host set** (zero new infra). A `served_by:["grimoire"]` link on each de-scoped source-pack (`anthropic-cybersecurity-skills`, `rev-skills`) tells the `check` rule which packs grimoire indexes. `rev-skills` sets `index_root: ".claude/skills"` because upstream does not use a top-level `skills/` directory. Invariant: `served_by` includes grimoire ⇒ `source-pack`, no `skill_roots`, pinned `commit`, present in the index. `check` fails if a served pack regains `skill_roots` or its skill names surface in any native catalog.
 
 ## Security
 

@@ -4,9 +4,17 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { buildIndex, parseFrontmatter } from "../src/indexer.js";
+import { buildIndex, parseFrontmatter, resolveSkillsRel } from "../src/indexer.js";
 import { Store } from "../src/store.js";
-import { setupIndex } from "./helpers.js";
+import { FIXTURE_COMMIT, FIXTURE_PACK, setupIndex } from "./helpers.js";
+
+test("resolveSkillsRel rejects absolute and traversal paths", () => {
+  assert.equal(resolveSkillsRel(undefined), "skills");
+  assert.equal(resolveSkillsRel(".claude/skills"), ".claude/skills");
+  assert.throws(() => resolveSkillsRel(".."), /invalid skillsRel/);
+  assert.throws(() => resolveSkillsRel("/tmp/skills"), /invalid skillsRel/);
+  assert.throws(() => resolveSkillsRel("foo/../bar"), /invalid skillsRel/);
+});
 
 test("parseFrontmatter reads inline + folded multi-line scalars", () => {
   const p = parseFrontmatter("---\nname: foo-bar\ndescription: line one\n  continues here\n  and here\ntags:\n- a\n- b\n---\nBODY TEXT\n");
@@ -15,6 +23,18 @@ test("parseFrontmatter reads inline + folded multi-line scalars", () => {
   assert.equal(p!.fields["description"], "line one continues here and here");
   assert.equal(p!.body, "BODY TEXT\n");
   assert.equal(parseFrontmatter("# no frontmatter\n"), null);
+});
+
+test("a declared commit on a nested pack is not compared to a parent git HEAD", () => {
+  const parentHead = execFileSync("git", ["-C", FIXTURE_PACK, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  assert.match(parentHead, /^[0-9a-f]{40}$/);
+  assert.notEqual(parentHead, FIXTURE_COMMIT);
+  const { res, cleanup } = setupIndex();
+  try {
+    assert.equal(res.manifest.packs[0]!.commit, FIXTURE_COMMIT);
+  } finally {
+    cleanup();
+  }
 });
 
 test("buildIndex validates + skips malformed, stores valid skills and files", () => {
@@ -52,7 +72,7 @@ test("a requested pack with no skills/ dir FAILS the build and never touches an 
     // Re-index the SAME dir pointing at an absent pack: must throw, not silently empty-build.
     assert.throws(
       () => buildIndex({ packs: [{ serviceId: "ghost", path: join(dir, "no-such-pack"), commit: "c" }], outDir: dir }),
-      /no skills\/ directory/,
+      /no skills directory/,
     );
     // Non-destructive: the prior index + manifest survive and still serve; no temp leaked.
     const after = new Store({ dir });
@@ -212,6 +232,66 @@ test("a clean HEAD change while indexing is not attributed to the initial commit
     } finally {
       store.close();
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("declared --commit that does not match a clean git HEAD is refused", () => {
+  const dir = join(tmpdir(), `grimoire-commit-mismatch-${process.pid}-${Date.now()}`);
+  const pack = join(dir, "pack");
+  const out = join(dir, "out");
+  const skillDir = join(pack, "skills", "useful-skill");
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(join(skillDir, "SKILL.md"), "---\nname: useful-skill\ndescription: Useful test skill.\n---\nUse the clean procedure.\n");
+  execFileSync("git", ["init", "-q", pack]);
+  execFileSync("git", ["-C", pack, "add", "."]);
+  execFileSync("git", ["-C", pack, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "initial"]);
+  const head = execFileSync("git", ["-C", pack, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  try {
+    assert.throws(
+      () => buildIndex({ packs: [{ serviceId: "fixture", path: pack, commit: "a".repeat(40) }], outDir: out }),
+      /git HEAD .* != declared commit/,
+    );
+    const ok = buildIndex({ packs: [{ serviceId: "fixture", path: pack, commit: head }], outDir: out });
+    assert.equal(ok.manifest.packs[0]!.commit, head);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("skillsRel indexes a non-default skills directory", () => {
+  const dir = join(tmpdir(), `grimoire-skillsrel-${process.pid}-${Date.now()}`);
+  const pack = join(dir, "pack");
+  const out = join(dir, "out");
+  const skillDir = join(pack, ".claude", "skills", "re-ghidra");
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(join(skillDir, "SKILL.md"), "---\nname: re-ghidra\ndescription: Ghidra reverse engineering.\n---\nUse Ghidra.\n");
+  try {
+    assert.throws(
+      () => buildIndex({ packs: [{ serviceId: "rev-skills", path: pack, commit: "c" }], outDir: out }),
+      /no skills directory/,
+    );
+    const result = buildIndex({
+      packs: [{ serviceId: "rev-skills", path: pack, commit: "c", skillsRel: ".claude/skills" }],
+      outDir: out,
+    });
+    assert.equal(result.skills, 1);
+    const store = new Store({ dir: out });
+    try {
+      const got = store.get("rev-skills:re-ghidra");
+      assert.equal(got.status, "ok");
+      if (got.status === "ok") {
+        assert.equal(got.skill.category, "reverse");
+        assert.match(got.skill.provenance.sourcePath, /^\.claude\/skills\/re-ghidra\/SKILL\.md$/);
+      }
+      const listed = store.list("re");
+      assert.equal(listed.status, "ok");
+      if (listed.status === "ok") {
+        assert.equal(listed.items.length, 1);
+        assert.equal(listed.items[0]!.id, "rev-skills:re-ghidra");
+      }
+    } finally { store.close(); }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   LIMITS, type FileGetResult, type GetResult, type ListResult, type SearchResult, type StatusError,
 } from "./contract.js";
-import { SCHEMA_VERSION, decId, rowToFull, rowToHit, rowToRef, type SkillRow } from "./model.js";
+import { CATEGORY_ALIASES, SCHEMA_VERSION, decId, rowToFull, rowToHit, rowToRef, type SkillRow } from "./model.js";
 import { resolvePaths, type GrimoirePaths } from "./namespace.js";
 
 interface ManifestPack { serviceId: string; commit: string; sourceHash: string }
@@ -109,8 +109,9 @@ export class Store {
       after = d;
     }
     const db = this.db();
-    const rows = (category
-      ? db.prepare("SELECT id,pack,name,description FROM skills WHERE category=? AND id>? ORDER BY id LIMIT ?").all(category, after, LIMITS.PAGE + 1)
+    const mappedCategory = category === undefined ? undefined : (CATEGORY_ALIASES[category] ?? category);
+    const rows = (mappedCategory
+      ? db.prepare("SELECT id,pack,name,description FROM skills WHERE category=? AND id>? ORDER BY id LIMIT ?").all(mappedCategory, after, LIMITS.PAGE + 1)
       : db.prepare("SELECT id,pack,name,description FROM skills WHERE id>? ORDER BY id LIMIT ?").all(after, LIMITS.PAGE + 1)
     ) as unknown as Pick<SkillRow, "id" | "pack" | "name" | "description">[];
     const hasMore = rows.length > LIMITS.PAGE;

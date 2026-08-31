@@ -62,6 +62,9 @@ CREATE TABLE index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 { "schemaVersion": 1,
   "packs": [ { "serviceId": "anthropic-cybersecurity-skills",
                "path": "external/anthropic-cybersecurity-skills",
+               "commit": "<pinned sha or pinned sha-dirty>", "sourceHash": "<sha256 of the indexed source set>" },
+             { "serviceId": "rev-skills",
+               "path": "external/rev-skills",
                "commit": "<pinned sha or pinned sha-dirty>", "sourceHash": "<sha256 of the indexed source set>" } ] }
 ```
 

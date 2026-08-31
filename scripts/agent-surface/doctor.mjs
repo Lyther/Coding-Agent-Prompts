@@ -55,6 +55,15 @@ async function grimoireIndexStatus() {
   try { manifest = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")); }
   catch { return "stale: unreadable manifest (npm run install:grimoire)"; }
   const registry = await readOptionalServices();
+  const requiredServed = Object.entries(registry.services ?? {})
+    .filter(([, service]) => Array.isArray(service.served_by) && service.served_by.includes("grimoire")
+      && (service.optional === false || service.status === "required"))
+    .map(([id]) => id);
+  const installedIds = new Set((manifest.packs ?? []).map((pack) => pack.serviceId));
+  const missingRequired = requiredServed.filter((id) => !installedIds.has(id));
+  if (missingRequired.length) {
+    return `stale: required pack ${missingRequired.join(",")} missing from index (npm run install:grimoire)`;
+  }
   for (const pack of manifest.packs ?? []) {
     const pin = registry.services?.[pack.serviceId]?.commit;
     const installed = String(pack.commit ?? "");
@@ -69,7 +78,9 @@ async function grimoireIndexStatus() {
       return `stale: ${pack.serviceId} installed ${installed.slice(0, 8)} but repo pins ${String(pin).slice(0, 8)} (npm run install:grimoire)`;
     }
   }
-  return `ok (${String(manifest.packs?.[0]?.commit ?? "").slice(0, 8) || "no packs"})`;
+  const packs = Array.isArray(manifest.packs) ? manifest.packs : [];
+  if (!packs.length) return "ok (no packs)";
+  return `ok (${packs.map((pack) => `${pack.serviceId}@${String(pack.commit ?? "").slice(0, 8)}`).join(", ")})`;
 }
 
 async function kiloConfigStatus() {

@@ -28,7 +28,9 @@ npm install && npm test          # build + run the test suite
 npm run install:grimoire         # (from repo root) build index from the pinned pack, link bins
 ```
 
-`install:grimoire` builds `~/.grimoire/index.sqlite` + `manifest.json` from the pinned
-submodule and links `grimoire-server` (+ `grimoire-index`) into `~/.local/bin`. Point your
-MCP host at the stdio command `grimoire-server`. The index is a write-once build artifact:
-a submodule bump or schema change surfaces as `INDEX_STALE`; rerun `install:grimoire`.
+`install:grimoire` builds `~/.grimoire/index.sqlite` + `manifest.json` from every
+`served_by: ["grimoire"]` source-pack in `registry/optional-services.json` (today:
+`anthropic-cybersecurity-skills` and `rev-skills`) and links `grimoire-server`
+(+ `grimoire-index`) into `~/.local/bin`. Point your MCP host at the stdio command
+`grimoire-server`. The index is a write-once build artifact: a submodule bump or
+schema change surfaces as `INDEX_STALE`; rerun `install:grimoire`.

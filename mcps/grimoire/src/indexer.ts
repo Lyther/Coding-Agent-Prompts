@@ -4,31 +4,62 @@
 // db then atomically renames. Not imported by the server.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { LIMITS, SLUG_RE } from "./contract.js";
 import { SCHEMA_SQL, SCHEMA_VERSION, deriveCategory, extId } from "./model.js";
 import { resolvePaths } from "./namespace.js";
 
-export interface PackSpec { serviceId: string; path: string; commit?: string } // path = dir containing skills/
+export interface PackSpec { serviceId: string; path: string; commit?: string; skillsRel?: string } // path = pack root; skillsRel defaults to skills/
 export interface IndexedPack { serviceId: string; path: string; commit: string; sourceHash: string }
 export interface IndexedManifest { schemaVersion: number; packs: IndexedPack[] }
 export interface BuildResult { manifest: IndexedManifest; skills: number; files: number; skipped: { dir: string; reason: string }[] }
 
 const sha256 = (s: string): string => createHash("sha256").update(s, "utf8").digest("hex");
 
+function gitToplevel(path: string): string | undefined {
+  try {
+    return execFileSync("git", ["-C", path, "rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || undefined;
+  } catch { return undefined; }
+}
+
+function sameDir(a: string, b: string): boolean {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return resolve(a) === resolve(b);
+  }
+}
+
+function gitOwnsPack(path: string): boolean {
+  const top = gitToplevel(path);
+  return top !== undefined && sameDir(top, path);
+}
+
 function gitHead(path: string): string | undefined {
+  if (!gitOwnsPack(path)) return undefined;
   try {
     return execFileSync("git", ["-C", path, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || undefined;
   } catch { return undefined; }
 }
 
-function indexedSourceIsDirty(path: string): boolean {
+export const DEFAULT_SKILLS_REL = "skills";
+
+export function resolveSkillsRel(rel?: string): string {
+  const value = rel ?? DEFAULT_SKILLS_REL;
+  if (value.startsWith("/") || value.split("/").some((part) => part === "" || part === "." || part === "..")) {
+    throw new Error(`invalid skillsRel: ${rel ?? ""}`);
+  }
+  return value;
+}
+
+function indexedSourceIsDirty(path: string, skillsRel: string): boolean {
+  if (!gitOwnsPack(path)) return false;
   try {
     return Boolean(execFileSync(
       "git",
-      ["-C", path, "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", "--", "skills"],
+      ["-C", path, "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", "--", skillsRel],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
     ).trim());
   } catch { return false; }
@@ -115,13 +146,17 @@ export function buildIndex(opts: {
 
     for (const pack of opts.packs) {
       const initialHead = gitHead(pack.path);
-      const baseCommit = pack.commit ?? initialHead ?? "uncommitted";
+      if (pack.commit && initialHead && pack.commit !== initialHead && !pack.commit.endsWith("-dirty")) {
+        throw new Error(`pack ${pack.serviceId}: git HEAD ${initialHead} != declared commit ${pack.commit}`);
+      }
+      const baseCommit = initialHead ?? pack.commit ?? "uncommitted";
       let commit = baseCommit;
-      const skillsDir = join(pack.path, "skills");
-      // A pack was explicitly requested: a missing skills/ dir is a hard error, not a skip.
+      const skillsRel = resolveSkillsRel(pack.skillsRel);
+      const skillsDir = join(pack.path, skillsRel);
+      // A pack was explicitly requested: a missing skills dir is a hard error, not a skip.
       // Failing here (vs. quietly producing an empty index) prevents a broken/incomplete
       // checkout from clobbering a good index or shipping a contradictory manifest.
-      if (!existsSync(skillsDir)) throw new Error(`pack ${pack.serviceId}: no skills/ directory at ${skillsDir}`);
+      if (!existsSync(skillsDir)) throw new Error(`pack ${pack.serviceId}: no skills directory at ${skillsDir}`);
       const fingerprints: string[] = []; // per-skill stable digests → pack sourceHash
       const sourceSnapshots = new Map<string, string>();
 
@@ -168,7 +203,7 @@ export function buildIndex(opts: {
         fingerprints.push(`${id}|${bodySha}|${fileDigests.join(",")}`);
       }
       if (baseCommit !== "uncommitted" && !baseCommit.endsWith("-dirty")
-        && (indexedSourceIsDirty(pack.path) || indexedSourceChanged(sourceSnapshots)
+        && (indexedSourceIsDirty(pack.path, skillsRel) || indexedSourceChanged(sourceSnapshots)
           || (initialHead !== undefined && gitHead(pack.path) !== initialHead))) {
         commit = `${baseCommit}-dirty`;
         updateSourceCommit.run(commit, pack.serviceId);
@@ -208,6 +243,15 @@ function main(argv: string[]): void {
       const c = spec.indexOf(":");
       if (c <= 0) { process.stderr.write(`[grimoire-index] bad --pack (want serviceId:path): ${spec}\n`); process.exit(2); }
       packs.push({ serviceId: spec.slice(0, c), path: spec.slice(c + 1) });
+    } else if (a === "--skills-rel") {
+      const last = packs[packs.length - 1];
+      if (!last) { process.stderr.write("[grimoire-index] --skills-rel must follow --pack\n"); process.exit(2); }
+      try { last.skillsRel = resolveSkillsRel(argv[++i]); }
+      catch (e) { process.stderr.write(`[grimoire-index] ${e instanceof Error ? e.message : String(e)}\n`); process.exit(2); }
+    } else if (a === "--commit") {
+      const last = packs[packs.length - 1];
+      if (!last) { process.stderr.write("[grimoire-index] --commit must follow --pack\n"); process.exit(2); }
+      last.commit = argv[++i] ?? "";
     } else if (a === "--out") {
       outDir = argv[++i];
     }

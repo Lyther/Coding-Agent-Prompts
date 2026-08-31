@@ -24,6 +24,7 @@ test("SCHEMA_SQL loads and the external-content FTS matches over skills", () => 
 test("deriveCategory maps the leading token; unknown -> other; always derived", () => {
   assert.deepEqual(deriveCategory("detecting-cobalt-strike-beacons"), { category: "detecting", categorySource: "derived" });
   assert.deepEqual(deriveCategory("reverse-engineering-malware"), { category: "reverse", categorySource: "derived" });
+  assert.deepEqual(deriveCategory("re-ghidra"), { category: "reverse", categorySource: "derived" });
   assert.deepEqual(deriveCategory("zzz-unmapped-thing"), { category: "other", categorySource: "derived" });
 });
 
