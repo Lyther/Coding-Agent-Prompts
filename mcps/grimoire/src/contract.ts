@@ -3,7 +3,7 @@
 // See mcps/grimoire/api-contract.md (this file is its machine-readable mirror).
 import { z } from "zod";
 
-export const CONTRACT_VERSION = "0.1.0";
+export const CONTRACT_VERSION = "1.0.0";
 
 // ---- limits (validate-early) -----------------------------------------------
 export const LIMITS = {
@@ -30,7 +30,13 @@ export type ErrorStatus = Exclude<Status, "ok">;
 export interface StatusError { status: ErrorStatus; hint: string }
 
 // ---- result DTOs (mapped from rows; never raw rows) ------------------------
-export interface Provenance { sourcePath: string; sourceCommit: string; sha256: string; indexedAt: string }
+export interface Provenance {
+  sourcePath: string;
+  sourceCommit: string;
+  sha256: string;
+  indexedAt: string;
+  attribution: string;
+}
 export interface FileManifestEntry { path: string; size: number }
 export interface SkillRef { id: string; pack: string; name: string; summary: string }
 export interface SkillHit extends SkillRef { score: number }
@@ -45,7 +51,10 @@ export interface SkillFull {
 export type SearchResult = { status: "ok"; hits: SkillHit[] } | StatusError;
 export type ListResult = { status: "ok"; items: SkillRef[]; nextCursor?: string } | StatusError;
 export type GetResult = { status: "ok"; skill: SkillFull } | StatusError;
-export type FileGetResult = { status: "ok"; file: { path: string; content: string; size: number } } | StatusError;
+export type FileGetResult = {
+  status: "ok";
+  file: { path: string; content: string; size: number; attribution: string };
+} | StatusError;
 
 // ===========================================================================
 // TOOL INPUTS (zod). The .shape feeds the host's tool schema; McpServer

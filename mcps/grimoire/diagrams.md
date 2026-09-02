@@ -17,7 +17,7 @@ flowchart TB
         S["grimoire-server<br/>stdio MCP · read-only · 4 tools"]
     end
     DB[("~/.grimoire/index.sqlite<br/>FTS5: skills + skill_files + index_meta")]
-    MAN["~/.grimoire/manifest.json<br/>(expected source: commit/hash)"]
+    MAN["~/.grimoire/manifest.json<br/>(expected packs: commit/hash/attribution)"]
 
     subgraph build["build-on-install (not at serve time)"]
         Inst["install.sh / npm run install:grimoire"]
@@ -65,7 +65,7 @@ erDiagram
     }
     index_meta {
         text key PK
-        text value "schema_version, pack:*:commit/hash/count/built_at"
+        text value "schema_version, pack_ids, pack:* provenance/count"
     }
 ```
 
@@ -91,10 +91,10 @@ sequenceDiagram
         G-->>M: {status: ok, hits:[{id,summary,score}]}
         M->>G: grimoire_get{id}
         G->>DB: row + file manifest + provenance
-        G-->>M: {status: ok, skill:{body, files[], provenance}}
+        G-->>M: {status: ok, skill:{body, files[], provenance+attribution}}
         M->>G: grimoire_file_get{id, path∈manifest}
         G->>DB: file content
-        G-->>M: {status: ok, file:{path, content}}  %% NOT_FOUND if path∉manifest
+        G-->>M: {status: ok, file:{path, content, attribution}}  %% NOT_FOUND if path∉manifest
     end
 ```
 

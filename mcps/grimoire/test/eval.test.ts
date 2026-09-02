@@ -58,7 +58,7 @@ test("real-pack eval: hit@5/MRR meet the regression floor", { skip: existsSync(R
   const dir = mkdtempSync(join(tmpdir(), "grimoire-realeval-"));
   const store = new Store({ dir });
   try {
-    buildIndex({ packs: [{ serviceId: "anthropic-cybersecurity-skills", path: REAL_PACK }], outDir: dir, indexedAt: "2026-01-01T00:00:00.000Z" });
+    buildIndex({ packs: [{ serviceId: "anthropic-cybersecurity-skills", path: REAL_PACK, attribution: "Anthropic Cybersecurity Skills test index." }], outDir: dir, indexedAt: "2026-01-01T00:00:00.000Z" });
     let hits = 0;
     let rrSum = 0;
     for (const q of queries) {
@@ -84,7 +84,7 @@ test("rev-skills pack: 121 skills, ghidra search, get", { skip: existsSync(REV_S
   const store = new Store({ dir });
   try {
     const built = buildIndex({
-      packs: [{ serviceId: "rev-skills", path: REV_PACK, skillsRel: ".claude/skills" }],
+      packs: [{ serviceId: "rev-skills", path: REV_PACK, skillsRel: ".claude/skills", attribution: "rev-skills test index." }],
       outDir: dir,
       indexedAt: "2026-01-01T00:00:00.000Z",
     });

@@ -1,6 +1,13 @@
 // Packaging + real-process runtime guards.
 // F001: every package.json#bin target must exist after build, so install.sh wrappers
 //       (derived from package.json#bin) can never point at a missing module.
+// SUBSTITUTE_JUSTIFICATION
+// - substitute: FIXTURE_PACK content indexed for the spawned-server protocol test
+// - replaces: third-party pack content only; the built server, stdio transport, SQLite index, and tool calls are real
+// - necessity: search -> get -> file_get requires one stable record with a known supporting-file path
+// - real-option: eval.test.ts indexes both checked-out pinned packs but cannot guarantee a permanent hit/file path
+// - proof-limit: proves the packaged stdio entry and tool chain, not real-pack quality or user-profile installation
+// - real-proof: npm run install:grimoire, then spawned stdio search/get against the resulting multi-pack index
 // F003: the actual grimoire-server binary must serve over a spawned stdio process, not
 //       only the in-process InMemoryTransport used by server.test.ts.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -9,8 +16,8 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { buildIndex } from "../src/indexer.js";
 import { FIXTURE_PACK } from "./helpers.js";
 
@@ -28,7 +35,7 @@ test("every package.json#bin target exists after build (no installer wrapper dri
 
 test("real stdio: the spawned grimoire-server serves search→get→file_get", async () => {
   const dir = mkdtempSync(join(tmpdir(), "grimoire-stdio-"));
-  buildIndex({ packs: [{ serviceId: "fixture", path: FIXTURE_PACK, commit: "stdio" }], outDir: dir, indexedAt: "2026-01-01T00:00:00.000Z" });
+  buildIndex({ packs: [{ serviceId: "fixture", path: FIXTURE_PACK, commit: "stdio", attribution: "Fixture skill pack for stdio test." }], outDir: dir, indexedAt: "2026-01-01T00:00:00.000Z" });
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [SERVER_JS],

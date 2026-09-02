@@ -1,5 +1,5 @@
 -- grimoire — canonical read-only index schema (mirrored by src/model.ts SCHEMA_SQL).
--- SCHEMA_VERSION = 1. Built write-once per indexed source state; rebuilt, never migrated.
+-- SCHEMA_VERSION = 2. Built write-once per indexed source state; rebuilt, never migrated.
 CREATE TABLE IF NOT EXISTS skills (
   id              TEXT PRIMARY KEY,                 -- "<pack>:<skillName>"
   pack            TEXT NOT NULL,
@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS skills (
   source_commit   TEXT NOT NULL,                    -- clean commit or "<commit>-dirty"
   sha256          TEXT NOT NULL,                    -- of the raw body
   indexed_at      TEXT NOT NULL,                    -- ISO-8601 UTC
-  description     TEXT NOT NULL,                    -- frontmatter description (raw)
-  body            TEXT NOT NULL,                    -- raw SKILL.md body (no mutation)
+  description     TEXT NOT NULL,                    -- parsed frontmatter description, capped at 1024 chars
+  body            TEXT NOT NULL,                    -- SKILL.md body after frontmatter separation
   category        TEXT NOT NULL,                    -- derived from name prefix
   category_source TEXT NOT NULL DEFAULT 'derived' CHECK (category_source IN ('derived')),
   UNIQUE (pack, name)
@@ -35,4 +35,4 @@ CREATE VIRTUAL TABLE IF NOT EXISTS skills_fts USING fts5(
 );
 
 CREATE TABLE IF NOT EXISTS index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
--- keys: 'schema_version' ; 'pack:<id>:source_commit' ; 'pack:<id>:file_count' ; 'pack:<id>:source_hash' ; 'pack:<id>:built_at'
+-- keys: 'schema_version' ; 'pack_ids' ; per-pack source_commit/file_count/source_hash/attribution/built_at

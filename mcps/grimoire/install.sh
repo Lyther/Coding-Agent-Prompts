@@ -1,9 +1,9 @@
 #!/bin/sh
 # grimoire — build the server, build the read-only index from the pinned skill pack(s),
 # and link the bins into ~/.local/bin. Idempotent: re-running rebuilds the index
-# (write-once + atomic rename) and re-links. The index + manifest live under ~/.grimoire.
+# (write-once + fail-closed publication) and re-links. The index + manifest live under ~/.grimoire.
 # If a required pack is absent, the install FAILS (exit 1); any existing index is left
-# untouched (atomic build), and a clean machine then reports INDEX_MISSING.
+# untouched until publication, and a clean machine then reports INDEX_MISSING.
 set -eu
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
@@ -50,8 +50,8 @@ esac
 # ---- build the index from pinned packs (served_by grimoire) --------------------------
 # Packs come from registry/optional-services.json (served_by includes grimoire).
 # A required pack that is absent FAILS (non-zero) rather than silently succeeding
-# without rebuilding. The indexer builds into a temp db and atomically renames, so
-# a failure never corrupts an existing index.
+# without rebuilding. The indexer builds temp artifacts before publishing; interruption
+# between the two final renames reports INDEX_STALE and is repaired by rerunning install.
 node dist/src/served-packs.js --repo "$REPO" --index --indexer "$HERE/dist/src/indexer.js"
 
 echo "Point your MCP host at the stdio command: grimoire-server"

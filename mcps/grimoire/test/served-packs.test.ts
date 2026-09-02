@@ -15,6 +15,10 @@ test("servedPacksFromRegistry reads the real optional-services registry", () => 
   assert.equal(byId.get("rev-skills")?.skillsRel, ".claude/skills");
   assert.equal(byId.get("rev-skills")?.required, true);
   assert.match(byId.get("rev-skills")?.commit ?? "", /^[0-9a-f]{40}$/);
+  assert.match(
+    byId.get("rev-skills")?.attribution ?? "",
+    /DslsDZC.*CC BY 4\.0/,
+  );
 });
 
 test("indexerArgv fail-closes a required pack whose skills dir is absent", () => {

@@ -38,8 +38,9 @@ test("rowToRef truncates the summary to the limit; rowToFull carries provenance"
   const ref = rowToRef(row);
   assert.ok(ref.summary.length <= LIMITS.SUMMARY_CHARS);
   assert.ok(ref.summary.endsWith("…"));
-  const full = rowToFull(row, [{ path: "references/a.md", size: 3 }]);
+  const full = rowToFull(row, [{ path: "references/a.md", size: 3 }], "Example source, Apache-2.0");
   assert.equal(full.provenance.sourceCommit, "abc");
+  assert.equal(full.provenance.attribution, "Example source, Apache-2.0");
   assert.equal(full.categorySource, "derived");
   assert.equal(full.files[0]!.path, "references/a.md");
 });
