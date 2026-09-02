@@ -9,8 +9,8 @@ import type {
   CompactMemory, FullMemory, IClock, IRedactor, IStore, LockRecord, Offset, RecallQuery, RecallResult,
   Store as Scope,
 } from "./contract.js";
-import { utf8Bytes } from "./contract.js";
-import { SCHEMA_SQL, SCHEMA_VERSION, decId, extId, rowToCompact, rowToFull, rowToLock, type LockRow, type MemoryRow } from "./model.js";
+import { SynapseInputError, utf8Bytes } from "./contract.js";
+import { SCHEMA_SQL, SCHEMA_VERSION, crossProjectId, decId, extId, rowToCompact, rowToFull, rowToLock, type LockRow, type MemoryRow } from "./model.js";
 import { resolveProjectRef } from "./namespace.js";
 
 const ftsQuery = (q: string): string =>
@@ -77,12 +77,18 @@ export class Store implements IStore {
     const store: Scope = q.global ? "global" : "project";
     const db = this.dbFor(store, q.projectDbPath);
     const tags = q.tags && q.tags.length ? JSON.stringify(q.tags) : null;
-    const sup = q.supersedes !== undefined ? decId(q.supersedes) : null;
+    const sup = q.supersedes ? decId(q.supersedes) : null;
     db.exec("BEGIN IMMEDIATE");
     try {
-      if (sup && sup.store === store) this.markSuperseded(db, sup.rowid);
+      if (sup) {
+        if (sup.store === "cross-project") throw new SynapseInputError("cross-project memory ids are read-only");
+        if (sup.store !== store) throw new SynapseInputError(`supersedes id ${q.supersedes} belongs to ${sup.store} memory`);
+        const predecessor = db.prepare("SELECT 1 FROM memory WHERE id=? AND status='live'").get(sup.rowid);
+        if (!predecessor) throw new SynapseInputError(`unknown supersedes id ${q.supersedes}`);
+        this.markSuperseded(db, sup.rowid);
+      }
       const res = db.prepare("INSERT INTO memory(ts,agent_id,content,tags,supersedes,status) VALUES(?,?,?,?,?,'live')")
-        .run(ts, q.agentId, text, tags, sup && sup.store === store ? sup.rowid : null);
+        .run(ts, q.agentId, text, tags, sup?.rowid ?? null);
       const rowid = Number(res.lastInsertRowid);
       db.prepare("INSERT INTO memory_fts(rowid,content,tags) VALUES(?,?,?)").run(rowid, text, tags ?? "");
       db.exec("COMMIT");
@@ -116,6 +122,7 @@ export class Store implements IStore {
 
   forget(q: { projectDbPath: string; agentId: string; id: Offset; reason: string }): { id: Offset; ts: number } | null {
     const d = decId(q.id);
+    if (d.store === "cross-project") throw new SynapseInputError("cross-project memory ids are read-only");
     const db = this.dbFor(d.store, q.projectDbPath);
     const exists = db.prepare("SELECT 1 FROM memory WHERE id=? AND status!='redacted'").get(d.rowid);
     if (!exists) return null;
@@ -134,7 +141,7 @@ export class Store implements IStore {
       { db: this.globalDb(), store: "global", since: 0 }, // global always re-scanned (low churn)
     ];
 
-    const hits: { row: MemoryRow; store: Scope; rank?: number }[] = [];
+    const hits: { row: MemoryRow; store: Scope; rank?: number; readOnly?: true }[] = [];
     for (const s of sources) {
       if (!s.db) continue;
       const rows = q.query ? this.searchRows(s.db, q.query, s.since, q.limit) : this.recentRows(s.db, s.since, q.limit);
@@ -143,7 +150,10 @@ export class Store implements IStore {
           const t = r.row.tags ? (JSON.parse(r.row.tags) as string[]) : [];
           if (!q.tags.every((x) => t.includes(x))) continue;
         }
-        hits.push(r.rank !== undefined ? { row: r.row, store: s.store, rank: r.rank } : { row: r.row, store: s.store });
+        const readOnly = q.project && s.store === "project" ? true : undefined;
+        hits.push(r.rank !== undefined
+          ? { row: r.row, store: s.store, rank: r.rank, ...(readOnly ? { readOnly } : {}) }
+          : { row: r.row, store: s.store, ...(readOnly ? { readOnly } : {}) });
       }
     }
     hits.sort((a, b) => (q.query ? (a.rank ?? 0) - (b.rank ?? 0) || b.row.id - a.row.id : b.row.id - a.row.id));
@@ -154,12 +164,19 @@ export class Store implements IStore {
     for (const h of hits) {
       if (results.length >= q.limit) { truncated = true; break; }
       const rec = q.mode === "full" ? rowToFull(h.row, h.store) : rowToCompact(h.row, h.store, h.rank);
+      if (h.readOnly) {
+        rec.id = crossProjectId(h.row.id);
+        if ("supersedes" in rec && rec.supersedes !== undefined) rec.supersedes = crossProjectId(rec.supersedes);
+        rec.readOnly = true;
+      }
       const size = utf8Bytes(q.mode === "full" ? (rec as FullMemory).content : (rec as CompactMemory).snippet);
       if (bytes + size > q.maxBytes && results.length > 0) { truncated = true; break; }
       results.push(rec);
       bytes += size;
     }
-    const max = this.rwDb(q.projectDbPath).prepare("SELECT COALESCE(MAX(id),0) AS m FROM memory").get() as unknown as { m: number };
+    const max = primaryDb
+      ? primaryDb.prepare("SELECT COALESCE(MAX(id),0) AS m FROM memory").get() as unknown as { m: number }
+      : { m: 0 };
     return { results, truncated, cursor: max.m };
   }
 
@@ -184,6 +201,7 @@ export class Store implements IStore {
     const byStore = new Map<Scope, number[]>();
     for (const id of q.ids) {
       const d = decId(id);
+      if (d.store === "cross-project") throw new SynapseInputError("cross-project memory ids are read-only; recall with mode=full");
       const arr = byStore.get(d.store);
       if (arr) arr.push(d.rowid); else byStore.set(d.store, [d.rowid]);
     }

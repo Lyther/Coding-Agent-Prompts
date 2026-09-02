@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { FakeClock } from "../src/clock.js";
 import type { CompactMemory, FullMemory, RecallQuery } from "../src/contract.js";
+import { resolveProjectRef } from "../src/namespace.js";
 import { createRedactor } from "../src/redactor.js";
 import { Store } from "../src/store.js";
+import { buildToolSet } from "../src/tools.js";
 
 function setup() {
   const clock = new FakeClock(1000);
@@ -84,6 +86,39 @@ test("forget hides from recall and get; supersede replaces", () => {
   } finally { cleanup(); }
 });
 
+test("remember treats supersedes zero as no predecessor", () => {
+  const { store, P, cleanup } = setup();
+  try {
+    const w = store.remember({ projectDbPath: P, agentId: "a", content: "standalone decision", supersedes: 0 });
+    assert.ok(w.id > 0);
+    assert.equal(store.recall(recall(P, { query: "standalone" })).results.length, 1);
+  } finally { cleanup(); }
+});
+
+test("remember rejects a stale supersedes id with a domain error and no partial write", () => {
+  const { store, P, cleanup } = setup();
+  try {
+    assert.throws(
+      () => store.remember({ projectDbPath: P, agentId: "a", content: "replacement", supersedes: 999 }),
+      /unknown supersedes id 999/,
+    );
+    assert.equal(store.recall(recall(P, { query: "replacement" })).results.length, 0);
+  } finally { cleanup(); }
+});
+
+test("memory_remember exposes stale supersedes as typed INVALID_INPUT", () => {
+  const { store, P, cleanup } = setup();
+  try {
+    const result = buildToolSet(store, { projectDbPath: P, agentId: "a" })
+      .call("memory_remember", { content: "replacement", supersedes: 999 });
+    assert.equal(result.isError, true);
+    assert.deepEqual(JSON.parse(result.content[0]!.text), {
+      code: "INVALID_INPUT",
+      message: "unknown supersedes id 999",
+    });
+  } finally { cleanup(); }
+});
+
 test("project isolation: project B cannot recall A's memory; global is shared", () => {
   const { store, dir, cleanup } = setup();
   const A = join(dir, "projA.sqlite");
@@ -93,6 +128,47 @@ test("project isolation: project B cannot recall A's memory; global is shared", 
     store.remember({ projectDbPath: A, agentId: "a", content: "shared gamma preference", global: true });
     assert.equal(store.recall(recall(B, { query: "alpha" })).results.length, 0, "B must not see A project");
     assert.equal(store.recall(recall(B, { query: "gamma" })).results.length, 1, "B sees shared global");
+  } finally { cleanup(); }
+});
+
+test("cross-project recall ids are read-only and its cursor belongs to the queried project", () => {
+  const { store, dir, cleanup } = setup();
+  const localDb = join(dir, "local.sqlite");
+  const targetRoot = join(dir, "target-project");
+  mkdirSync(targetRoot);
+  const targetDb = resolveProjectRef(targetRoot, dir);
+  try {
+    const local = store.remember({ projectDbPath: localDb, agentId: "local", content: "local collision row" });
+    store.remember({ projectDbPath: localDb, agentId: "local", content: "local second row" });
+    const targetPredecessor = store.remember({ projectDbPath: targetDb, agentId: "remote", content: "remote predecessor" });
+    const target = store.remember({
+      projectDbPath: targetDb,
+      agentId: "remote",
+      content: "remote project marker",
+      supersedes: targetPredecessor.id,
+    });
+    assert.equal(local.id, targetPredecessor.id, "the two physical project DBs reproduce the row-id collision");
+
+    const result = store.recall(recall(localDb, { project: targetRoot, query: "remote project marker", mode: "full" }));
+    assert.equal(result.results.length, 1);
+    const remote = result.results[0] as FullMemory & { readOnly?: boolean };
+    assert.ok(remote.id >= 2_000_000_000_000, "cross-project rows use the reserved read-only id range");
+    assert.ok((remote.supersedes ?? 0) >= 2_000_000_000_000, "cross-project predecessor ids use the same read-only range");
+    assert.equal(remote.readOnly, true);
+    assert.equal(result.cursor, target.id, "cross-project cursor comes from the queried project DB");
+    assert.throws(
+      () => store.get({ projectDbPath: localDb, agentId: "local", ids: [remote.id] }),
+      /cross-project memory ids are read-only/,
+    );
+    assert.throws(
+      () => store.forget({ projectDbPath: localDb, agentId: "local", id: remote.id, reason: "must not touch local" }),
+      /cross-project memory ids are read-only/,
+    );
+    assert.throws(
+      () => store.remember({ projectDbPath: localDb, agentId: "local", content: "must not supersede local", supersedes: remote.supersedes }),
+      /cross-project memory ids are read-only/,
+    );
+    assert.equal(store.get({ projectDbPath: localDb, agentId: "local", ids: [local.id] }).length, 1, "colliding local row remains live");
   } finally { cleanup(); }
 });
 

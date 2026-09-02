@@ -7,9 +7,13 @@ export const SCHEMA_VERSION = 1;
 // External id codec: global ext-id = BASE + rowid; project ext-id = rowid. Keeps the
 // two physical id-spaces disjoint so recall -> get/forget round-trips across files.
 export const GLOBAL_BASE = 1_000_000_000_000;
+export const CROSS_PROJECT_BASE = 2_000_000_000_000;
 export const extId = (store: Store, rowid: number): number => (store === "global" ? GLOBAL_BASE + rowid : rowid);
-export const decId = (id: number): { store: Store; rowid: number } =>
-  id >= GLOBAL_BASE ? { store: "global", rowid: id - GLOBAL_BASE } : { store: "project", rowid: id };
+export const crossProjectId = (rowid: number): number => CROSS_PROJECT_BASE + rowid;
+export const decId = (id: number): { store: Store | "cross-project"; rowid: number } => {
+  if (id >= CROSS_PROJECT_BASE) return { store: "cross-project", rowid: id - CROSS_PROJECT_BASE };
+  return id >= GLOBAL_BASE ? { store: "global", rowid: id - GLOBAL_BASE } : { store: "project", rowid: id };
+};
 
 // Inlined so the compiled sidecar needs no file lookup. Keep in sync with schema.sql.
 export const SCHEMA_SQL = `

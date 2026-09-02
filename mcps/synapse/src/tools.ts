@@ -4,7 +4,7 @@
 // Server; the bridge proxies upstream instead.
 import { zodToJsonSchema } from "zod-to-json-schema";
 import {
-  LIMITS, TOOLS, TOOL_DESCRIPTIONS,
+  LIMITS, SynapseInputError, TOOLS, TOOL_DESCRIPTIONS,
   type IStore,
   type LockAcquireArgs, type LockListArgs, type LockReleaseArgs,
   type MemoryForgetArgs, type MemoryGetArgs, type MemoryRecallArgs, type MemoryRememberArgs,
@@ -66,7 +66,12 @@ export function buildToolSet(store: IStore, ctx: SessionCtx): { specs: ToolSpec[
       if (!tool || !handler) return fail("INVALID_INPUT", `unknown tool: ${name}`);
       const parsed = tool.input.safeParse(rawArgs ?? {});
       if (!parsed.success) return fail("INVALID_INPUT", (parsed.error?.issues ?? []).map((i) => i.message).join("; ") || "invalid arguments");
-      return handler(parsed.data);
+      try {
+        return handler(parsed.data);
+      } catch (error) {
+        if (error instanceof SynapseInputError) return fail("INVALID_INPUT", error.message);
+        throw error;
+      }
     },
   };
 }
