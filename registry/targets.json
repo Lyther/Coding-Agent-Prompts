@@ -57,6 +57,15 @@
         "mcps"
       ]
     },
+    "dsh": {
+      "status": "implemented",
+      "build_supported": true,
+      "install_supported": true,
+      "renders": [
+        "skills",
+        "external"
+      ]
+    },
     "pi": {
       "status": "implemented",
       "build_supported": true,
@@ -112,6 +121,45 @@
       "install_supported": true,
       "renders": [
         "skills",
+        "rules",
+        "subagents",
+        "external",
+        "mcps"
+      ]
+    },
+    "qoder": {
+      "status": "implemented",
+      "build_supported": true,
+      "install_supported": true,
+      "renders": [
+        "skills",
+        "commands",
+        "rules",
+        "subagents",
+        "external",
+        "mcps"
+      ]
+    },
+    "qwen-code": {
+      "status": "implemented",
+      "build_supported": true,
+      "install_supported": true,
+      "renders": [
+        "skills",
+        "commands",
+        "rules",
+        "subagents",
+        "external",
+        "mcps"
+      ]
+    },
+    "kiro": {
+      "status": "implemented",
+      "build_supported": true,
+      "install_supported": true,
+      "renders": [
+        "skills",
+        "commands-as-workflows",
         "rules",
         "subagents",
         "external",
@@ -177,18 +225,6 @@
         "mcps"
       ]
     },
-    "vscodium": {
-      "status": "implemented",
-      "build_supported": true,
-      "install_supported": true,
-      "renders": [
-        "skills",
-        "instructions",
-        "prompts",
-        "external",
-        "mcps"
-      ]
-    },
     "cursor": {
       "status": "implemented",
       "build_supported": true,
@@ -223,7 +259,9 @@
       "renders": [
         "skills",
         "instructions",
-        "external"
+        "subagents",
+        "external",
+        "mcps"
       ]
     },
     "trae": {
@@ -233,6 +271,7 @@
       "renders": [
         "skills",
         "rules",
+        "subagents",
         "external",
         "mcps"
       ]
@@ -261,9 +300,17 @@
       ]
     }
   },
-  "planned": [],
+  "planned": [
+    "amp",
+    "auggie",
+    "crush",
+    "warp"
+  ],
   "out_of_scope": [
+    "gemini-cli",
+    "iflow-cli",
     "roo-code",
+    "vscodium",
     "xcode"
   ]
 }

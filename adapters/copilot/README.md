@@ -1,24 +1,23 @@
 # GitHub Copilot adapter
 
-Native surfaces:
+This target covers current Copilot CLI customization and retains the VS Code user instruction file.
 
-- `.github/copilot-instructions.md`
-- `.github/instructions/*.instructions.md`
-- `AGENTS.md` where supported by the consuming environment
+User scope:
 
-Current implementation writes the global Copilot skill catalog and VS Code/Copilot user instruction surface.
+- `~/.copilot/skills/<name>/SKILL.md`
+- `~/.copilot/agents/<name>.agent.md`
+- `~/.copilot/copilot-instructions.md`
+- `~/.copilot/mcp-config.json`
+- the VS Code user `instructions/agent-surface-copilot.instructions.md`
 
-Canonical and reviewed external skill root:
+Project scope uses `.github/skills`, `.github/agents`, `.github/copilot-instructions.md`, and `.mcp.json`. Canonical and reviewed external skills use the same native skill roots. High-impact workflows remain explicit-invocation skills.
 
-- `~/.copilot/skills/`
+Custom-agent access maps to Copilot's `read`, `search`, `edit`, and `*` tool aliases. Copilot has no persistent allow-all setting equivalent to other hosts; headless real runs must pass `--allow-all` (or `COPILOT_ALLOW_ALL=true`) and record that invocation.
 
-Instruction paths, under the VS Code user data directory:
+First-party secretless MCP servers are non-destructively merged as command-plus-args entries. External or secret-bearing MCP services remain opt-in.
 
-- `instructions/agent-surface-copilot.instructions.md`
-- `instructions/references/rules/<rule>.md`
+References:
 
-Repository-level `.github/` files remain project-specific and are not written by user-scope installs.
-
-Available high-impact commands use explicit-invocation compatibility skills with `disable-model-invocation: true`; Copilot enforcement remains unproven. VS Code and VSCodium use explicit prompt files instead.
-
-The instruction file bundles only always-on rules. Scoped language policies are distributed as references for project-aware commands.
+- [CLI configuration directories](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference)
+- [Agent Skills](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills)
+- [Custom agents](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/invoke-custom-agents)

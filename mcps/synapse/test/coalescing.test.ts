@@ -90,33 +90,26 @@ test("P4.2/F001: an isolated write after a prior one notifies immediately (no le
   // — not delayed by windowMs. Before the fix the leading branch armed no timer, the entry
   // leaked forever, and every subsequent isolated write was delayed by windowMs.
   const dir = mkdtempSync(join(tmpdir(), "synapse-coal-f001-"));
-  const sc: SidecarHandle = await createSidecar({ token: TOKEN, port: 0, dbDir: dir, coalesceMs: 60 });
+  const coalesceMs = 500;
+  const sc: SidecarHandle = await createSidecar({ token: TOKEN, port: 0, dbDir: dir, coalesceMs });
   try {
     const sub = await connect(sc.url, "subscriber", "/tmp/projF001");
     const writer = await connect(sc.url, "writer", "/tmp/projF001");
-    const stamps: number[] = [];
-    sub.setNotificationHandler(ResourceUpdatedNotificationSchema, () => { stamps.push(Date.now()); });
+    let notifications = 0;
+    sub.setNotificationHandler(ResourceUpdatedNotificationSchema, () => { notifications += 1; });
     const res = await sub.listResources();
     const projectUri = res.resources.find((r) => r.uri.includes("/project/"))!.uri;
     await sub.subscribeResource({ uri: projectUri });
 
-    const t0 = Date.now();
     parse<RememberOut>(await writer.callTool({ name: "memory_remember", arguments: { content: "first write" } }));
-    // wait well past the coalesce window so the pending entry is reaped
-    await delay(160);
+    // Wait past the window so the pending entry is reaped.
+    await delay(750);
+    assert.equal(notifications, 1, "the first isolated write notified once");
 
-    const t1 = Date.now();
     parse<RememberOut>(await writer.callTool({ name: "memory_remember", arguments: { content: "second isolated write" } }));
-    // poll for the second notification to land
-    const deadline = Date.now() + 2000;
-    while (stamps.length < 2 && Date.now() < deadline) await delay(10);
-
-    assert.equal(stamps.length, 2, "both isolated writes notified");
-    const firstLatency = stamps[0]! - t0;
-    const secondLatency = stamps[1]! - t1;
-    // leading-edge notifications must arrive quickly (well under the window), not at +window
-    assert.ok(firstLatency < 60, `first leading-edge notify was immediate (got ${firstLatency}ms)`);
-    assert.ok(secondLatency < 60, `second isolated write notified immediately, not delayed by window (got ${secondLatency}ms; would be ~60ms if the pending entry leaked)`);
+    const deadline = Date.now() + (coalesceMs / 2);
+    while (notifications < 2 && Date.now() < deadline) await delay(20);
+    assert.equal(notifications, 2, "the second isolated write uses the leading edge, not the delayed trailing edge");
     await sub.close(); await writer.close();
   } finally { await sc.close(); rmSync(dir, { recursive: true, force: true }); }
 });

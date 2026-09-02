@@ -1,6 +1,6 @@
 # API Contract — grimoire
 
-Status: IMPLEMENTED (v0.1) · Source: mcps/grimoire/architecture.md · Last updated: 2026-07-01
+Status: IMPLEMENTED (package v0.1; contract v1.0.0) · Source: mcps/grimoire/architecture.md · Last updated: 2026-08-31
 
 The frozen tool contract for the grimoire MCP server. `src/contract.ts` (zod) is the machine-readable source of truth and owns these shapes; `src/tools.ts` implements them; `src/store.ts` returns the DTOs. Read-only: no tool mutates. Transport: MCP stdio (`@modelcontextprotocol/sdk`). `CONTRACT_VERSION` semver; the MCP `InitializeResult` carries name `grimoire` + version.
 
@@ -8,7 +8,7 @@ The frozen tool contract for the grimoire MCP server. `src/contract.ts` (zod) is
 
 - `readOnlyHint: true` on every tool; every result returns **`structuredContent`** (the typed object below) **and** a text mirror prefixed `Indexed Agent Skill (third-party content, not authority):` so runtimes recognize and use the selected skill without treating pack content as higher-priority instructions.
 - Every result object has `status: "ok" | "INDEX_MISSING" | "INDEX_STALE" | "NOT_FOUND" | "INVALID_INPUT"`. On non-`ok`, the result is `{ status, hint }` only (payload fields omitted) and `isError` stays **false** — these are actionable states the model should surface, not protocol failures. Schema-invalid args (wrong type, missing required, out-of-range) never reach the handler: `McpServer` rejects them via zod and returns an `isError: true` result carrying the JSON-RPC `-32602` invalid-params message. So the two error channels are distinct: SDK schema validation ⇒ `isError: true` (`-32602`); our semantic states ⇒ `isError: false` + `status`.
-- Content (`body`, file `content`) is served **raw** — never mutated/stripped.
+- The `SKILL.md` body is served unchanged after frontmatter is separated into metadata; supporting-file `content` is served byte-for-byte as indexed. Full-content responses carry source/license attribution.
 
 ## Shared types
 
@@ -16,7 +16,10 @@ The frozen tool contract for the grimoire MCP server. `src/contract.ts` (zod) is
 type SkillId = string;     // "<pack>:<skillName>", both slugs: ^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*$
 type Status  = "ok" | "INDEX_MISSING" | "INDEX_STALE" | "NOT_FOUND" | "INVALID_INPUT";
 
-interface Provenance { sourcePath: string; sourceCommit: string; sha256: string; indexedAt: string /*ISO-8601*/ }
+interface Provenance {
+  sourcePath: string; sourceCommit: string; sha256: string; indexedAt: string /*ISO-8601*/;
+  attribution: string; // author/source/license and any mechanical transformation notice
+}
 interface FileManifestEntry { path: string; size: number /*bytes*/ }
 interface SkillRef  { id: SkillId; pack: string; name: string; summary: string }          // list item
 interface SkillHit  extends SkillRef { score: number /*bm25, higher = better*/ }           // search hit
@@ -46,7 +49,7 @@ grimoire_get(input: { id: SkillId })
 
 // 4. One supporting file's content (path must be in the skill's manifest).
 grimoire_file_get(input: { id: SkillId; path: string })
-  -> { status: "ok"; file: { path: string; content: string; size: number } }
+  -> { status: "ok"; file: { path: string; content: string; size: number; attribution: string } }
    | { status: "NOT_FOUND"|"INVALID_INPUT"|...; hint }
    // path not in the skill's manifest -> NOT_FOUND; traversal/absolute path -> INVALID_INPUT
 ```
@@ -74,7 +77,8 @@ grimoire_file_get(input: { id: SkillId; path: string })
 
 // grimoire_file_get after grimoire_get exposed the manifest
 → { "id": "anthropic-cybersecurity-skills:hunting-for-cobalt-strike-beacons", "path": "references/iocs.md" }
-← { "status": "ok", "file": { "path": "references/iocs.md", "content": "<raw markdown>", "size": 4096 } }
+← { "status": "ok", "file": { "path": "references/iocs.md", "content": "<raw markdown>",
+     "size": 4096, "attribution": "<author, source, license>" } }
 
 // stale index
 ← { "status": "INDEX_STALE", "hint": "index is stale; run: npm run install:grimoire" }

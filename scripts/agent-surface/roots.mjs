@@ -4,8 +4,7 @@ import path from "node:path";
 import process from "node:process";
 import { fail } from "./util.mjs";
 
-export function installRootGoose(scope) {
-  // user → ~ (so MCP reaches ~/.config/goose/config.yaml); project → cwd (recipes in ./recipes).
+export function installRootUserOrProject(scope) {
   return scope === "user" ? os.homedir() : process.cwd();
 }
 
@@ -14,54 +13,14 @@ export function installRootHomeOnly(scope) {
   return os.homedir();
 }
 
-export function installRootClaude(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
 export function installRootCodex(scope) {
   if (scope !== "user") fail("codex install supports --scope user only unless --dest is supplied");
   return os.homedir();
 }
 
-export function installRootDeepagents(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
-export function installRootGrokBuild(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
-export function installRootPi(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
-export function installRootPool(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
-export function installRootOpencode(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
-export function installRootOpenHands(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
-export function installRootCline(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
-export function installRootKilo(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
 export function installRootKimiCode(scope) {
   if (scope === "project") return process.cwd();
   return path.resolve(process.env.KIMI_CODE_HOME ?? path.join(os.homedir(), ".kimi-code"));
-}
-
-export function installRootDroid(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
 }
 
 export function installRootAntigravity(scope) {
@@ -77,19 +36,6 @@ export function installRootAntigravityCli(scope) {
 export function installRootVsCode(scope) {
   if (scope !== "user") fail("vscode install supports --scope user only unless --dest is supplied");
   return os.homedir();
-}
-
-export function installRootVscodium(scope) {
-  if (scope !== "user") fail("vscodium install supports --scope user only unless --dest is supplied");
-  return os.homedir();
-}
-
-export function installRootWindsurf(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
-}
-
-export function installRootZed(scope) {
-  return scope === "user" ? os.homedir() : process.cwd();
 }
 
 export function antigravityCliSkillOutputName(source) {
@@ -164,6 +110,82 @@ export function deepagentsMcpPath() {
 
 export function grokBuildSkillRoot() {
   return path.join(".grok", "skills");
+}
+
+export function dshSkillRoot() {
+  return path.join(".dsh", "skills");
+}
+
+export function qoderConfigRoot() {
+  return ".qoder";
+}
+
+export function qoderSkillRoot() {
+  return path.join(qoderConfigRoot(), "skills");
+}
+
+export function qoderCommandRoot() {
+  return path.join(qoderConfigRoot(), "commands");
+}
+
+export function qoderAgentRoot() {
+  return path.join(qoderConfigRoot(), "agents");
+}
+
+export function qoderInstructionPath(context) {
+  return context.scope === "user" ? path.join(qoderConfigRoot(), "AGENTS.md") : "AGENTS.md";
+}
+
+export function qoderSettingsPath() {
+  return path.join(qoderConfigRoot(), "settings.json");
+}
+
+export function qwenCodeConfigRoot() {
+  return ".qwen";
+}
+
+export function qwenCodeSkillRoot() {
+  return path.join(qwenCodeConfigRoot(), "skills");
+}
+
+export function qwenCodeCommandRoot() {
+  return path.join(qwenCodeConfigRoot(), "commands");
+}
+
+export function qwenCodeAgentRoot() {
+  return path.join(qwenCodeConfigRoot(), "agents");
+}
+
+export function qwenCodeInstructionPath(context) {
+  return context.scope === "user" ? path.join(qwenCodeConfigRoot(), "QWEN.md") : "QWEN.md";
+}
+
+export function qwenCodeSettingsPath() {
+  return path.join(qwenCodeConfigRoot(), "settings.json");
+}
+
+export function kiroConfigRoot() {
+  return ".kiro";
+}
+
+export function kiroSkillRoot() {
+  return path.join(kiroConfigRoot(), "skills");
+}
+
+export function kiroSteeringRoot() {
+  return path.join(kiroConfigRoot(), "steering");
+}
+
+export function kiroAgentRoot() {
+  return path.join(kiroConfigRoot(), "agents");
+}
+
+export function kiroMcpPath() {
+  return path.join(kiroConfigRoot(), "settings", "mcp.json");
+}
+
+export function kiroPermissionsPath() {
+  return path.join(kiroConfigRoot(), "settings", "permissions.yaml");
 }
 
 export function piSkillRoot(context) {
@@ -399,8 +421,42 @@ export function traeSkillRoot() {
   return path.join(".trae", "skills");
 }
 
-export function copilotSkillRoot() {
-  return path.join(".copilot", "skills");
+export function traeCliSkillRoot() {
+  return path.join(".traecli", "skills");
+}
+
+export function traeAgentRoot(context) {
+  return context.scope === "user"
+    ? [path.join(".trae-cn", "agents"), path.join(".traecli", "agents")]
+    : [path.join(".trae", "agents"), path.join(".traecli", "agents")];
+}
+
+export function traeRuleRoot(context) {
+  return context.scope === "user"
+    ? path.join(".trae-cn", "user_rules")
+    : path.join(".trae", "rules");
+}
+
+export function traeCliConfigPath() {
+  return path.join(".trae", "traecli.toml");
+}
+
+export function copilotSkillRoot(context) {
+  return context.scope === "user" ? path.join(".copilot", "skills") : path.join(".github", "skills");
+}
+
+export function copilotAgentRoot(context) {
+  return context.scope === "user" ? path.join(".copilot", "agents") : path.join(".github", "agents");
+}
+
+export function copilotInstructionPath(context) {
+  return context.scope === "user"
+    ? path.join(".copilot", "copilot-instructions.md")
+    : path.join(".github", "copilot-instructions.md");
+}
+
+export function copilotMcpPath(context) {
+  return context.scope === "user" ? path.join(".copilot", "mcp-config.json") : ".mcp.json";
 }
 
 export function sharedAgentSkillRoot() {

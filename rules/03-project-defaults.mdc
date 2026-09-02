@@ -25,6 +25,12 @@ Simplicity is a design constraint:
 - Add an abstraction, service, compatibility layer, dependency, or configuration axis only when a current requirement earns its complexity.
 - Do not build for hypothetical scale, providers, callers, attacks, or future reuse. Record the limit and evolve when evidence crosses it.
 - When two designs satisfy the current goal, choose the one with fewer concepts, states, dependencies, and failure modes.
+- Name the current user-visible failure or explicit requirement before adding safeguards. If the case is only hypothetical, document the limit and defer it.
+- Prefer replacing or deleting a flawed design over stacking guards, exceptions, and compatibility branches around it. Repeated same-class fixes are a signal to stop and simplify the design.
+- Use a maintained parser, library, or protocol implementation for non-trivial domain rules instead of enumerating cases locally. Add the dependency only when it reduces total owned complexity.
+- Weigh occurrence likelihood and impact against implementation size and long-term maintenance. Decline work whose complexity cost is disproportionate to its demonstrated value.
+- Keep findings scoped: nits, speculative edge cases, and unrelated pre-existing debt do not become implementation work without explicit value or user direction.
+- Test user-observable behavior and stable contracts. Do not test prose wording, documentation counts, implementation shape, or dependency internals unless those exact bytes are a consumed interface.
 
 ## Reliability
 

@@ -1,5 +1,5 @@
 {
-  "reviewed_at": "2026-08-06",
+  "reviewed_at": "2026-08-31",
   "targets": {
     "claude-code": {
       "summary": "Claude Code supports Agent Skills, subagents, and MCP; agent-surface generates canonical auto-invocable skills plus explicit-only high-impact workflows, subagents, first-party MCP wiring (Synapse + Grimoire), and external skills.",
@@ -327,7 +327,7 @@
       }
     },
     "grok-build": {
-      "summary": "Grok Build supports Agent Skills, project AGENTS.md instructions, plugins, and Claude-compatible assets; agent-surface generates skills, project instructions, and external skill packs.",
+      "summary": "Grok Build supports Agent Skills, project AGENTS.md instructions, TOML configuration, and MCP; agent-surface generates skills, instructions, first-party MCP wiring, and always-approve execution policy.",
       "generated_render_tokens": [
         "skills",
         "rules",
@@ -365,9 +365,10 @@
             "project"
           ],
           "paths": [
-            "AGENTS.md"
+            "AGENTS.md",
+            ".grok/references/rules/<rule>.md"
           ],
-          "notes": "Project instructions use the AGENTS.md compatibility family."
+          "notes": "Project instructions use the AGENTS.md compatibility family; scoped policies remain separate references."
         },
         "external": {
           "support": "native",
@@ -390,10 +391,51 @@
             "project"
           ],
           "paths": [
-            "~/.grok/settings.json",
-            ".grok/settings.json"
+            "~/.grok/config.toml",
+            ".grok/config.toml"
           ],
-          "notes": "First-party secretless MCP services are merged into the Grok settings.json mcpServers map; external or secret-bearing MCPs remain opt-in."
+          "notes": "First-party secretless MCP services are merged into mcp_servers; the ui.permission_mode setting is always-approve. External or secret-bearing MCPs remain opt-in."
+        }
+      }
+    },
+    "dsh": {
+      "summary": "DSH Developer Preview natively discovers Agent Skills; agent-surface limits this adapter to canonical and reviewed external skills while its profile and MCP contracts remain unstable.",
+      "generated_render_tokens": [
+        "skills",
+        "external"
+      ],
+      "evidence": [
+        {
+          "label": "DSH developer preview",
+          "url": "https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md"
+        }
+      ],
+      "surfaces": {
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.dsh/skills/<name>/SKILL.md",
+            ".dsh/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills are emitted unchanged for automatic and explicit native skill discovery. Manual command artifacts are intentionally not generated."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.dsh/skills/<external-skill>/...",
+            ".dsh/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skills use the same discovery roots."
         }
       }
     },
@@ -1064,6 +1106,336 @@
         }
       }
     },
+    "qoder": {
+      "summary": "Qoder CLI natively supports Agent Skills, Markdown commands, AGENTS.md, custom subagents, JSON settings, MCP, and headless execution; agent-surface generates each stable file surface with bypass-permissions as the default mode.",
+      "generated_render_tokens": [
+        "skills",
+        "commands",
+        "rules",
+        "subagents",
+        "external",
+        "mcps"
+      ],
+      "evidence": [
+        {
+          "label": "Qoder settings",
+          "url": "https://docs.qoder.com/cli/settings-reference"
+        },
+        {
+          "label": "Qoder skills",
+          "url": "https://docs.qoder.com/cli/Skills"
+        },
+        {
+          "label": "Qoder commands",
+          "url": "https://docs.qoder.com/cli/commands"
+        },
+        {
+          "label": "Qoder subagents",
+          "url": "https://docs.qoder.com/cli/subagent"
+        }
+      ],
+      "surfaces": {
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qoder/skills/<name>/SKILL.md",
+            ".qoder/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills are emitted unchanged and remain available for automatic or explicit invocation."
+        },
+        "commands": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qoder/commands/<name>.md",
+            ".qoder/commands/<name>.md"
+          ],
+          "notes": "High-impact workflows remain explicit slash commands in Qoder's Markdown command format."
+        },
+        "rules": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qoder/AGENTS.md",
+            "AGENTS.md"
+          ],
+          "notes": "Always-on rules use Qoder's user and project instruction files; scoped rules remain references."
+        },
+        "subagents": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qoder/agents/<name>.md",
+            ".qoder/agents/<name>.md"
+          ],
+          "notes": "Normalized access maps to native tool allowlists and permissionMode values."
+        },
+        "mcp": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qoder/settings.json",
+            ".qoder/settings.json"
+          ],
+          "notes": "First-party MCP entries, bypass permission mode, and the native-catalog-only skill source policy are deep-merged without replacing sibling settings."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qoder/skills/<external-skill>/...",
+            ".qoder/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skills use the same native roots."
+        }
+      }
+    },
+    "qwen-code": {
+      "summary": "Qwen Code natively supports Agent Skills, Markdown commands, QWEN.md, custom subagents, JSON settings, MCP, and headless execution; agent-surface generates these surfaces with yolo approval mode.",
+      "generated_render_tokens": [
+        "skills",
+        "commands",
+        "rules",
+        "subagents",
+        "external",
+        "mcps"
+      ],
+      "evidence": [
+        {
+          "label": "Qwen Code skills",
+          "url": "https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/"
+        },
+        {
+          "label": "Qwen Code subagents",
+          "url": "https://qwenlm.github.io/qwen-code-docs/en/users/features/sub-agents/"
+        },
+        {
+          "label": "Qwen Code MCP",
+          "url": "https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/"
+        }
+      ],
+      "surfaces": {
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qwen/skills/<name>/SKILL.md",
+            ".qwen/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills remain model-invocable and directly slash-invocable."
+        },
+        "commands": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qwen/commands/<name>.md",
+            ".qwen/commands/<name>.md"
+          ],
+          "notes": "High-impact workflows use the current Markdown command format, not deprecated TOML commands."
+        },
+        "rules": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qwen/QWEN.md",
+            "QWEN.md"
+          ],
+          "notes": "Always-on rules use Qwen Code's native context files; scoped rules remain references."
+        },
+        "subagents": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qwen/agents/<name>.md",
+            ".qwen/agents/<name>.md"
+          ],
+          "notes": "Normalized access maps to native tool names and plan, auto-edit, or yolo approvalMode."
+        },
+        "mcp": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qwen/settings.json",
+            ".qwen/settings.json"
+          ],
+          "notes": "First-party MCP entries and tools.approvalMode are deep-merged without replacing sibling settings."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.qwen/skills/<external-skill>/...",
+            ".qwen/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skills use the same native roots."
+        }
+      }
+    },
+    "kiro": {
+      "summary": "Kiro IDE 1.x and CLI 3.x share skills, steering, custom agents, capability permissions, and MCP files; agent-surface generates one current-format target for both surfaces.",
+      "generated_render_tokens": [
+        "skills",
+        "commands-as-workflows",
+        "rules",
+        "subagents",
+        "external",
+        "mcps"
+      ],
+      "evidence": [
+        {
+          "label": "Kiro skills",
+          "url": "https://kiro.dev/docs/cli/skills/"
+        },
+        {
+          "label": "Kiro custom agents",
+          "url": "https://kiro.dev/docs/custom-agents/configuration-reference/"
+        },
+        {
+          "label": "Kiro permissions",
+          "url": "https://kiro.dev/docs/cli/chat/permissions/"
+        }
+      ],
+      "surfaces": {
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.kiro/skills/<name>/SKILL.md",
+            ".kiro/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical skills use current Agent Skills discovery and custom agents reference both user and project roots."
+        },
+        "commands-as-workflows": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.kiro/steering/command-<name>.md",
+            ".kiro/steering/command-<name>.md"
+          ],
+          "notes": "High-impact workflows use manual-inclusion steering, which is available through slash completion but never auto-loads."
+        },
+        "rules": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.kiro/steering/<rule>.md",
+            ".kiro/steering/<rule>.md"
+          ],
+          "notes": "Always and fileMatch inclusion modes preserve the source rule scope."
+        },
+        "subagents": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.kiro/agents/<name>.md",
+            ".kiro/agents/<name>.md"
+          ],
+          "notes": "Current v3 Markdown agents use tool tags, skill/steering resources, and capability permissions."
+        },
+        "mcp": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.kiro/settings/mcp.json",
+            ".kiro/settings/mcp.json"
+          ],
+          "notes": "First-party secretless MCP services use native command-plus-args stdio entries."
+        },
+        "settings": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user"
+          ],
+          "paths": [
+            "~/.kiro/settings/permissions.yaml"
+          ],
+          "notes": "User installs grant capability all with effect allow. Headless acceptance also passes --trust-all-tools; immutable Kiro restrictions still apply."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.kiro/skills/<external-skill>/...",
+            ".kiro/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skills use the same native roots."
+        }
+      }
+    },
     "antigravity": {
       "summary": "The legacy Antigravity desktop target supports workflow files; current Antigravity CLI plugin packaging is generated by antigravity-cli.",
       "generated_render_tokens": [
@@ -1150,7 +1522,7 @@
             "user"
           ],
           "paths": [
-            "~/.gemini/config/plugins/agent-surface/plugin.json"
+            "~/.gemini/antigravity-cli/plugins/agent-surface/plugin.json"
           ],
           "notes": "Generated manifest packages the Antigravity CLI plugin."
         },
@@ -1161,7 +1533,7 @@
             "user"
           ],
           "paths": [
-            "~/.gemini/config/plugins/agent-surface/skills/<name>/SKILL.md"
+            "~/.gemini/antigravity-cli/plugins/agent-surface/skills/<name>/SKILL.md"
           ],
           "notes": "Canonical skills are packaged in directory-form Agent Skills. Available high-impact commands are packaged as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
         },
@@ -1172,7 +1544,7 @@
             "user"
           ],
           "paths": [
-            "~/.gemini/config/plugins/agent-surface/agents/<name>.md"
+            "~/.gemini/antigravity-cli/plugins/agent-surface/agents/<name>.md"
           ],
           "notes": "Normalized subagents are included inside the plugin package."
         },
@@ -1183,8 +1555,8 @@
             "user"
           ],
           "paths": [
-            "~/.gemini/config/plugins/agent-surface/rules/<always-on-rule>.md",
-            "~/.gemini/config/plugins/agent-surface/references/rules/<scoped-rule>.md"
+            "~/.gemini/antigravity-cli/plugins/agent-surface/rules/<always-on-rule>.md",
+            "~/.gemini/antigravity-cli/plugins/agent-surface/references/rules/<scoped-rule>.md"
           ],
           "notes": "Always-on rules render as plugin rules; scoped language/security policies render as references selected by project-aware commands."
         },
@@ -1195,7 +1567,7 @@
             "user"
           ],
           "paths": [
-            "~/.gemini/config/plugins/agent-surface/mcp_config.json"
+            "~/.gemini/antigravity-cli/plugins/agent-surface/mcp_config.json"
           ],
           "notes": "First-party secretless MCP services are generated into the plugin mcp_config.json (mcpServers); external or secret-bearing MCPs remain opt-in."
         },
@@ -1207,7 +1579,7 @@
             "project"
           ],
           "paths": [
-            "~/.gemini/config/plugins/agent-surface/skills/<skill>/..."
+            "~/.gemini/antigravity-cli/plugins/agent-surface/skills/<skill>/..."
           ],
           "notes": "Registry-backed external Agent Skills are copied only from configured skill_roots that contain SKILL.md."
         }
@@ -1506,83 +1878,6 @@
         }
       }
     },
-    "vscodium": {
-      "summary": "VSCodium uses the VS Code OSS customization surfaces with VSCodium-specific user-data paths; agent-surface generates instruction and prompt files.",
-      "generated_render_tokens": [
-        "skills",
-        "instructions",
-        "prompts",
-        "external",
-        "mcps"
-      ],
-      "evidence": [
-        {
-          "label": "VSCodium project",
-          "url": "https://vscodium.com/"
-        },
-        {
-          "label": "VS Code Copilot customization",
-          "url": "https://code.visualstudio.com/docs/copilot/copilot-customization"
-        }
-      ],
-      "surfaces": {
-        "instructions": {
-          "support": "native",
-          "generation": "generated",
-          "scope": [
-            "user"
-          ],
-          "paths": [
-            "instructions/agent-surface.instructions.md"
-          ],
-          "notes": "Generated inside the VSCodium user profile root."
-        },
-        "prompts": {
-          "support": "native",
-          "generation": "generated",
-          "scope": [
-            "user"
-          ],
-          "paths": [
-            "prompts/agent-surface.prompt.md"
-          ],
-          "notes": "Generated inside the VSCodium user profile root."
-        },
-        "mcp": {
-          "support": "native",
-          "generation": "generated",
-          "scope": [
-            "user"
-          ],
-          "paths": [
-            "mcp.json"
-          ],
-          "notes": "First-party secretless MCP services are generated/merged into the VSCodium user MCP config (servers map); external or secret-bearing MCPs remain opt-in."
-        },
-        "skills": {
-          "support": "native",
-          "generation": "generated",
-          "scope": [
-            "user"
-          ],
-          "paths": [
-            "~/.agents/skills/<name>/SKILL.md"
-          ],
-          "notes": "Canonical skills use the same Agent Skills compatibility root. Available high-impact commands remain user prompt files."
-        },
-        "external": {
-          "support": "native",
-          "generation": "generated",
-          "scope": [
-            "user"
-          ],
-          "paths": [
-            "~/.agents/skills/<external-skill>/..."
-          ],
-          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
-        }
-      }
-    },
     "cursor": {
       "summary": "Cursor supports rules, commands, agents, MCP, and ignore files; agent-surface generates rules, commands, subagents, ignore files, and first-party MCP wiring (Synapse + Grimoire).",
       "generated_render_tokens": [
@@ -1784,20 +2079,22 @@
       }
     },
     "copilot": {
-      "summary": "GitHub Copilot and VS Code consume instruction files and repository instructions; agent-surface generates the user-profile instruction file only.",
+      "summary": "GitHub Copilot CLI supports native Agent Skills, custom agents, instruction files, and MCP; agent-surface generates those CLI surfaces and retains the VS Code user instruction output.",
       "generated_render_tokens": [
         "skills",
         "instructions",
-        "external"
+        "subagents",
+        "external",
+        "mcps"
       ],
       "evidence": [
         {
-          "label": "GitHub Copilot custom instructions",
-          "url": "https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot"
+          "label": "Copilot CLI configuration directories",
+          "url": "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference"
         },
         {
-          "label": "VS Code Copilot customization",
-          "url": "https://code.visualstudio.com/docs/copilot/copilot-customization"
+          "label": "Copilot CLI custom agents",
+          "url": "https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/invoke-custom-agents"
         }
       ],
       "surfaces": {
@@ -1805,75 +2102,15 @@
           "support": "native",
           "generation": "generated",
           "scope": [
-            "user"
+            "user",
+            "project"
           ],
           "paths": [
+            "~/.copilot/copilot-instructions.md",
+            ".github/copilot-instructions.md",
             "instructions/agent-surface-copilot.instructions.md"
           ],
-          "notes": "Repository-level .github files are project-specific and are not generated by user installs."
-        },
-        "mcp": {
-          "support": "manual-only",
-          "generation": "not-applicable",
-          "scope": [
-            "user"
-          ],
-          "paths": [],
-          "notes": "Copilot MCP is configured through the host editor (see the vscode target), not a standalone Copilot file; not generated here."
-        },
-        "skills": {
-          "support": "native",
-          "generation": "generated",
-          "scope": [
-            "user"
-          ],
-          "paths": [
-            "~/.copilot/skills/<name>/SKILL.md"
-          ],
-          "notes": "Canonical skills use GitHub Copilot Agent Skills discovery. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
-        },
-        "external": {
-          "support": "native",
-          "generation": "generated",
-          "scope": [
-            "user"
-          ],
-          "paths": [
-            "~/.copilot/skills/<external-skill>/..."
-          ],
-          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
-        }
-      }
-    },
-    "trae": {
-      "summary": "Trae exposes user/project rules and MCP config; agent-surface generates the user rules file and first-party MCP wiring (Synapse + Grimoire).",
-      "generated_render_tokens": [
-        "skills",
-        "rules",
-        "external",
-        "mcps"
-      ],
-      "evidence": [
-        {
-          "label": "Trae rules",
-          "url": "https://docs.trae.ai/ide/rules"
-        },
-        {
-          "label": "Trae MCP",
-          "url": "https://docs.trae.ai/ide/mcp"
-        }
-      ],
-      "surfaces": {
-        "rules": {
-          "support": "native",
-          "generation": "generated",
-          "scope": [
-            "user"
-          ],
-          "paths": [
-            "~/.trae/user_rules.md"
-          ],
-          "notes": "Reusable behavior currently ships as user rules only."
+          "notes": "CLI-native instructions are generated at user/project scope; user installs also retain the VS Code instruction file."
         },
         "mcp": {
           "support": "native",
@@ -1883,31 +2120,165 @@
             "project"
           ],
           "paths": [
-            ".trae/mcp.json"
+            "~/.copilot/mcp-config.json",
+            ".mcp.json"
           ],
-          "notes": "First-party secretless MCP services are generated/merged; external or secret-bearing MCPs remain opt-in."
+          "notes": "First-party secretless MCP servers use native command-plus-args entries. External or secret-bearing servers remain opt-in."
         },
         "skills": {
           "support": "native",
           "generation": "generated",
           "scope": [
-            "user"
+            "user",
+            "project"
           ],
           "paths": [
-            "~/.trae/skills/<name>/SKILL.md"
+            "~/.copilot/skills/<name>/SKILL.md",
+            ".github/skills/<name>/SKILL.md"
           ],
-          "notes": "Canonical skills are emitted unchanged for the installed Trae native skill root. Available high-impact commands are emitted as explicit-invocation compatibility skills with disable-model-invocation: true; host enforcement remains unproven."
+          "notes": "Canonical skills are emitted unchanged. High-impact workflows remain explicit-invocation compatibility skills."
+        },
+        "subagents": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.copilot/agents/<name>.agent.md",
+            ".github/agents/<name>.agent.md"
+          ],
+          "notes": "Normalized access maps to Copilot tool aliases; headless full autonomy is supplied with --allow-all because Copilot has no equivalent persistent default setting."
         },
         "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.copilot/skills/<external-skill>/...",
+            ".github/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
+        }
+      }
+    },
+    "trae": {
+      "summary": "Current TraeCode exposes native skills, rules, Markdown subagents, CLI permission policy, and IDE/CLI MCP config; agent-surface generates each documented file surface.",
+      "generated_render_tokens": [
+        "skills",
+        "rules",
+        "subagents",
+        "external",
+        "mcps"
+      ],
+      "evidence": [
+        {
+          "label": "Trae rules",
+          "url": "https://docs.trae.cn/ide_rules"
+        },
+        {
+          "label": "Trae MCP",
+          "url": "https://docs.trae.ai/ide/mcp"
+        },
+        {
+          "label": "TraeCode CLI skills",
+          "url": "https://docs.trae.cn/cli_skills"
+        },
+        {
+          "label": "TraeCode CLI agents",
+          "url": "https://docs.trae.cn/cli_agent"
+        },
+        {
+          "label": "TraeCode CLI config",
+          "url": "https://docs.trae.cn/cli_config-file"
+        }
+      ],
+      "surfaces": {
+        "rules": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.trae/user_rules.md",
+            "~/.trae-cn/user_rules/<name>.md",
+            ".trae/user_rules.md",
+            ".trae/rules/<name>.md"
+          ],
+          "notes": "Current native rule files are emitted for both scopes; the combined user_rules.md route remains for the installed IDE generation that still consumes it."
+        },
+        "mcp": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            ".trae/mcp.json",
+            "~/.trae/traecli.toml"
+          ],
+          "notes": "First-party secretless MCP services are generated for the IDE JSON route and the user CLI TOML route; external or secret-bearing MCPs remain opt-in."
+        },
+        "subagents": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.trae-cn/agents/<name>.md",
+            "~/.traecli/agents/<name>.md",
+            ".trae/agents/<name>.md",
+            ".traecli/agents/<name>.md"
+          ],
+          "notes": "IDE and CLI-native agent routes are both generated; IDE discovery may require its Subagents beta directory toggle."
+        },
+        "settings": {
           "support": "native",
           "generation": "generated",
           "scope": [
             "user"
           ],
           "paths": [
-            "~/.trae/skills/<external-skill>/..."
+            "~/.trae/traecli.toml"
           ],
-          "notes": "Reviewed external Agent Skill packs use the same native skill roots."
+          "notes": "The CLI config merges approval_policy never and :danger-full-access without replacing sibling settings."
+        },
+        "skills": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.trae/skills/<name>/SKILL.md",
+            "~/.traecli/skills/<name>/SKILL.md",
+            ".trae/skills/<name>/SKILL.md",
+            ".traecli/skills/<name>/SKILL.md"
+          ],
+          "notes": "Canonical and explicit-only compatibility skills are emitted to the retained IDE root and the CLI-native root. Host enforcement of disable-model-invocation remains unproven."
+        },
+        "external": {
+          "support": "native",
+          "generation": "generated",
+          "scope": [
+            "user",
+            "project"
+          ],
+          "paths": [
+            "~/.trae/skills/<external-skill>/...",
+            ".trae/skills/<external-skill>/..."
+          ],
+          "notes": "Reviewed external Agent Skill packs stay single-copy in the IDE root, which current TraeCode CLI also reads."
         }
       }
     },
@@ -1978,7 +2349,8 @@
           "support": "native",
           "generation": "generated",
           "scope": [
-            "user"
+            "user",
+            "project"
           ],
           "paths": [
             "~/.codeium/windsurf/mcp_config.json",
@@ -2067,7 +2439,8 @@
           "support": "native",
           "generation": "generated",
           "scope": [
-            "user"
+            "user",
+            "project"
           ],
           "paths": [
             "~/.config/zed/settings.json",

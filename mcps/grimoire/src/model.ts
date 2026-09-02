@@ -2,7 +2,7 @@
 // (mirrors schema.sql). Pure: no node:sqlite, no fs, no Date.
 import { LIMITS, SLUG_RE, type FileManifestEntry, type Provenance, type SkillFull, type SkillHit, type SkillRef } from "./contract.js";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 // External id codec. id = "<pack>:<skillName>"; both segments are slugs (no ":"),
 // so decId splits on the FIRST ":". Ids are content-independent → stable across rebuilds.
@@ -24,9 +24,12 @@ export const CATEGORIES = new Set([
   "reverse", "hardening", "investigating", "monitoring", "responding", "scanning",
   "testing", "writing", "creating", "designing", "managing", "reviewing",
 ]);
+export const CATEGORY_ALIASES: Record<string, string> = { re: "reverse" };
+
 export function deriveCategory(name: string): { category: string; categorySource: "derived" } {
   const head = name.split("-", 1)[0] ?? "";
-  return { category: CATEGORIES.has(head) ? head : "other", categorySource: "derived" };
+  const mapped = CATEGORY_ALIASES[head] ?? head;
+  return { category: CATEGORIES.has(mapped) ? mapped : "other", categorySource: "derived" };
 }
 
 // Inlined so the compiled server needs no file lookup. Keep in sync with schema.sql.
@@ -80,9 +83,10 @@ export function rowToRef(r: RefRow): SkillRef {
 export function rowToHit(r: RefRow, score: number): SkillHit {
   return { ...rowToRef(r), score };
 }
-export function rowToFull(r: SkillRow, files: FileManifestEntry[]): SkillFull {
+export function rowToFull(r: SkillRow, files: FileManifestEntry[], attribution: string): SkillFull {
   const provenance: Provenance = {
-    sourcePath: r.source_path, sourceCommit: r.source_commit, sha256: r.sha256, indexedAt: r.indexed_at,
+    sourcePath: r.source_path, sourceCommit: r.source_commit, sha256: r.sha256,
+    indexedAt: r.indexed_at, attribution,
   };
   return {
     id: r.id, pack: r.pack, name: r.name, description: r.description, body: r.body,

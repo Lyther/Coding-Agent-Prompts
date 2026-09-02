@@ -40,6 +40,11 @@
         "droid",
         "kilo",
         "kimi-code",
+        "qoder",
+        "qwen-code",
+        "kiro",
+        "copilot",
+        "trae",
         "antigravity-cli",
         "antigravity",
         "opencode"
@@ -67,6 +72,21 @@
           "type": "boolean"
         },
         "kimi-code": {
+          "type": "boolean"
+        },
+        "qoder": {
+          "type": "boolean"
+        },
+        "qwen-code": {
+          "type": "boolean"
+        },
+        "kiro": {
+          "type": "boolean"
+        },
+        "copilot": {
+          "type": "boolean"
+        },
+        "trae": {
           "type": "boolean"
         },
         "antigravity-cli": {

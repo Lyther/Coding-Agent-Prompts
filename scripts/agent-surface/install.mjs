@@ -11,10 +11,10 @@ import process from "node:process";
 import { exportableCatalog, localCommandOverlays, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
 import { readFileIfExists, readJsonIfExists, removeTree } from "./io.mjs";
 import { mergeKiloInstructionJsonc, parseJsoncResult, setJsoncRootProperty } from "./jsonc.mjs";
-import { YAML_MCP_FORMATS, mergeCodexMcpToml, mergeJsonMcpConfig, mergeYamlMcpConfig, optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
+import { YAML_MCP_FORMATS, assertJsonPropertyType, mergeCodexMcpToml, mergeJsonMcpConfig, mergeKiroPermissions, mergeYamlMcpConfig, optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { packageVersion, readSourceKinds, relative, root } from "./registry.mjs";
 import { readRules } from "./rules.mjs";
-import { adapterMcpConfigs, kiloRuleInstructionPaths, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
+import { adapterMcpConfigs, kiloRuleInstructionPaths, mcpConfigRootProperties, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, retiredInstallTargets, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
 import { argValue, argValues, fail, isPathInside, isSafeRelativePath, isSafeTargetName, splitArgValues, uniqueStrings } from "./util.mjs";
 
 export async function build(args) {
@@ -60,6 +60,7 @@ export async function build(args) {
 
 export async function install(args) {
   const selectedTargets = selectedInstallTargets(args);
+  const allTargetsSelected = installTargetsIncludeAll(args);
   const scope = argValue(args, "--scope") ?? "project";
   const dryRun = args.includes("--dry-run");
   const allowScopeRoot = args.includes("--allow-scope-root");
@@ -78,6 +79,16 @@ export async function install(args) {
   }
 
   const plans = [];
+  if (allTargetsSelected && scope === "user" && categoryFilter === null && optionalServices === null) {
+    for (const [target, adapter] of Object.entries(retiredInstallTargets)) {
+      const installRoot = dest ? path.resolve(dest) : adapter.installRoot(scope);
+      plans.push(await installPlan(target, adapter, installRoot, scope, dest ? "explicit --dest" : "scope-derived root", {
+        agentName,
+        categoryFilter,
+        optionalServices,
+      }));
+    }
+  }
   for (const target of selectedTargets) {
     const adapter = targets[target];
     if (!adapter) fail(`unsupported install target: ${target}`);
@@ -90,6 +101,7 @@ export async function install(args) {
     }));
   }
   addCrossPlanInstallConflicts(plans);
+  protectCrossPlanLiveOutputs(plans);
 
   const blocked = plans.flatMap((plan) => plan.blocked.map((item) => `${plan.target}: ${item}`));
   // A category-filtered install must do real work across the selection: if no selected target
@@ -126,12 +138,16 @@ export async function install(args) {
   }
 }
 
+function installTargetsIncludeAll(args) {
+  return splitArgValues([...argValues(args, "--target"), ...argValues(args, "--runtime")]).includes("all");
+}
+
 function addCrossPlanInstallConflicts(plans) {
   const planned = new Map();
   for (const plan of plans) {
     const outputs = [
       ...plan.writes.map((item) => ({ output: item.output, relativeOutput: item.relativeOutput, content: item.content })),
-      ...plan.configMerges.map((item) => ({ output: item.output, relativeOutput: item.relativeOutput, content: null })),
+      ...plan.configMerges.map((item) => ({ output: item.output, relativeOutput: item.relativeOutput, content: item.content ?? null })),
     ];
     for (const item of outputs) {
       const previous = planned.get(item.output);
@@ -142,6 +158,18 @@ function addCrossPlanInstallConflicts(plans) {
       if (item.content !== null && previous.content !== null && item.content === previous.content) continue;
       plan.blocked.push(`output ${item.relativeOutput} also planned by ${previous.target}`);
       previous.plan.blocked.push(`output ${previous.relativeOutput} also planned by ${plan.target}`);
+    }
+  }
+}
+
+function protectCrossPlanLiveOutputs(plans) {
+  const live = new Set(plans.flatMap((plan) => [
+    ...plan.writes.map((item) => item.output),
+    ...plan.configMerges.map((item) => item.output),
+  ]));
+  for (const plan of plans) {
+    for (const item of plan.staleRemovalActions) {
+      if (item.action === "remove" && live.has(item.output)) item.action = "retain";
     }
   }
 }
@@ -290,11 +318,13 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     categoryFilter,
     optionalServices,
   };
-  // Scope-retired routes still need cleanup. Use every adapter-declared route to
-  // establish the target-owned namespace, even when that route is not emitted at
-  // the current scope; manifest data alone never establishes a writable namespace.
-  const trustedConfigRoutes = adapterMcpConfigs(adapter).map((mcpConfig) => ({
+  // Only exact adapter-declared paths and formats authorize config cleanup.
+  const declaredConfigRoutes = [
+    ...adapterMcpConfigs(adapter),
+    ...(adapter.cleanupConfigRoutes ?? []),
+  ].map((mcpConfig) => ({
     relativeOutput: outputRootFor(mcpConfig.relativeOutput, configRouteContext),
+    format: mcpConfig.format,
   }));
   if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps"))) {
     const merge = await kiloConfigMerge(installRoot, scope, {
@@ -305,7 +335,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       optionalServices,
     });
     liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
-    trustedConfigRoutes.push(merge);
+    declaredConfigRoutes.push(merge);
     const prepared = await prepareKiloConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
     if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
   } else if (!categoryFilter || categoryFilter.has("mcps")) {
@@ -314,7 +344,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
         ...configRouteContext,
       });
       liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
-      trustedConfigRoutes.push(merge);
+      declaredConfigRoutes.push(merge);
       const prepared = await prepareMcpConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
       if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
     }
@@ -326,7 +356,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       configMerges,
       ownedConfigEntries,
       liveConfigRoutes,
-      trustedConfigRoutes,
+      declaredConfigRoutes,
       legacyOwnership.config_entries,
       installRoot,
     );
@@ -481,53 +511,83 @@ async function addObsoleteConfigRouteMerges(
   configMerges,
   ownedConfigEntries,
   liveConfigRoutes,
-  trustedConfigRoutes,
+  declaredConfigRoutes,
   legacyConfigEntries,
   installRoot,
 ) {
   const mergeIndexesByPath = new Map(configMerges.map((merge, index) => [merge.relativeOutput, index]));
   const obsoleteRoutes = groupedConfigEntries(ownedConfigEntries)
     .filter((entry) => !liveConfigRoutes.has(configEntryKey(entry.path, entry.format)));
-  const trustedLegacyRoutes = new Set(legacyConfigEntries.map((entry) => configEntryKey(entry.path, entry.format)));
+  const declaredRouteKeys = new Set(declaredConfigRoutes.map((route) => configEntryKey(route.relativeOutput, route.format)));
+  const legacyRouteKeys = new Set(legacyConfigEntries.map((entry) => configEntryKey(entry.path, entry.format)));
 
   for (const entry of obsoleteRoutes) {
-    if (!trustedLegacyRoutes.has(configEntryKey(entry.path, entry.format))
-      && !trustedConfigRoutes.some((route) => configRouteSharesNamespace(entry.path, route.relativeOutput))) {
-      configMerges.push({
-        kind: "mcp",
-        action: "blocked",
-        relativeOutput: entry.path,
-        error: `untrusted obsolete MCP config route in manifest: ${entry.path}; register an exact legacy-owned route before cleanup`,
-      });
-      continue;
-    }
+    const liveIdsAtPath = new Set(configMerges
+      .filter((merge) => merge.relativeOutput === entry.path)
+      .flatMap((merge) => (merge.kind === "kilo" ? merge.mcpEntries : merge.entries) ?? [])
+      .map(([id]) => id));
+    const staleEntry = { ...entry, ids: entry.ids.filter((id) => !liveIdsAtPath.has(id)) };
+    if (staleEntry.ids.length === 0) continue;
+    const routeKey = configEntryKey(entry.path, entry.format);
+    const cleanupDeclared = declaredRouteKeys.has(routeKey) || legacyRouteKeys.has(routeKey);
     const existingIndex = mergeIndexesByPath.get(entry.path);
     if (existingIndex !== undefined) {
-      configMerges[existingIndex] = mergeObsoleteConfigRoute(configMerges[existingIndex], entry);
+      const liveMerge = configMerges[existingIndex];
+      configMerges[existingIndex] = mergeObsoleteConfigRoute(
+        liveMerge,
+        staleEntry,
+        staleEntry.format === liveMerge.format || cleanupDeclared,
+      );
       continue;
     }
 
     const safetyRoot = configRouteSafetyRoot(entry.path, path.isAbsolute(entry.path), installRoot);
+    const output = path.isAbsolute(entry.path) ? path.normalize(entry.path) : path.join(installRoot, entry.path);
+    let info;
+    try {
+      info = await lstat(output);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (!info) continue;
+    if (!info.isFile()) {
+      configMerges.push({
+        kind: "mcp",
+        action: "blocked",
+        relativeOutput: entry.path,
+        error: `obsolete MCP config route is not a regular file: ${entry.path}`,
+      });
+      continue;
+    }
+    if (!cleanupDeclared) {
+      configMerges.push({
+        kind: "mcp",
+        action: "blocked",
+        relativeOutput: entry.path,
+        error: `obsolete MCP config route is not declared for cleanup: ${entry.path} (${entry.format})`,
+      });
+      continue;
+    }
     const prepared = await prepareMcpConfigMerge({
       kind: "mcp",
-      output: path.isAbsolute(entry.path) ? path.normalize(entry.path) : path.join(installRoot, entry.path),
+      output,
       relativeOutput: entry.path,
-      format: entry.format,
+      format: staleEntry.format,
       entries: [],
       allowAbsoluteOutput: path.isAbsolute(entry.path),
       safetyRoot,
-    }, [entry], true);
+    }, [staleEntry], true);
     if (isEmptyConfigNoop(prepared)) continue;
     mergeIndexesByPath.set(entry.path, configMerges.length);
     configMerges.push(prepared);
   }
 }
 
-function mergeObsoleteConfigRoute(merge, entry) {
+function mergeObsoleteConfigRoute(merge, entry, editContent) {
   if (merge.action === "blocked") return merge;
-  let content;
+  let content = merge.content;
   try {
-    content = mergeMcpConfigContent(merge.content, entry.format, [], entry.ids);
+    if (editContent) content = mergeMcpConfigContent(content, entry.format, [], entry.ids);
   } catch (error) {
     return { ...merge, action: "blocked", error: `${entry.path}: ${error.message}` };
   }
@@ -617,6 +677,15 @@ function printInstallPlan(plan) {
     console.log("  none");
   } else {
     for (const item of removes) console.log(`  ${item}`);
+  }
+  const retained = plan.staleRemovalActions
+    .filter((item) => item.action === "retain")
+    .map((item) => item.relativeOutput);
+  console.log("planned stale managed paths retained by active targets:");
+  if (retained.length === 0) {
+    console.log("  none");
+  } else {
+    for (const item of retained) console.log(`  ${item}`);
   }
   console.log("planned manifest:");
   console.log(`  ${path.relative(plan.installRoot, plan.manifestPath)}`);
@@ -745,7 +814,8 @@ async function mcpConfigMerge(mcpConfig, installRoot, scope, context) {
     relativeOutput,
     format: mcpConfig.format,
     entries,
-    rootProperties: context.categoryFilter ? {} : (mcpConfig.rootProperties ?? {}),
+    rootProperties: context.categoryFilter ? {} : mcpConfigRootProperties(mcpConfig, { ...context, scope }),
+    replaceRootProperties: mcpConfig.replaceRootProperties ?? [],
     allowAbsoluteOutput: mcpConfig.allowAbsoluteOutput === true,
     safetyRoot,
   };
@@ -768,21 +838,40 @@ async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneConfigEn
     if (merge.entries.length === 0 && Object.keys(merge.rootProperties ?? {}).length === 0) {
       return { ...merge, action: "skip", addMcpServers: [], removeMcpServers, removeIds, content: "" };
     }
+    const content = renderMcpConfig(merge.format, merge.entries, merge.rootProperties);
     return {
       ...merge,
       action: "write",
       addMcpServers,
       removeMcpServers,
       removeIds,
-      content: renderMcpConfig(merge.format, merge.entries, merge.rootProperties),
+      content,
     };
   }
 
   const text = existing.toString("utf8");
   let content;
   try {
-    content = mergeMcpConfigContent(text, merge.format, merge.entries, removeIds, merge.rootProperties);
+    content = mergeMcpConfigContent(
+      text,
+      merge.format,
+      merge.entries,
+      removeIds,
+      merge.rootProperties,
+      merge.replaceRootProperties,
+    );
   } catch (error) {
+    const priorFormats = uniqueStrings(previousConfigEntries
+      .filter((entry) => entry.path === merge.relativeOutput && entry.format !== merge.format)
+      .map((entry) => entry.format))
+      .sort();
+    if (priorFormats.length > 0) {
+      return {
+        ...merge,
+        action: "blocked",
+        error: `config format migration required for ${merge.relativeOutput}: ${priorFormats.join(", ")} -> ${merge.format}; existing file is incompatible with the current format (${error.message})`,
+      };
+    }
     return { ...merge, action: "blocked", error: `${merge.relativeOutput}: ${error.message}` };
   }
   if (content === text) return { ...merge, action: "skip", addMcpServers: [], removeMcpServers: [], removeIds, content };
@@ -798,31 +887,6 @@ function configRouteSafetyRoot(configPath, allowAbsoluteOutput, installRoot) {
   ].filter((value) => typeof value === "string" && value.length > 0).map((value) => path.resolve(value)));
   const normalized = path.resolve(configPath);
   return trustedRoots.find((trustedRoot) => isPathInside(trustedRoot, normalized)) ?? null;
-}
-
-function configRouteSharesNamespace(candidate, trustedRoute) {
-  const normalizedCandidate = path.normalize(candidate);
-  const normalizedTrusted = path.normalize(trustedRoute);
-  if (path.isAbsolute(normalizedCandidate) !== path.isAbsolute(normalizedTrusted)) return false;
-  const trustedNamespace = configRouteNamespace(normalizedTrusted);
-  if (trustedNamespace === null) return normalizedCandidate === normalizedTrusted;
-  return isPathInside(trustedNamespace, normalizedCandidate);
-}
-
-function configRouteNamespace(configPath) {
-  const parsed = path.parse(configPath);
-  const relativePath = path.relative(parsed.root, configPath);
-  const parts = relativePath.split(path.sep).filter(Boolean);
-  if (parts.length <= 1) return null;
-  if (parts[0] === ".config" && parts[1]) return path.join(parsed.root, parts[0], parts[1]);
-  if (parts[0] === "Library" && parts[1] === "Application Support" && parts[2]) {
-    return path.join(parsed.root, parts[0], parts[1], parts[2]);
-  }
-  if (parts[0] === "AppData" && parts[1] === "Roaming" && parts[2]) {
-    return path.join(parsed.root, parts[0], parts[1], parts[2]);
-  }
-  if (parts[0].startsWith(".")) return path.join(parsed.root, parts[0]);
-  return path.dirname(configPath);
 }
 
 async function installPathError(safetyRoot, candidate, label) {
@@ -859,10 +923,18 @@ async function installPathError(safetyRoot, candidate, label) {
   return null;
 }
 
-function mergeMcpConfigContent(text, format, entries, removeIds, rootProperties = {}) {
+function mergeMcpConfigContent(
+  text,
+  format,
+  entries,
+  removeIds,
+  rootProperties = {},
+  replaceRootProperties = [],
+) {
+  if (format === "kiro-permissions") return mergeKiroPermissions(text, rootProperties);
   if (format === "codex-toml") return mergeCodexMcpToml(text, entries, removeIds, rootProperties);
   if (YAML_MCP_FORMATS.has(format)) return mergeYamlMcpConfig(text, format, entries, removeIds);
-  return mergeJsonMcpConfig(text, format, entries, removeIds, rootProperties);
+  return mergeJsonMcpConfig(text, format, entries, removeIds, rootProperties, replaceRootProperties);
 }
 
 async function kiloConfigMerge(installRoot, scope, options = {}) {
@@ -959,12 +1031,19 @@ async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneConfigE
   if (parsed.value === null || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
     return { ...merge, action: "blocked", error: `${merge.relativeOutput}: config must be an object` };
   }
+  try {
+    for (const [property, value] of Object.entries(merge.rootProperties)) {
+      if (Object.hasOwn(parsed.value, property)) assertJsonPropertyType(property, parsed.value[property], value);
+    }
+  } catch (error) {
+    return { ...merge, action: "blocked", error: `${merge.relativeOutput}: ${error.message}` };
+  }
 
   let content = text;
   let missing = [];
   let remove = [];
   if (merge.instructions.length > 0) {
-    const instructions = parsed.value.instructions ?? [];
+    const instructions = Object.hasOwn(parsed.value, "instructions") ? parsed.value.instructions : [];
     if (!Array.isArray(instructions)) {
       return { ...merge, action: "blocked", error: `${merge.relativeOutput}: instructions must be an array` };
     }
@@ -988,8 +1067,12 @@ async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneConfigE
       return { ...merge, action: "blocked", error: `${merge.relativeOutput}: ${error.message}` };
     }
   }
-  for (const [property, value] of Object.entries(merge.rootProperties)) {
-    content = setJsoncRootProperty(content, property, value);
+  try {
+    for (const [property, value] of Object.entries(merge.rootProperties)) {
+      content = setJsoncRootProperty(content, property, value);
+    }
+  } catch (error) {
+    return { ...merge, action: "blocked", error: `${merge.relativeOutput}: ${error.message}` };
   }
 
   if (content === text) {

@@ -1,30 +1,22 @@
 # Antigravity CLI plugin adapter
 
-Package canonical Agent Skills, all available high-impact commands, always-on rules, scoped rule references, and normalized subagents. Commands use explicit-invocation compatibility skills with `disable-model-invocation: true`; Antigravity CLI enforcement remains unproven.
+Packages canonical skills, explicit high-impact workflow skills, rules, scoped references, subagents, external skills, and first-party MCP wiring under Antigravity CLI's active staged-plugin root:
 
-Default user install target:
+- `~/.gemini/antigravity-cli/plugins/agent-surface/plugin.json`
+- `~/.gemini/antigravity-cli/plugins/agent-surface/skills/<name>/SKILL.md`
+- `~/.gemini/antigravity-cli/plugins/agent-surface/agents/<name>.md`
+- `~/.gemini/antigravity-cli/plugins/agent-surface/rules/<rule>.md`
+- `~/.gemini/antigravity-cli/plugins/agent-surface/references/rules/<rule>.md`
+- `~/.gemini/antigravity-cli/plugins/agent-surface/mcp_config.json`
 
-- `~/.gemini/config/plugins/agent-surface/plugin.json`
-- `~/.gemini/config/plugins/agent-surface/README.md`
-- `~/.gemini/config/plugins/agent-surface/rules/<always-on-rule>.md`
-- `~/.gemini/config/plugins/agent-surface/references/rules/<scoped-rule>.md`
-- `~/.gemini/config/plugins/agent-surface/skills/<name>/SKILL.md`
-- `~/.gemini/config/plugins/agent-surface/skills/<external-skill>/SKILL.md`
-- `~/.gemini/config/plugins/agent-surface/agents/<name>.md`
-- `~/.gemini/config/plugins/agent-surface/mcp_config.json` `mcpServers.{synapse,grimoire}`
-
-Validate generated output with:
+Validate and register the staged plugin with:
 
 ```bash
-agy plugin validate ~/.gemini/config/plugins/agent-surface
+agy plugin validate ~/.gemini/antigravity-cli/plugins/agent-surface
+agy plugin install ~/.gemini/antigravity-cli/plugins/agent-surface
+agy plugin list
 ```
 
-Canonical skills use the standard directory form. Re-run `agy plugin validate` after Antigravity changes its plugin loader before claiming live plugin compatibility.
+The install command creates Antigravity's runtime-owned imported copy and registry entry; agent-surface owns only the staged source above. The prior direct `~/.gemini/config/plugins/agent-surface` output could validate as a directory without being registered, so agent-surface no longer writes that route. Gemini CLI is also retired from the target portfolio and is not valid proof for this adapter.
 
-External skill packs render only when the optional-service entry declares `skill_roots`. `anthropic-cybersecurity-skills` is kept as a pinned source asset but is not emitted into the Antigravity CLI plugin by default.
-
-The separate `antigravity` binary is a desktop-supervised surface unless current help/probe output proves a headless mode. Gemini CLI is EoL in this project; do not use it as an adapter or as proof that Antigravity CLI plugin packaging works.
-
-Only `alwaysApply: true` rules are packaged under plugin `rules/`. Cybersecurity policy is always-on; scoped language policies are reference files and should be attached by project-aware commands only when applicable.
-
-First-party MCP services (Synapse, Grimoire) are generated and non-destructively merged into the plugin's `mcp_config.json` (`mcpServers` map), which Antigravity discovers from the staged plugin. External or secret-bearing MCPs remain opt-in. Confirm the plugin MCP loads with a live `agy`/Antigravity probe before treating the host as runtime-verified (the file shape follows Antigravity's documented plugin `mcp_config.json` + shared `~/.gemini/config/mcp_config.json`).
+Reference: [Antigravity CLI plugins](https://antigravity.google/docs/cli/plugins/)

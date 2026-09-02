@@ -1,10 +1,12 @@
 #!/usr/bin/env node
+import * as TOML from "@decimalturn/toml-patch";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { kimiCodeCursorSettingsPath, kimiCodeVsCodeSettingsPath } from "../../scripts/agent-surface/roots.mjs";
+import { parse as parseYaml } from "yaml";
+import { kimiCodeCursorSettingsPath, kimiCodeVsCodeSettingsPath, vsCodeUserRoot } from "../../scripts/agent-surface/roots.mjs";
 import { targets } from "../../scripts/agent-surface/targets.mjs";
 import {
   clineIdeUserDataRoot,
@@ -70,6 +72,30 @@ planHas(kimiCodePlan, [
   /\.kimi-code\/mcp\.json MCP \+= grimoire, synapse/,
 ], "kimi-code");
 
+const qoderPlan = dryRun("qoder");
+planHas(qoderPlan, [
+  /\.qoder\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/,
+  /\.qoder\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/,
+  /\.qoder\/agents\/boss\.md <- subagents\/boss\.md/,
+  /\.qoder\/settings\.json MCP \+= grimoire, synapse/,
+], "qoder");
+
+const qwenCodePlan = dryRun("qwen-code");
+planHas(qwenCodePlan, [
+  /\.qwen\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/,
+  /\.qwen\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/,
+  /\.qwen\/agents\/boss\.md <- subagents\/boss\.md/,
+  /\.qwen\/settings\.json MCP \+= grimoire, synapse/,
+], "qwen-code");
+
+const kiroPlan = dryRun("kiro");
+planHas(kiroPlan, [
+  /\.kiro\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/,
+  /\.kiro\/steering\/command-ops-nuke\.md <- commands\/ops-nuke\.md/,
+  /\.kiro\/agents\/boss\.md <- subagents\/boss\.md/,
+  /\.kiro\/settings\/mcp\.json MCP \+= grimoire, synapse/,
+], "kiro");
+
 const geminiPlan = status(["install", "--target", "gemini-cli", "--dest", "/tmp/agent-surface-gemini", "--dry-run"]);
 assert.notEqual(geminiPlan.status, 0);
 assert.match(`${geminiPlan.stdout}${geminiPlan.stderr}`, /unsupported install target: gemini-cli/);
@@ -80,7 +106,9 @@ for (const [target, patterns] of [
   ["droid", [/\.factory\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/, /\.factory\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/, /\.factory\/mcp\.json MCP \+= grimoire, synapse/, /karpathy-guidelines\/SKILL\.md/]],
   ["codex", [/\.agents\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
   ["openhands", [/\.agents\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
-  ["antigravity-cli", [/config\/plugins\/agent-surface\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
+  ["antigravity-cli", [/antigravity-cli\/plugins\/agent-surface\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
+  ["copilot", [/\.github\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/, /\.github\/agents\/boss\.agent\.md <- subagents\/boss\.md/, /\.mcp\.json MCP \+= grimoire, synapse/]],
+  ["grok-build", [/\.grok\/config\.toml MCP \+= grimoire, synapse/]],
 ]) {
   planHas(dryRun(target), patterns, target);
 }
@@ -89,11 +117,26 @@ for (const [target, patterns] of [
 planLacks(dryRun("openhands"), [/\.openhands\/mcp\.json MCP/], "openhands project");
 
 // Goose user-scope: commands use Agent Skills; project recipes never land in $HOME.
-const gooseUserPlan = run(["install", "--target", "goose", "--scope", "user", "--allow-scope-root", "--dry-run"]);
-assert.match(gooseUserPlan, /\.config\/goose\/config\.yaml MCP/);
-assert.doesNotMatch(gooseUserPlan, /recipes\//);
-if (hasLocalOpsServerCommand) {
-  assert.match(gooseUserPlan, /\.agents\/skills\/ops-server\/SKILL\.md <- commands\/ops-server\.md/);
+// SUBSTITUTE_JUSTIFICATION
+// - substitute: gooseHome temporary HOME
+// - replaces: the operator's real user-scope Goose and Agent Skills directories
+// - necessity: the assertion requires a user-scope install and must not write hundreds of files into the operator profile
+// - real-option: the production installer and filesystem are exercised against a disposable real directory; using the operator HOME is destructive
+// - proof-limit: proves path selection and install behavior, not Goose runtime discovery
+// - real-proof: tests/suites/install-live.test.mjs plus a credentialed Goose task-shaped run
+const gooseHome = mkdtempSync(path.join(os.tmpdir(), "agent-surface-goose-home-"));
+try {
+  const gooseUserPlan = run(
+    ["install", "--target", "goose", "--scope", "user", "--allow-scope-root", "--dry-run"],
+    { env: { ...process.env, HOME: gooseHome } },
+  );
+  assert.match(gooseUserPlan, /\.config\/goose\/config\.yaml MCP/);
+  assert.doesNotMatch(gooseUserPlan, /recipes\//);
+  if (hasLocalOpsServerCommand) {
+    assert.match(gooseUserPlan, /\.agents\/skills\/ops-server\/SKILL\.md <- commands\/ops-server\.md/);
+  }
+} finally {
+  rmSync(gooseHome, { recursive: true, force: true });
 }
 
 // --category mcps across all targets must succeed; non-MCP hosts report non-applicable.
@@ -103,8 +146,8 @@ if (hasLocalOpsServerCommand) {
   });
   assert.match(mcpsAllPlan, /MCP \+= grimoire, synapse/);
 }
-const piCopilotStatus = status(["install", "--target", "pi,copilot", "--scope", "user", "--allow-scope-root", "--category", "mcps", "--dry-run"]);
-assert.notEqual(piCopilotStatus.status, 0);
+const piDshStatus = status(["install", "--target", "pi,dsh", "--scope", "user", "--allow-scope-root", "--category", "mcps", "--dry-run"]);
+assert.notEqual(piDshStatus.status, 0);
 
 // Codex keeps manual workflows non-implicit in the shared Agent Skills root.
 // Other targets may own the same compatibility file, but Codex must not create
@@ -156,6 +199,102 @@ assert.match(syncPlan, /planned stale managed removals:/);
 assert.match(syncPlan, /\.factory\/skills\/ghost-descoped-skill\/SKILL\.md/);
 assert.match(syncPlan, /\.factory\/skills\/karpathy-guidelines\/SKILL\.md/);
 rmSync(syncDest, { recursive: true, force: true });
+
+// SUBSTITUTE_JUSTIFICATION
+// - substitute: retired Gemini/VSCodium manifests and config in a disposable user root
+// - replaces: real profiles previously managed by the removed Gemini and VSCodium targets, including a stale path now owned by Kilo
+// - necessity: retirement cleanup needs exact historical ownership without deleting the operator's editor profile
+// - real-option: the production all-target installer and filesystem are used; only the old profile state is seeded
+// - proof-limit: proves owned file/config cleanup, not VSCodium runtime behavior
+// - real-proof: a full user-scope distribution on a machine carrying the prior manifest
+const retiredVscodiumDest = "/tmp/agent-surface-retired-vscodium";
+rmSync(retiredVscodiumDest, { recursive: true, force: true });
+run(["install", "--target", "vscode", "--scope", "user", "--dest", retiredVscodiumDest]);
+run(["install", "--target", "kilo", "--scope", "user", "--dest", retiredVscodiumDest]);
+const sharedLiveSkillRel = path.join(".agents", "skills", "ops-ask", "SKILL.md");
+const sharedLiveSkillPath = path.join(retiredVscodiumDest, sharedLiveSkillRel);
+const sharedLiveSkill = readFileSync(sharedLiveSkillPath, "utf8");
+const liveKiloConfigRel = path.join(".config", "kilo", "kilo.jsonc");
+const liveKiloConfigPath = path.join(retiredVscodiumDest, liveKiloConfigRel);
+const liveKiloConfig = JSON.parse(readFileSync(liveKiloConfigPath, "utf8"));
+liveKiloConfig.userKey = "keep";
+writeFileSync(liveKiloConfigPath, `${JSON.stringify(liveKiloConfig, null, 2)}\n`);
+const retiredVscodiumRoot = vsCodeUserRoot("VSCodium", { scope: "user" });
+const retiredOwnedRel = path.join(retiredVscodiumRoot, "prompts", "old-owned.md");
+const retiredUnownedRel = path.join(retiredVscodiumRoot, "prompts", "keep-user.md");
+const retiredMcpRel = path.join(retiredVscodiumRoot, "mcp.json");
+mkdirSync(path.join(retiredVscodiumDest, path.dirname(retiredOwnedRel)), { recursive: true });
+writeFileSync(path.join(retiredVscodiumDest, retiredOwnedRel), "remove\n");
+writeFileSync(path.join(retiredVscodiumDest, retiredUnownedRel), "keep\n");
+writeFileSync(path.join(retiredVscodiumDest, retiredMcpRel), `${JSON.stringify({
+  servers: {
+    existing: { command: "keep" },
+    "old-owned": { command: "remove" },
+  },
+}, null, 2)}\n`);
+mkdirSync(path.join(retiredVscodiumDest, ".agent-surface"), { recursive: true });
+writeFileSync(path.join(retiredVscodiumDest, ".agent-surface", "vscodium-manifest.json"), `${JSON.stringify({
+  target: "vscodium",
+  scope: "user",
+  managed: [
+    { target: "vscodium", output: retiredOwnedRel, source: "retired" },
+    { target: "vscodium", output: sharedLiveSkillRel, source: "retired-shared-skill" },
+  ],
+  config_entries: [{ path: retiredMcpRel, format: "vscode-servers", ids: ["old-owned"] }],
+}, null, 2)}\n`);
+const retiredGeminiRel = path.join(".gemini", "commands", "removed.toml");
+const retiredGeminiMcpRel = path.join(".gemini", "settings.json");
+mkdirSync(path.join(retiredVscodiumDest, path.dirname(retiredGeminiRel)), { recursive: true });
+writeFileSync(path.join(retiredVscodiumDest, retiredGeminiRel), "remove\n");
+writeFileSync(path.join(retiredVscodiumDest, retiredGeminiMcpRel), `${JSON.stringify({
+  mcpServers: { existing: { command: "keep" }, "old-owned": { command: "remove" } },
+}, null, 2)}\n`);
+writeFileSync(path.join(retiredVscodiumDest, ".agent-surface", "gemini-cli-manifest.json"), `${JSON.stringify({
+  target: "gemini-cli",
+  scope: "user",
+  managed: [
+    { target: "gemini-cli", output: retiredGeminiRel, source: "retired" },
+    { target: "gemini-cli", output: liveKiloConfigRel, source: "retired-config-collision" },
+  ],
+  config_entries: [{ path: retiredGeminiMcpRel, format: "mcpServers", ids: ["old-owned"] }],
+}, null, 2)}\n`);
+const retiredGrokMcpRel = path.join(".grok", "settings.json");
+mkdirSync(path.join(retiredVscodiumDest, ".grok"), { recursive: true });
+writeFileSync(path.join(retiredVscodiumDest, retiredGrokMcpRel), `${JSON.stringify({
+  mcpServers: { existing: { command: "keep" }, "old-owned": { command: "remove" } },
+}, null, 2)}\n`);
+writeFileSync(path.join(retiredVscodiumDest, ".agent-surface", "grok-build-manifest.json"), `${JSON.stringify({
+  target: "grok-build",
+  scope: "user",
+  managed: [],
+  config_entries: [{ path: retiredGrokMcpRel, format: "mcpServers", ids: ["old-owned"] }],
+}, null, 2)}\n`);
+const retiredVscodiumPlan = run(["install", "--target", "all", "--scope", "user", "--dest", retiredVscodiumDest, "--dry-run"]);
+assert.match(retiredVscodiumPlan, /planned stale managed paths retained by active targets:/);
+assert.match(retiredVscodiumPlan, new RegExp(liveKiloConfigRel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+run(["install", "--target", "all", "--scope", "user", "--dest", retiredVscodiumDest]);
+assert.equal(existsSync(path.join(retiredVscodiumDest, retiredOwnedRel)), false);
+assert.equal(existsSync(path.join(retiredVscodiumDest, retiredGeminiRel)), false);
+assert.equal(readFileSync(path.join(retiredVscodiumDest, retiredUnownedRel), "utf8"), "keep\n");
+assert.equal(
+  readFileSync(sharedLiveSkillPath, "utf8"),
+  sharedLiveSkill,
+  "retired-target cleanup cannot remove a path still emitted by an active target",
+);
+assert.equal(
+  JSON.parse(readFileSync(liveKiloConfigPath, "utf8")).userKey,
+  "keep",
+  "retired-target cleanup cannot remove a live config merge output",
+);
+const retiredMcp = JSON.parse(readFileSync(path.join(retiredVscodiumDest, retiredMcpRel), "utf8"));
+assert.equal(retiredMcp.servers.existing.command, "keep");
+assert.equal(Object.hasOwn(retiredMcp.servers, "old-owned"), false);
+for (const route of [retiredGeminiMcpRel, retiredGrokMcpRel]) {
+  const config = JSON.parse(readFileSync(path.join(retiredVscodiumDest, route), "utf8"));
+  assert.equal(config.mcpServers.existing.command, "keep");
+  assert.equal(Object.hasOwn(config.mcpServers, "old-owned"), false);
+}
+rmSync(retiredVscodiumDest, { recursive: true, force: true });
 
 const liveDest = "/tmp/agent-surface-live";
 rmSync(liveDest, { recursive: true, force: true });
@@ -393,7 +532,9 @@ writeFileSync(
     "    \".kilo/rules/14-shell.md\",",
     "    \".kilo/rules/14-lang-shell.md\",",
     "  ],",
-    "  \"marker\": \",]\"",
+    "  \"marker\": \",]\",",
+    "  \"share\": \"manual\",",
+    "  \"permission\": { \"shell\": \"ask\" }",
     "}",
     "",
   ].join("\n"),
@@ -407,6 +548,7 @@ assert.match(mergedKiloConfig, /"\.\/existing-rule\.md"/);
 assert.doesNotMatch(mergedKiloConfig, /"skills"/);
 assert.match(mergedKiloConfig, /"permission": \{\s*"\*": "allow"\s*\}/);
 assert.match(mergedKiloConfig, /"share": "disabled"/);
+assert.doesNotMatch(mergedKiloConfig, /"shell": "ask"/);
 assert.doesNotMatch(mergedKiloConfig, /"\.kilo\/rules\/agent-surface\.md"/);
 assert.doesNotMatch(mergedKiloConfig, /"\.kilo\/rules\/00-core\.md"/);
 assert.doesNotMatch(mergedKiloConfig, /"\.kilo\/rules\/10-python\.md"/);
@@ -503,59 +645,70 @@ assert.deepEqual(ownedCursorManifest.config_entries, [
 ]);
 rmSync(ownedCursorMcpDest, { recursive: true, force: true });
 
-const obsoleteCursorMcpDest = "/tmp/agent-surface-cursor-obsolete-mcp-routes";
-rmSync(obsoleteCursorMcpDest, { recursive: true, force: true });
-mkdirSync(path.join(obsoleteCursorMcpDest, ".cursor"), { recursive: true });
-mkdirSync(path.join(obsoleteCursorMcpDest, ".agent-surface"), { recursive: true });
-writeFileSync(
-  path.join(obsoleteCursorMcpDest, ".cursor", "mcp.json"),
-  `${JSON.stringify({
-    servers: {
-      existing: { command: "local-existing-format", args: ["--keep"] },
-      "old-format-owned": { command: "old-generated-entry", args: [] },
-    },
-  }, null, 2)}\n`,
-);
-writeFileSync(
-  path.join(obsoleteCursorMcpDest, ".cursor", "retired-mcp.json"),
-  `${JSON.stringify({
-    mcpServers: {
-      existing: { command: "local-existing-route", args: ["--keep"] },
-      "old-route-owned": { command: "old-generated-entry", args: [] },
-    },
-  }, null, 2)}\n`,
-);
-writeFileSync(
-  path.join(obsoleteCursorMcpDest, ".agent-surface", "cursor-manifest.json"),
-  `${JSON.stringify({
-    target: "cursor",
-    scope: "project",
-    managed: [],
-    config_entries: [
-      { path: ".cursor/mcp.json", format: "vscode-servers", ids: ["old-format-owned"] },
-      { path: ".cursor/missing-mcp.json", format: "mcpServers", ids: ["missing-owned"] },
-      { path: ".cursor/retired-mcp.json", format: "mcpServers", ids: ["old-route-owned"] },
-    ],
-  }, null, 2)}\n`,
-);
-const obsoleteCursorPlan = run(["install", "--target", "cursor", "--dest", obsoleteCursorMcpDest, "--dry-run"]);
-assert.match(obsoleteCursorPlan, /\.cursor\/mcp\.json MCP -= old-format-owned/);
-assert.match(obsoleteCursorPlan, /\.cursor\/missing-mcp\.json MCP -= missing-owned/);
-assert.match(obsoleteCursorPlan, /\.cursor\/retired-mcp\.json MCP -= old-route-owned/);
-run(["install", "--target", "cursor", "--dest", obsoleteCursorMcpDest]);
-const obsoleteCurrentCursorMcp = JSON.parse(readFileSync(path.join(obsoleteCursorMcpDest, ".cursor", "mcp.json"), "utf8"));
-assert.equal(obsoleteCurrentCursorMcp.servers.existing.command, "local-existing-format");
-assert.equal(Object.hasOwn(obsoleteCurrentCursorMcp.servers, "old-format-owned"), false);
-assert.equal(obsoleteCurrentCursorMcp.mcpServers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
-assert.equal(obsoleteCurrentCursorMcp.mcpServers.grimoire.command, path.join(os.homedir(), ".local", "bin", "grimoire-server"));
-const obsoleteRetiredCursorMcp = JSON.parse(readFileSync(path.join(obsoleteCursorMcpDest, ".cursor", "retired-mcp.json"), "utf8"));
-assert.equal(obsoleteRetiredCursorMcp.mcpServers.existing.command, "local-existing-route");
-assert.equal(Object.hasOwn(obsoleteRetiredCursorMcp.mcpServers, "old-route-owned"), false);
-const obsoleteCursorManifest = JSON.parse(readFileSync(path.join(obsoleteCursorMcpDest, ".agent-surface", "cursor-manifest.json"), "utf8"));
-assert.deepEqual(obsoleteCursorManifest.config_entries, [
-  { path: ".cursor/mcp.json", format: "mcpServers", ids: ["grimoire", "synapse"] },
-]);
-rmSync(obsoleteCursorMcpDest, { recursive: true, force: true });
+/*
+SUBSTITUTE_JUSTIFICATION
+- substitute: a disposable Antigravity profile containing the former direct-import manifest route
+- replaces: a real pre-migration plugin profile plus the runtime-owned import recreated by `agy plugin install`
+- necessity: exercising one-time cleanup against the real plugin root would temporarily disconnect its MCP servers
+- real-option: the production installer and config merger are used; only the disposable profile state is controlled
+- proof-limit: proves ownership handoff and repeat-install behavior, not native plugin activation
+- real-proof: `agy plugin validate`, `agy plugin install`, and `agy plugin list` against the real staged plugin
+*/
+{
+  const dest = mkdtempSync("/tmp/agent-surface-antigravity-route-handoff-");
+  const oldRoute = path.join("config", "plugins", "agent-surface", "mcp_config.json");
+  const currentRoute = path.join("antigravity-cli", "plugins", "agent-surface", "mcp_config.json");
+  const oldConfigPath = path.join(dest, oldRoute);
+  try {
+    mkdirSync(path.dirname(oldConfigPath), { recursive: true });
+    mkdirSync(path.join(dest, ".agent-surface"), { recursive: true });
+    writeFileSync(oldConfigPath, `${JSON.stringify({
+      mcpServers: {
+        existing: { command: "keep", args: [] },
+        grimoire: { command: "old-grimoire", args: [] },
+        synapse: { command: "old-synapse", args: [] },
+      },
+    }, null, 2)}\n`);
+    writeFileSync(
+      path.join(dest, ".agent-surface", "antigravity-cli-manifest.json"),
+      `${JSON.stringify({
+        target: "antigravity-cli",
+        scope: "user",
+        managed: [],
+        config_entries: [{ path: oldRoute, format: "mcpServers", ids: ["grimoire", "synapse"] }],
+      }, null, 2)}\n`,
+    );
+
+    run(["install", "--target", "antigravity-cli", "--scope", "user", "--dest", dest]);
+    const cleanedImport = JSON.parse(readFileSync(oldConfigPath, "utf8"));
+    assert.deepEqual(Object.keys(cleanedImport.mcpServers), ["existing"]);
+    const staged = JSON.parse(readFileSync(path.join(dest, currentRoute), "utf8"));
+    assert.deepEqual(Object.keys(staged.mcpServers).sort(), ["grimoire", "synapse"]);
+    const currentManifest = JSON.parse(readFileSync(
+      path.join(dest, ".agent-surface", "antigravity-cli-manifest.json"),
+      "utf8",
+    ));
+    assert.deepEqual(currentManifest.config_entries, [
+      { path: currentRoute, format: "mcpServers", ids: ["grimoire", "synapse"] },
+    ]);
+
+    writeFileSync(oldConfigPath, `${JSON.stringify({
+      mcpServers: {
+        existing: { command: "keep", args: [] },
+        grimoire: { command: "runtime-import", args: [] },
+        synapse: { command: "runtime-import", args: [] },
+      },
+    }, null, 2)}\n`);
+    run(["install", "--target", "antigravity-cli", "--scope", "user", "--dest", dest]);
+    assert.deepEqual(Object.keys(JSON.parse(readFileSync(oldConfigPath, "utf8")).mcpServers).sort(), [
+      "existing",
+      "grimoire",
+      "synapse",
+    ]);
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
 
 /*
 SUBSTITUTE_JUSTIFICATION
@@ -619,118 +772,6 @@ for (const scope of ["user", "project"]) {
   rmSync(obsoleteClineMcpDest, { recursive: true, force: true });
 }
 
-const legacyOwnedConfigPath = path.join(root, "registry", "legacy-owned.json");
-const legacyOwnedConfigOriginal = readFileSync(legacyOwnedConfigPath, "utf8");
-const legacyOwnedCursorMcpDest = "/tmp/agent-surface-cursor-legacy-owned-mcp-route";
-try {
-  const legacyOwnedConfig = JSON.parse(legacyOwnedConfigOriginal);
-  legacyOwnedConfig.config_entries.push({
-    target: "cursor",
-    path: ".cursor/legacy-owned-mcp.json",
-    format: "mcpServers",
-    ids: ["legacy-owned"],
-  });
-  writeFileSync(legacyOwnedConfigPath, `${JSON.stringify(legacyOwnedConfig, null, 2)}\n`);
-  rmSync(legacyOwnedCursorMcpDest, { recursive: true, force: true });
-  mkdirSync(path.join(legacyOwnedCursorMcpDest, ".cursor"), { recursive: true });
-  writeFileSync(
-    path.join(legacyOwnedCursorMcpDest, ".cursor", "legacy-owned-mcp.json"),
-    `${JSON.stringify({
-      mcpServers: {
-        existing: { command: "local-existing", args: ["--keep"] },
-        "legacy-owned": { command: "old-generated-entry", args: [] },
-      },
-    }, null, 2)}\n`,
-  );
-  const legacyOwnedCursorPlan = run(["install", "--target", "cursor", "--dest", legacyOwnedCursorMcpDest, "--dry-run"]);
-  assert.match(legacyOwnedCursorPlan, /\.cursor\/legacy-owned-mcp\.json MCP -= legacy-owned/);
-  run(["install", "--target", "cursor", "--dest", legacyOwnedCursorMcpDest]);
-  const legacyOwnedCursorMcp = JSON.parse(readFileSync(path.join(legacyOwnedCursorMcpDest, ".cursor", "legacy-owned-mcp.json"), "utf8"));
-  assert.equal(legacyOwnedCursorMcp.mcpServers.existing.command, "local-existing");
-  assert.equal(Object.hasOwn(legacyOwnedCursorMcp.mcpServers, "legacy-owned"), false);
-  const legacyOwnedCursorManifest = JSON.parse(readFileSync(path.join(legacyOwnedCursorMcpDest, ".agent-surface", "cursor-manifest.json"), "utf8"));
-  assert.equal(legacyOwnedCursorManifest.config_entries.some((entry) => entry.path === ".cursor/legacy-owned-mcp.json"), false);
-} finally {
-  writeFileSync(legacyOwnedConfigPath, legacyOwnedConfigOriginal);
-  rmSync(legacyOwnedCursorMcpDest, { recursive: true, force: true });
-}
-
-/*
-SUBSTITUTE_JUSTIFICATION
-- substitute: disposable install roots with a symlinked target namespace, predictable manifest temp route, and tampered ownership manifest
-- replaces: malformed or locally modified user host profiles at the config filesystem boundary
-- necessity: deterministic path redirection and manifest-route tampering cannot be introduced into a real profile without risking unrelated user configuration
-- real-option: a live user-scope install was considered, but intentionally redirecting or falsifying its config ownership is destructive and cannot safely serve these assertions
-- proof-limit: these cases prove installer rejection and non-mutation only; they do not prove host loading or MCP task execution
-- real-proof: BLOCKED: requires an isolated OS account with disposable real host profiles and independently observed host startup
-*/
-{
-  const dest = mkdtempSync("/tmp/agent-surface-config-symlink-");
-  const outside = mkdtempSync("/tmp/agent-surface-config-outside-");
-  try {
-    symlinkSync(outside, path.join(dest, ".cursor"), "dir");
-    const redirectedInstall = status(["install", "--target", "cursor", "--dest", dest, "--dry-run"]);
-    assert.notEqual(redirectedInstall.status, 0);
-    assert.match(
-      `${redirectedInstall.stdout}${redirectedInstall.stderr}`,
-      /MCP config .* traverses symbolic link/,
-    );
-    assert.equal(existsSync(path.join(outside, "mcp.json")), false);
-  } finally {
-    rmSync(dest, { recursive: true, force: true });
-    rmSync(outside, { recursive: true, force: true });
-  }
-}
-
-{
-  const dest = mkdtempSync("/tmp/agent-surface-manifest-temp-");
-  const outside = mkdtempSync("/tmp/agent-surface-manifest-temp-outside-");
-  try {
-    mkdirSync(path.join(dest, ".agent-surface"), { recursive: true });
-    const outsidePath = path.join(outside, "unrelated.txt");
-    writeFileSync(outsidePath, "preserve\n");
-    symlinkSync(outsidePath, path.join(dest, ".agent-surface", "cursor-manifest.json.tmp"));
-    run(["install", "--target", "cursor", "--dest", dest]);
-    assert.equal(readFileSync(outsidePath, "utf8"), "preserve\n");
-    assert.equal(
-      JSON.parse(readFileSync(path.join(dest, ".agent-surface", "cursor-manifest.json"), "utf8")).target,
-      "cursor",
-    );
-  } finally {
-    rmSync(dest, { recursive: true, force: true });
-    rmSync(outside, { recursive: true, force: true });
-  }
-}
-
-{
-  const dest = mkdtempSync("/tmp/agent-surface-config-manifest-");
-  try {
-    mkdirSync(path.join(dest, ".agent-surface"), { recursive: true });
-    mkdirSync(path.join(dest, ".ssh"), { recursive: true });
-    const unrelatedPath = path.join(dest, ".ssh", "config");
-    const unrelatedContent = `${JSON.stringify({ mcpServers: { synapse: { command: "keep" } } }, null, 2)}\n`;
-    writeFileSync(unrelatedPath, unrelatedContent);
-    writeFileSync(
-      path.join(dest, ".agent-surface", "cursor-manifest.json"),
-      `${JSON.stringify({
-        target: "cursor",
-        scope: "project",
-        managed: [],
-        config_entries: [{ path: ".ssh/config", format: "mcpServers", ids: ["synapse"] }],
-      }, null, 2)}\n`,
-    );
-    const tamperedManifestInstall = status(["install", "--target", "cursor", "--dest", dest, "--dry-run"]);
-    assert.notEqual(tamperedManifestInstall.status, 0);
-    assert.match(
-      `${tamperedManifestInstall.stdout}${tamperedManifestInstall.stderr}`,
-      /untrusted obsolete MCP config route in manifest: \.ssh\/config/,
-    );
-    assert.equal(readFileSync(unrelatedPath, "utf8"), unrelatedContent);
-  } finally {
-    rmSync(dest, { recursive: true, force: true });
-  }
-}
-
 const existingOpenHandsMcpDest = "/tmp/agent-surface-openhands-existing-mcp";
 rmSync(existingOpenHandsMcpDest, { recursive: true, force: true });
 mkdirSync(path.join(existingOpenHandsMcpDest, ".openhands"), { recursive: true });
@@ -747,6 +788,7 @@ rmSync(existingOpenHandsMcpDest, { recursive: true, force: true });
 
 const existingCodexMcpDest = "/tmp/agent-surface-codex-existing-mcp";
 rmSync(existingCodexMcpDest, { recursive: true, force: true });
+
 mkdirSync(path.join(existingCodexMcpDest, ".codex"), { recursive: true });
 writeFileSync(
   path.join(existingCodexMcpDest, ".codex", "config.toml"),
@@ -765,23 +807,23 @@ writeFileSync(
 );
 run(["install", "--target", "codex", "--dest", existingCodexMcpDest, "--category", "mcps", "--service", "synapse"]);
 const mergedCodexMcp = readFileSync(path.join(existingCodexMcpDest, ".codex", "config.toml"), "utf8");
-assert.match(mergedCodexMcp, /\[profile\.default\]/);
-assert.match(mergedCodexMcp, /^approval_policy = "on-request"$/m);
-assert.match(mergedCodexMcp, /^sandbox_mode = "workspace-write"$/m);
-assert.match(mergedCodexMcp, /\[mcp_servers\.existing\]/);
-assert.match(mergedCodexMcp, /\[mcp_servers\.synapse\]/);
-assert.doesNotMatch(mergedCodexMcp, /\[mcp_servers\.agentmemory\]/);
+const parsedCodexMcp = TOML.parse(mergedCodexMcp);
+assert.equal(parsedCodexMcp.approval_policy, "on-request");
+assert.equal(parsedCodexMcp.sandbox_mode, "workspace-write");
+assert.equal(parsedCodexMcp.profile.default.model, "keep-me");
+assert.equal(parsedCodexMcp.mcp_servers.existing.command, "local-existing");
+assert.equal(parsedCodexMcp.mcp_servers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
+assert.equal(Object.hasOwn(parsedCodexMcp.mcp_servers, "agentmemory"), false);
 rmSync(existingCodexMcpDest, { recursive: true, force: true });
 
 // P3.1/P3.2 acceptance: non-destructive MCP merge into every manual/secret-bearing
 // host. Each fixture carries a pre-existing user server; the merge must keep it,
 // add the first-party synapse entry, never add external/secret-bearing MCPs, and a
 // second merge must be a no-op (idempotent). Cursor + Codex are covered explicitly
-// above; this loop closes the remaining eight (claude-code, cline, kilo,
-// opencode, trae, vscode, windsurf, zed).
+// above; this loop closes the remaining JSON/JSONC hosts.
 /*
 SUBSTITUTE_JUSTIFICATION
-- substitute: mergeFixtures pre-existing config objects for claude-code, cline, kilo, opencode, trae, vscode, windsurf, and zed
+- substitute: mergeFixtures pre-existing config objects for the listed JSON/JSONC MCP hosts
 - replaces: user-owned sibling settings needed to exercise non-destructive and idempotent MCP merges for each config format
 - necessity: the exact preservation assertion requires controlled unknown sibling entries and repeated writes; modifying real host profiles could corrupt user configuration
 - real-option: disposable current installs were considered, but they cannot create unknown user-owned entries; live profiles are unsafe and vary by machine
@@ -808,6 +850,16 @@ const mergeFixtures = [
     }
   },
   { target: "trae", rel: ".trae/mcp.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
+  {
+    target: "qoder", rel: ".qoder/settings.json", root: "mcpServers", pre: { general: { theme: "keep" }, mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } },
+    keep: (parsed) => assert.equal(parsed.general.theme, "keep", "qoder settings sibling preserved"),
+  },
+  {
+    target: "qwen-code", rel: ".qwen/settings.json", root: "mcpServers", pre: { tools: { sandbox: true }, mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } },
+    keep: (parsed) => assert.equal(parsed.tools.sandbox, true, "qwen settings sibling preserved"),
+  },
+  { target: "kiro", rel: ".kiro/settings/mcp.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
+  { target: "copilot", scope: "user", rel: ".copilot/mcp-config.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
   { target: "vscode", rel: path.join(clineIdeUserDataRoot("Code"), "User", "mcp.json"), root: "servers", pre: { servers: { existing: { type: "stdio", command: "local-existing", args: ["--keep"] } } } },
   { target: "windsurf", rel: ".windsurf/mcp_config.json", root: "mcpServers", pre: { mcpServers: { existing: { command: "local-existing", args: ["--keep"] } } } },
   {
@@ -844,21 +896,227 @@ for (const fx of mergeFixtures) {
   }
 }
 
+/*
+SUBSTITUTE_JUSTIFICATION
+- substitute: policy config seeds for Qoder, Qwen Code, OpenCode, Kiro, and Grok Build
+- replaces: pre-existing operator-owned settings needed to test sibling preservation during a real install
+- necessity: deterministic preservation requires known unknown-to-agent-surface sibling values; modifying real host profiles is unsafe
+- real-option: disposable installs exercise the real installer and filesystem but still need seeded pre-existing values
+- proof-limit: proves merge behavior only, not host discovery or tool execution
+- real-proof: target-shaped live CLI runs are tracked separately and remain BLOCKED when the runtime or login is unavailable
+*/
+for (const fx of [
+  {
+    target: "qoder",
+    rel: ".qoder/settings.json",
+    seed: { general: { theme: "keep" }, skills: { customSetting: "keep" } },
+    assertPolicy: (parsed) => {
+      assert.equal(parsed.general.theme, "keep");
+      assert.equal(parsed.general.defaultPermissionMode, "bypass_permissions");
+      assert.equal(parsed.skills.customSetting, "keep");
+      assert.equal(parsed.skills.loadFromAgentsDirectory, false);
+    },
+  },
+  {
+    target: "qwen-code",
+    rel: ".qwen/settings.json",
+    seed: { tools: { sandbox: true } },
+    assertPolicy: (parsed) => {
+      assert.equal(parsed.tools.sandbox, true);
+      assert.equal(parsed.tools.approvalMode, "yolo");
+    },
+  },
+]) {
+  const dest = mkdtempSync(`/tmp/agent-surface-${fx.target}-policy-`);
+  try {
+    mkdirSync(path.join(dest, path.dirname(fx.rel)), { recursive: true });
+    writeFileSync(path.join(dest, fx.rel), `${JSON.stringify(fx.seed, null, 2)}\n`);
+    run(["install", "--target", fx.target, "--dest", dest]);
+    fx.assertPolicy(JSON.parse(readFileSync(path.join(dest, fx.rel), "utf8")));
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
+{
+  const dest = mkdtempSync("/tmp/agent-surface-opencode-policy-");
+  try {
+    const configPath = path.join(dest, ".opencode", "opencode.json");
+    mkdirSync(path.dirname(configPath), { recursive: true });
+    writeFileSync(configPath, `${JSON.stringify({
+      permission: { shell: "ask", edit: "ask" },
+      share: "manual",
+      userKey: "keep",
+    }, null, 2)}\n`);
+    run(["install", "--target", "opencode", "--dest", dest]);
+    const config = JSON.parse(readFileSync(configPath, "utf8"));
+    assert.deepEqual(config.permission, { "*": "allow" });
+    assert.equal(config.share, "disabled");
+    assert.equal(config.userKey, "keep");
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
+{
+  const dest = mkdtempSync("/tmp/agent-surface-kiro-policy-");
+  try {
+    mkdirSync(path.join(dest, ".kiro", "settings"), { recursive: true });
+    const permissionsPath = path.join(dest, ".kiro", "settings", "permissions.yaml");
+    writeFileSync(permissionsPath, 'rules:\n    - capability: "all"\n      effect: deny\n    - capability: shell\n      match: ["git *"]\n      effect: ask\nother: keep\n');
+    const args = ["install", "--target", "kiro", "--scope", "user", "--dest", dest];
+    run(args);
+    const merged = readFileSync(permissionsPath, "utf8");
+    const permissions = parseYaml(merged);
+    assert.equal(permissions.other, "keep");
+    assert.deepEqual(permissions.rules.find((rule) => rule.capability === "shell"), {
+      capability: "shell", match: ["git *"], effect: "ask",
+    });
+    assert.deepEqual(permissions.rules.filter((rule) => rule.capability === "all"), [
+      { capability: "all", effect: "allow" },
+    ]);
+    run(args);
+    assert.equal(readFileSync(permissionsPath, "utf8"), merged, "Kiro permission re-merge is idempotent");
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
+{
+  const dest = mkdtempSync("/tmp/agent-surface-grok-policy-");
+  try {
+    mkdirSync(path.join(dest, ".grok"), { recursive: true });
+    writeFileSync(path.join(dest, ".grok", "config.toml"), '[ui]\ntheme = "keep"\npermission_mode = "ask"\n\n[profile.default]\nmodel = "keep"\n');
+    run(["install", "--target", "grok-build", "--dest", dest]);
+    const config = readFileSync(path.join(dest, ".grok", "config.toml"), "utf8");
+    const parsed = TOML.parse(config);
+    assert.equal(parsed.ui.theme, "keep");
+    assert.equal(parsed.ui.permission_mode, "ask");
+    assert.equal(parsed.profile.default.model, "keep");
+    assert.equal(parsed.mcp_servers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
+{
+  const dest = mkdtempSync("/tmp/agent-surface-trae-project-agents-");
+  try {
+    run(["install", "--target", "trae", "--scope", "project", "--dest", dest]);
+    assert.equal(existsSync(path.join(dest, ".trae", "agents", "boss.md")), true);
+    assert.equal(existsSync(path.join(dest, ".traecli", "agents", "boss.md")), true);
+    assert.equal(existsSync(path.join(dest, ".trae", "skills", "workflow-runtime", "SKILL.md")), true);
+    assert.equal(existsSync(path.join(dest, ".traecli", "skills", "workflow-runtime", "SKILL.md")), true);
+    const nativeRule = readFileSync(path.join(dest, ".trae", "rules", "00-precedence-and-safety.md"), "utf8");
+    assert.match(nativeRule, /^alwaysApply: true$/m);
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
+{
+  const dest = mkdtempSync("/tmp/agent-surface-trae-user-config-");
+  try {
+    mkdirSync(path.join(dest, ".trae"), { recursive: true });
+    const configPath = path.join(dest, ".trae", "traecli.toml");
+    writeFileSync(configPath, '[profile.default] # keep\nmodel = "keep-me"\n');
+    const args = ["install", "--target", "trae", "--scope", "user", "--dest", dest];
+    run(args);
+    const config = readFileSync(configPath, "utf8");
+    const parsed = TOML.parse(config);
+    assert.equal(parsed.approval_policy, "never");
+    assert.equal(parsed.default_permissions, ":danger-full-access");
+    assert.equal(parsed.profile.default.model, "keep-me");
+    assert.equal(parsed.mcp_servers.synapse.command, path.join(os.homedir(), ".local", "bin", "synapse-bridge"));
+    run(args);
+    assert.equal(readFileSync(configPath, "utf8"), config, "Trae user config re-merge is idempotent");
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
+/*
+SUBSTITUTE_JUSTIFICATION
+- substitute: disposable project root for a combined Claude Code and Copilot install
+- replaces: an operator repository carrying a shared .mcp.json
+- necessity: the collision assertion requires both real adapters to write one project config; using an active repository would overwrite its MCP setup
+- real-option: the production installer and both adapters run unmodified against a disposable real filesystem
+- proof-limit: proves shared-config installation and merge compatibility, not runtime MCP startup
+- real-proof: credentialed Claude Code and Copilot project runs are separate acceptance scenarios
+*/
+{
+  const dest = mkdtempSync("/tmp/agent-surface-claude-copilot-project-");
+  try {
+    run(["install", "--target", "claude-code,copilot", "--scope", "project", "--dest", dest]);
+    const mcp = JSON.parse(readFileSync(path.join(dest, ".mcp.json"), "utf8"));
+    assert.ok(mcp.mcpServers.synapse);
+    assert.ok(mcp.mcpServers.grimoire);
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
+// Representative fail-closed checks at each supported syntax boundary.
+for (const fx of [
+  { target: "qoder", rel: ".qoder/settings.json", seed: '{"mcpServers":null}\n', error: /mcpServers must be an object/ },
+  { target: "qoder", rel: ".qoder/settings.json", seed: '{"mcpServers":{},"mcpServers":{}}\n', error: /duplicate/ },
+  { target: "codex", rel: ".codex/config.toml", seed: "[mcp_servers.synapse\n", error: /invalid TOML/ },
+  { target: "goose", scope: "user", rel: ".config/goose/config.yaml", seed: "extensions:\n  synapse: [\n", error: /invalid YAML/ },
+  { target: "kiro", scope: "user", rel: ".kiro/settings/permissions.yaml", seed: "rules: {}\n", error: /rules must be a sequence/ },
+]) {
+  const dest = mkdtempSync("/tmp/agent-surface-invalid-config-");
+  try {
+    const file = path.join(dest, fx.rel);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, fx.seed);
+    const args = ["install", "--target", fx.target, "--dest", dest];
+    if (fx.scope) args.push("--scope", fx.scope);
+    const result = status(args);
+    assert.notEqual(result.status, 0, fx.target);
+    assert.match(result.stdout + result.stderr, fx.error, fx.target);
+    assert.equal(readFileSync(file, "utf8"), fx.seed, fx.target + ": invalid config stays untouched");
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
+// Inserting into a compact JSONC root preserves comments rather than normalizing
+// the whole object through JSON.stringify.
+{
+  const dest = mkdtempSync("/tmp/agent-surface-qoder-compact-comment-");
+  try {
+    const configPath = path.join(dest, ".qoder", "settings.json");
+    mkdirSync(path.dirname(configPath), { recursive: true });
+    writeFileSync(configPath, '{"marker":"keep" /* compact user comment */}\n');
+    const args = ["install", "--target", "qoder", "--dest", dest];
+    run(args);
+    const merged = readFileSync(configPath, "utf8");
+    assert.match(merged, /compact user comment/);
+    assert.equal(JSON.parse(merged.replace(/\/\*[\s\S]*?\*\//g, "")).marker, "keep");
+    run(args);
+    assert.equal(readFileSync(configPath, "utf8"), merged, "compact JSONC comment re-merge is idempotent");
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
+
 // YAML MCP merge (Goose extensions) is non-destructive + idempotent: preserves the user's
 // provider/model, sibling extensions, and comments; adds grimoire+synapse; re-merge is a no-op.
 {
   const dest = mkdtempSync("/tmp/agent-surface-goose-yaml-");
   try {
     mkdirSync(path.join(dest, ".config", "goose"), { recursive: true });
-    const seed = "# my goose config\nGOOSE_PROVIDER: openrouter\nextensions:\n  developer:\n    name: developer\n    type: builtin\n    enabled: true\n";
+    const seed = "# my goose config\nGOOSE_PROVIDER: openrouter\nother:\n  keep: true\nextensions:\n  developer:\n    name: developer\n    type: builtin\n    enabled: true\n";
     writeFileSync(path.join(dest, ".config", "goose", "config.yaml"), seed);
     run(["install", "--target", "goose", "--scope", "user", "--category", "mcps", "--dest", dest]);
     const merged = readFileSync(path.join(dest, ".config", "goose", "config.yaml"), "utf8");
     assert.match(merged, /# my goose config/, "comment preserved");
-    assert.match(merged, /GOOSE_PROVIDER: openrouter/, "provider preserved");
-    assert.match(merged, /^ {2}developer:/m, "sibling extension preserved");
-    assert.match(merged, /^ {2}grimoire:/m, "grimoire added");
-    assert.match(merged, /^ {2}synapse:/m, "synapse added");
+    const config = parseYaml(merged);
+    assert.equal(config.GOOSE_PROVIDER, "openrouter");
+    assert.deepEqual(config.other, { keep: true });
+    assert.equal(config.extensions.developer.name, "developer");
+    assert.equal(config.extensions.grimoire.name, "grimoire");
+    assert.equal(config.extensions.synapse.name, "synapse");
     run(["install", "--target", "goose", "--scope", "user", "--category", "mcps", "--dest", dest]);
     assert.equal(readFileSync(path.join(dest, ".config", "goose", "config.yaml"), "utf8"), merged, "goose YAML re-merge is idempotent");
   } finally {
@@ -879,9 +1137,14 @@ for (const fx of mergeFixtures) {
 }
 
 assert.match(readFileSync(path.join(root, ".gitignore"), "utf8"), /^commands\/ops-server\.md$/m);
+assert.match(readFileSync(path.join(root, ".gitignore"), "utf8"), /^\.agent-surface\/$/m);
 assert.equal(
   execFileSync("git", ["check-ignore", "commands/ops-server.md"], { cwd: root, encoding: "utf8" }).trim(),
   "commands/ops-server.md",
+);
+assert.equal(
+  execFileSync("git", ["check-ignore", ".agent-surface/readiness/example/readiness.json"], { cwd: root, encoding: "utf8" }).trim(),
+  ".agent-surface/readiness/example/readiness.json",
 );
 assert.doesNotMatch(readFileSync(path.join(root, ".npmignore"), "utf8"), /^external\/\*$/m);
 assert.match(readFileSync(path.join(root, ".npmignore"), "utf8"), /^commands\/ops-server\.md$/m);
@@ -897,6 +1160,7 @@ for (const required of [
   assert.equal(packedPaths.has(required), true, `npm package missing ${required}`);
 }
 assert.equal(packedPaths.has("commands/ops-server.md"), false, "npm package leaked private ops-server command");
+assert.equal([...packedPaths].some((file) => file.startsWith(".agent-surface/")), false, "npm package leaked local agent state");
 
 // A public package cannot carry the ignored private command overlay. Installing
 // that package later must not interpret the absent private source as a request
@@ -982,7 +1246,7 @@ try {
     const sources = manifest.managed.map((item) => item.source);
     assert.equal(
       sources.includes("commands/ops-server.md"),
-      hasLocalOpsServerCommand,
+      hasLocalOpsServerCommand && target !== "dsh",
       `${target}: local ops-server overlay`,
     );
     for (const optionalPack of [

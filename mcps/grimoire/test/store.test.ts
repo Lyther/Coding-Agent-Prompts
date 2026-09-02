@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { buildIndex } from "../src/indexer.js";
 import { Store } from "../src/store.js";
-import { setupIndex } from "./helpers.js";
+import { FIXTURE_ATTRIBUTION, FIXTURE_PACK, setupIndex } from "./helpers.js";
 
 const COBALT = "fixture:detecting-cobalt-strike-beacons";
 
@@ -22,7 +23,6 @@ test("search ranks the relevant skill first and respects k", () => {
     if (one.status === "ok") assert.ok(one.hits.length <= 1);
   } finally { cleanup(); }
 });
-
 test("list: all / by derived category / unknown category / cursor paging", () => {
   const { store, cleanup } = setupIndex();
   try {
@@ -59,6 +59,7 @@ test("get returns body + provenance + file manifest; unknown/invalid ids handled
     if (g.status === "ok") {
       assert.match(g.skill.body, /Cobalt Strike/);
       assert.equal(g.skill.provenance.sourceCommit.length > 0, true);
+      assert.equal(g.skill.provenance.attribution, FIXTURE_ATTRIBUTION);
       assert.deepEqual(g.skill.files.map((f) => f.path), ["references/iocs.md"]);
       assert.equal(g.skill.categorySource, "derived");
     }
@@ -70,7 +71,11 @@ test("get returns body + provenance + file manifest; unknown/invalid ids handled
 test("fileGet: raw content; not-in-manifest → NOT_FOUND; traversal/absolute → INVALID_INPUT", () => {
   const { store, cleanup } = setupIndex();
   try {
-    assert.equal(store.fileGet(COBALT, "references/iocs.md").status, "ok");
+    const raw = store.fileGet(COBALT, "references/iocs.md");
+    assert.equal(raw.status, "ok");
+    if (raw.status === "ok") {
+      assert.equal(raw.file.attribution, FIXTURE_ATTRIBUTION);
+    }
     assert.equal(store.fileGet(COBALT, "references/missing.md").status, "NOT_FOUND");
     assert.equal(store.fileGet("fixture:does-not-exist", "references/iocs.md").status, "NOT_FOUND");
     assert.equal(store.fileGet(COBALT, "../../../etc/passwd").status, "INVALID_INPUT");
@@ -99,4 +104,59 @@ test("INDEX_STALE when the installed manifest no longer matches the index", () =
     assert.equal(store.search("cobalt").status, "INDEX_STALE");
     store.close();
   } finally { cleanup(); }
+});
+
+test("INDEX_STALE when the manifest omits a pack still present in the index", () => {
+  const dir = mkdtempSync(join(tmpdir(), "grimoire-pack-subset-"));
+  const store = new Store({ dir });
+  try {
+    buildIndex({
+      packs: [
+        { serviceId: "alpha", path: FIXTURE_PACK, commit: "alpha-commit", attribution: FIXTURE_ATTRIBUTION },
+        { serviceId: "beta", path: FIXTURE_PACK, commit: "beta-commit", attribution: FIXTURE_ATTRIBUTION },
+      ],
+      outDir: dir,
+    });
+    const manifestPath = join(dir, "manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.packs = manifest.packs.filter((pack: { serviceId: string }) => pack.serviceId === "alpha");
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    assert.equal(store.search("cobalt").status, "INDEX_STALE");
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a long-lived Store reopens the index after an atomic rebuild", () => {
+  const dir = mkdtempSync(join(tmpdir(), "grimoire-reopen-"));
+  const pack = join(dir, "pack");
+  cpSync(FIXTURE_PACK, pack, { recursive: true });
+  const store = new Store({ dir });
+  try {
+    buildIndex({
+      packs: [{ serviceId: "fixture", path: pack, attribution: FIXTURE_ATTRIBUTION }],
+      outDir: dir,
+    });
+    const before = store.get(COBALT);
+    assert.equal(before.status, "ok");
+    if (before.status !== "ok") return;
+    const skillPath = join(pack, "skills", "detecting-cobalt-strike-beacons", "SKILL.md");
+    writeFileSync(skillPath, `${readFileSync(skillPath, "utf8")}\nSecond build marker.\n`);
+
+    buildIndex({
+      packs: [{ serviceId: "fixture", path: pack, attribution: FIXTURE_ATTRIBUTION }],
+      outDir: dir,
+    });
+    const after = store.get(COBALT);
+    assert.equal(after.status, "ok");
+    if (after.status === "ok") {
+      assert.doesNotMatch(before.skill.body, /Second build marker/);
+      assert.match(after.skill.body, /Second build marker/);
+    }
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

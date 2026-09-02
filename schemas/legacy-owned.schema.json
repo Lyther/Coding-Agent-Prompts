@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agent-surface legacy ownership registry",
+  "type": "object",
+  "required": [
+    "files",
+    "config_entries"
+  ],
+  "properties": {
+    "$comment": {
+      "type": "string"
+    },
+    "files_$comment": {
+      "type": "string"
+    },
+    "config_entries_$comment": {
+      "type": "string"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "output"
+        ],
+        "properties": {
+          "target": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "source": {
+            "type": "string"
+          },
+          "output": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "config_entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "format",
+          "ids"
+        ],
+        "properties": {
+          "target": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "format": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

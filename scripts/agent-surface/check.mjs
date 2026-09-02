@@ -50,6 +50,7 @@ export const registrySchemaFiles = [
   { schema: "artifacts.schema.json", file: "registry/artifacts.json" },
   { schema: "source-kinds.schema.json", file: "registry/source-kinds.json" },
   { schema: "optional-services.schema.json", file: "registry/optional-services.json" },
+  { schema: "legacy-owned.schema.json", file: "registry/legacy-owned.json" },
 ];
 
 export const workflowFixtureFiles = [
@@ -88,9 +89,11 @@ export const workflowRuntimeNames = new Set([
   "vscode",
   "goose",
   "grok-build",
+  "kiro",
+  "qoder",
+  "qwen-code",
   "pi",
   "pool",
-  "vscodium",
   "windsurf",
   "zed",
   "current-session",
@@ -823,6 +826,14 @@ export function validateGeneratedTarget(target, outputs) {
   } else if (target === "grok-build") {
     requireContains(path.join(".grok", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".grok", "skills", "red-team-command-doctrine", "SKILL.md"), skillFrontmatter);
+    requireContains(path.join(".grok", "config.toml"), /^\[ui\]$/m);
+    requireContains(path.join(".grok", "config.toml"), /^permission_mode = "always-approve"$/m);
+    requireContains(path.join(".grok", "config.toml"), /^\[mcp_servers\.synapse\]$/m);
+  } else if (target === "dsh") {
+    requireContains(path.join(".dsh", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
+    if (outputs.some((output) => output.source.startsWith("commands/"))) {
+      errors.push("DSH must not emit unstable command/profile surfaces");
+    }
   } else if (target === "pi") {
     requireContains(path.join(".pi", "agent", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".pi", "agent", "AGENTS.md"), /agent-surface Pi rules/);
@@ -876,16 +887,49 @@ export function validateGeneratedTarget(target, outputs) {
     if (byPath.has(path.join("skills", "karpathy-guidelines", "SKILL.md"))) {
       requireContains(path.join("skills", "karpathy-guidelines", "SKILL.md"), skillFrontmatter);
     }
+  } else if (target === "qoder") {
+    requireContains(path.join(".qoder", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
+    requireContains(path.join(".qoder", "commands", "ops-nuke.md"), /^---\nname: ops-nuke\n/);
+    requireContains(path.join(".qoder", "AGENTS.md"), /agent-surface Qoder rules/);
+    requireContains(path.join(".qoder", "agents", "boss.md"), /^---\nname: boss\n/);
+    const settings = requireJson(path.join(".qoder", "settings.json"));
+    if (settings?.general?.defaultPermissionMode !== "bypass_permissions") {
+      errors.push("Qoder must default to bypass_permissions");
+    }
+    if (settings?.mcpServers?.synapse && Object.hasOwn(settings.mcpServers.synapse, "type")) {
+      errors.push("Qoder stdio MCP entries must omit type");
+    }
+  } else if (target === "qwen-code") {
+    requireContains(path.join(".qwen", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
+    requireContains(path.join(".qwen", "commands", "ops-nuke.md"), /^---\ndescription: "/);
+    requireContains(path.join(".qwen", "QWEN.md"), /agent-surface Qwen Code rules/);
+    requireContains(path.join(".qwen", "agents", "boss.md"), /^---\nname: boss\n/);
+    const settings = requireJson(path.join(".qwen", "settings.json"));
+    if (settings?.tools?.approvalMode !== "yolo") errors.push("Qwen Code must default to yolo approval mode");
+    if (settings?.mcpServers?.synapse && Object.hasOwn(settings.mcpServers.synapse, "type")) {
+      errors.push("Qwen Code stdio MCP entries must omit type");
+    }
+  } else if (target === "kiro") {
+    requireContains(path.join(".kiro", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
+    requireContains(path.join(".kiro", "steering", "command-ops-nuke.md"), /^---\ninclusion: manual\n---/);
+    requireContains(path.join(".kiro", "steering", "00-precedence-and-safety.md"), /^---\ninclusion: always\n---/);
+    requireContains(path.join(".kiro", "agents", "boss.md"), /^---\nname: boss\n/);
+    requireContains(path.join(".kiro", "agents", "boss.md"), /file:\/\/~\/\.kiro\/steering\/\*\*\/\*\.md/);
+    requireContains(path.join(".kiro", "settings", "permissions.yaml"), /^rules:\n  - capability: all\n    effect: allow\n$/);
+    const mcp = requireJson(path.join(".kiro", "settings", "mcp.json"));
+    if (mcp?.mcpServers?.synapse && Object.hasOwn(mcp.mcpServers.synapse, "type")) {
+      errors.push("Kiro stdio MCP entries must omit type");
+    }
   } else if (target === "antigravity") {
     requireContains(path.join("config", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join("antigravity", "global_workflows", "ops-nuke.md"), /^---\ndescription: "/);
   } else if (target === "antigravity-cli") {
-    const plugin = requireJson(path.join("config", "plugins", "agent-surface", "plugin.json"));
+    const plugin = requireJson(path.join("antigravity-cli", "plugins", "agent-surface", "plugin.json"));
     if (plugin && plugin.name !== "agent-surface") errors.push("Antigravity CLI plugin name must be agent-surface");
-    requireContains(path.join("config", "plugins", "agent-surface", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
-    requireContains(path.join("config", "plugins", "agent-surface", "agents", "boss.md"), /^---\nname: boss\n/);
-    requireContains(path.join("config", "plugins", "agent-surface", "rules", "00-precedence-and-safety.md"), /Antigravity CLI plugin rule/);
-    requireContains(path.join("config", "plugins", "agent-surface", "references", "rules", "10-python.md"), /Scoped agent-surface reference/);
+    requireContains(path.join("antigravity-cli", "plugins", "agent-surface", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
+    requireContains(path.join("antigravity-cli", "plugins", "agent-surface", "agents", "boss.md"), /^---\nname: boss\n/);
+    requireContains(path.join("antigravity-cli", "plugins", "agent-surface", "rules", "00-precedence-and-safety.md"), /Antigravity CLI plugin rule/);
+    requireContains(path.join("antigravity-cli", "plugins", "agent-surface", "references", "rules", "10-python.md"), /Scoped agent-surface reference/);
   } else if (target === "cursor") {
     requirePath(path.join(".cursor", "skills", "ops-flow", "SKILL.md"));
     requirePath(path.join(".cursor", "commands", "ops-nuke.md"));
@@ -910,16 +954,17 @@ export function validateGeneratedTarget(target, outputs) {
   } else if (target === "copilot") {
     const userRoot = vsCodeUserRoot("Code", { scope: "user" });
     requirePath(path.join(".copilot", "skills", "ops-flow", "SKILL.md"));
+    requireContains(path.join(".copilot", "copilot-instructions.md"), /agent-surface GitHub Copilot instructions/);
+    requireContains(path.join(".copilot", "agents", "boss.agent.md"), /^---\nname: boss\n/);
+    const mcp = requireJson(path.join(".copilot", "mcp-config.json"));
+    if (mcp?.mcpServers?.synapse?.type !== "stdio") {
+      errors.push("Copilot CLI stdio MCP entries must use the standard stdio type");
+    }
     requireContains(path.join(userRoot, "instructions", "agent-surface-copilot.instructions.md"), /^---\ndescription: "agent-surface Copilot global instructions"\napplyTo: "\*\*"/);
   } else if (target === "vscode") {
     const userRoot = vsCodeUserRoot("Code", { scope: "user" });
     requirePath(path.join(".agents", "skills", "ops-flow", "SKILL.md"));
     requireContains(path.join(userRoot, "instructions", "agent-surface.instructions.md"), /^---\ndescription: "agent-surface VS Code instructions"\napplyTo: "\*\*"/);
-    requireContains(path.join(userRoot, "prompts", "ops-nuke.md"), /^---\ndescription: "Respawn an unmaintainable project/);
-  } else if (target === "vscodium") {
-    const userRoot = vsCodeUserRoot("VSCodium", { scope: "user" });
-    requirePath(path.join(".agents", "skills", "ops-flow", "SKILL.md"));
-    requireContains(path.join(userRoot, "instructions", "agent-surface.instructions.md"), /^---\ndescription: "agent-surface VSCodium instructions"\napplyTo: "\*\*"/);
     requireContains(path.join(userRoot, "prompts", "ops-nuke.md"), /^---\ndescription: "Respawn an unmaintainable project/);
   } else if (target === "opencode") {
     requireContains(path.join(".config", "opencode", "AGENTS.md"), /agent-surface global OpenCode rules/);
@@ -929,6 +974,10 @@ export function validateGeneratedTarget(target, outputs) {
   } else if (target === "trae") {
     requireContains(path.join(".trae", "user_rules.md"), /agent-surface Trae user rules/);
     requirePath(path.join(".trae", "skills", "ops-flow", "SKILL.md"));
+    requireContains(path.join(".trae-cn", "agents", "boss.md"), /^---\nname: boss\n/);
+    requireContains(path.join(".trae", "traecli.toml"), /^approval_policy = "never"$/m);
+    requireContains(path.join(".trae", "traecli.toml"), /^default_permissions = ":danger-full-access"$/m);
+    requireContains(path.join(".trae", "traecli.toml"), /^\[mcp_servers\.synapse\]$/m);
   } else if (target === "windsurf") {
     requirePath(path.join(".codeium", "windsurf", "skills", "ops-flow", "SKILL.md"));
     requirePath(path.join(".codeium", "windsurf", "global_workflows", "ops-nuke.md"));

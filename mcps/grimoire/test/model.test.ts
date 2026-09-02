@@ -24,6 +24,7 @@ test("SCHEMA_SQL loads and the external-content FTS matches over skills", () => 
 test("deriveCategory maps the leading token; unknown -> other; always derived", () => {
   assert.deepEqual(deriveCategory("detecting-cobalt-strike-beacons"), { category: "detecting", categorySource: "derived" });
   assert.deepEqual(deriveCategory("reverse-engineering-malware"), { category: "reverse", categorySource: "derived" });
+  assert.deepEqual(deriveCategory("re-ghidra"), { category: "reverse", categorySource: "derived" });
   assert.deepEqual(deriveCategory("zzz-unmapped-thing"), { category: "other", categorySource: "derived" });
 });
 
@@ -37,8 +38,9 @@ test("rowToRef truncates the summary to the limit; rowToFull carries provenance"
   const ref = rowToRef(row);
   assert.ok(ref.summary.length <= LIMITS.SUMMARY_CHARS);
   assert.ok(ref.summary.endsWith("…"));
-  const full = rowToFull(row, [{ path: "references/a.md", size: 3 }]);
+  const full = rowToFull(row, [{ path: "references/a.md", size: 3 }], "Example source, Apache-2.0");
   assert.equal(full.provenance.sourceCommit, "abc");
+  assert.equal(full.provenance.attribution, "Example source, Apache-2.0");
   assert.equal(full.categorySource, "derived");
   assert.equal(full.files[0]!.path, "references/a.md");
 });

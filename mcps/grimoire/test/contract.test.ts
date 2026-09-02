@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  FileGetInput, GetInput, REFERENCE_LABEL,
+  CONTRACT_VERSION, FileGetInput, GetInput, REFERENCE_LABEL,
   SearchInput,
   SERVER_INSTRUCTIONS,
   SKILL_ID_RE, TOOL_DESCRIPTIONS,
 } from "../src/contract.js";
 import { decId, extId } from "../src/model.js";
+
+test("public contract version reflects required attribution fields", () => {
+  assert.equal(CONTRACT_VERSION, "1.0.0");
+});
 
 test("id codec round-trips across packs and splits on the first colon", () => {
   for (const [pack, name] of [["fixture", "detecting-cobalt-strike-beacons"], ["anthropic-cybersecurity-skills", "implementing-mfa-enforcement"]] as const) {

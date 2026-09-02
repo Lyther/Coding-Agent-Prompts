@@ -1,19 +1,24 @@
 # Trae adapter
 
-Current implementation writes Trae's native global skill catalog, global user rules, and MCP config.
+The target covers Trae/TraeCode's documented skills, rules, Markdown subagents, IDE MCP JSON, and TraeCode CLI TOML.
 
-Implemented target path:
+User scope:
 
-- `~/.trae/user_rules.md`
 - `~/.trae/skills/<name>/SKILL.md`
-- `~/.trae/references/rules/<rule>.md`
-- `~/.trae/mcp.json` `mcpServers.{synapse,grimoire}`
+- `~/.traecli/skills/<name>/SKILL.md`
+- `~/.trae/user_rules.md` plus current `~/.trae-cn/user_rules/*.md`
+- `~/.trae-cn/agents/<name>.md` and `~/.traecli/agents/<name>.md`
+- `~/.trae/mcp.json`
+- `~/.trae/traecli.toml`
 
-Known project-level surfaces:
+Project scope uses `.trae/skills` and `.traecli/skills`, `.trae/agents` and `.traecli/agents`, `.trae/rules` plus the retained `.trae/user_rules.md`, and `.trae/mcp.json`. Current official TraeCode documentation requires enabling the IDE Subagents directory beta toggle if it is not already active; the CLI discovers its `.traecli` routes directly and can also consume the IDE-compatible `.trae` routes.
 
-- `.trae/project_rules.md`
-- `.trae/mcp.json`
+The CLI TOML merge sets `approval_policy = "never"`, `default_permissions = ":danger-full-access"`, and first-party `mcp_servers` while preserving unrelated settings. The IDE JSON MCP route remains generated separately. High-impact workflows stay explicit-invocation compatibility skills.
 
-First-party MCP wiring (Synapse and Grimoire) is generated and safely merged. External or secret-bearing MCPs remain opt-in. Canonical and reviewed external skills use the installed Trae version's native global skill root; available high-impact commands use explicit-invocation compatibility skills with `disable-model-invocation: true`, whose enforcement remains host-dependent.
+References:
 
-Generated Trae rules bundle only always-on rules. Scoped language policies are distributed as references for project-aware commands.
+- [TraeCode subagents](https://docs.trae.cn/ide_subagents)
+- [TraeCode CLI skills](https://docs.trae.cn/cli_skills)
+- [TraeCode CLI agents](https://docs.trae.cn/cli_agent)
+- [TraeCode CLI config](https://docs.trae.cn/cli_config-file)
+- [Trae rules](https://docs.trae.cn/ide_rules)

@@ -12,6 +12,11 @@ targets:
   droid: true
   kilo: true
   kimi-code: true
+  qoder: true
+  qwen-code: true
+  kiro: true
+  copilot: true
+  trae: true
   antigravity-cli: true
   antigravity: false
   opencode: true

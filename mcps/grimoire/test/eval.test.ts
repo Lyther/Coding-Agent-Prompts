@@ -58,7 +58,7 @@ test("real-pack eval: hit@5/MRR meet the regression floor", { skip: existsSync(R
   const dir = mkdtempSync(join(tmpdir(), "grimoire-realeval-"));
   const store = new Store({ dir });
   try {
-    buildIndex({ packs: [{ serviceId: "anthropic-cybersecurity-skills", path: REAL_PACK, commit: "eval" }], outDir: dir, indexedAt: "2026-01-01T00:00:00.000Z" });
+    buildIndex({ packs: [{ serviceId: "anthropic-cybersecurity-skills", path: REAL_PACK, attribution: "Anthropic Cybersecurity Skills test index." }], outDir: dir, indexedAt: "2026-01-01T00:00:00.000Z" });
     let hits = 0;
     let rrSum = 0;
     for (const q of queries) {
@@ -74,5 +74,37 @@ test("real-pack eval: hit@5/MRR meet the regression floor", { skip: existsSync(R
     const mrr = rrSum / queries.length;
     assert.ok(hitAt5 >= HIT5_FLOOR, `hit@5 ${hitAt5.toFixed(3)} >= ${HIT5_FLOOR}`);
     assert.ok(mrr >= MRR_FLOOR, `MRR ${mrr.toFixed(3)} >= ${MRR_FLOOR}`);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+const REV_PACK = join(HERE, "..", "..", "..", "..", "external", "rev-skills");
+const REV_SKILLS = join(REV_PACK, ".claude", "skills");
+test("rev-skills pack: 121 skills, ghidra search, get", { skip: existsSync(REV_SKILLS) ? false : "rev-skills submodule not checked out" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "grimoire-revskills-"));
+  const store = new Store({ dir });
+  try {
+    const built = buildIndex({
+      packs: [{ serviceId: "rev-skills", path: REV_PACK, skillsRel: ".claude/skills", attribution: "rev-skills test index." }],
+      outDir: dir,
+      indexedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.equal(built.skills, 121, `expected 121 rev-skills, got ${built.skills} skipped=${built.skipped.map((s) => s.dir).join(",")}`);
+    const search = store.search("ghidra", 5);
+    assert.equal(search.status, "ok");
+    if (search.status === "ok") {
+      assert.equal(search.hits[0]?.id, "rev-skills:re-ghidra");
+    }
+    const got = store.get("rev-skills:re-analyze");
+    assert.equal(got.status, "ok");
+    if (got.status === "ok") {
+      assert.equal(got.skill.pack, "rev-skills");
+      assert.equal(got.skill.category, "reverse");
+      assert.match(got.skill.body, /./);
+    }
+    const cracking = store.get("rev-skills:re-cracking");
+    assert.equal(cracking.status, "ok");
+    if (cracking.status === "ok") {
+      assert.match(cracking.skill.body, /授权边界|authorized|CTF/i);
+    }
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });

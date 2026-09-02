@@ -1,34 +1,83 @@
 // grimoire — build-time ONLY writer. Walks pinned skill packs, validates metadata,
-// stores body + every supporting file RAW into a self-contained sqlite index, writes
-// index_meta + the installed expected-source manifest. Write-once: builds into a temp
-// db then atomically renames. Not imported by the server.
+// stores body + every UTF-8 supporting file verbatim in a self-contained sqlite index, writes
+// index_meta + the installed expected-source manifest. Write-once: builds temp artifacts,
+// then publishes them fail-closed. Not imported by the server.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { TextDecoder } from "node:util";
+import { parseDocument as parseYamlDocument } from "yaml";
 import { LIMITS, SLUG_RE } from "./contract.js";
 import { SCHEMA_SQL, SCHEMA_VERSION, deriveCategory, extId } from "./model.js";
 import { resolvePaths } from "./namespace.js";
 
-export interface PackSpec { serviceId: string; path: string; commit?: string } // path = dir containing skills/
-export interface IndexedPack { serviceId: string; path: string; commit: string; sourceHash: string }
+export interface PackSpec {
+  serviceId: string;
+  path: string;
+  commit?: string;
+  skillsRel?: string;
+  attribution: string;
+}
+export interface IndexedPack { serviceId: string; path: string; commit: string; sourceHash: string; attribution: string }
 export interface IndexedManifest { schemaVersion: number; packs: IndexedPack[] }
 export interface BuildResult { manifest: IndexedManifest; skills: number; files: number; skipped: { dir: string; reason: string }[] }
 
 const sha256 = (s: string): string => createHash("sha256").update(s, "utf8").digest("hex");
+const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
+
+function readUtf8Text(file: string, label: string): string {
+  try {
+    return utf8.decode(readFileSync(file));
+  } catch {
+    throw new Error(`${label} is not UTF-8 text: ${file}`);
+  }
+}
+
+function gitToplevel(path: string): string | undefined {
+  try {
+    return execFileSync("git", ["-C", path, "rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || undefined;
+  } catch { return undefined; }
+}
+
+function sameDir(a: string, b: string): boolean {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return resolve(a) === resolve(b);
+  }
+}
+
+function gitOwnsPack(path: string): boolean {
+  const top = gitToplevel(path);
+  return top !== undefined && sameDir(top, path);
+}
 
 function gitHead(path: string): string | undefined {
+  if (!gitOwnsPack(path)) return undefined;
   try {
     return execFileSync("git", ["-C", path, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || undefined;
   } catch { return undefined; }
 }
 
-function indexedSourceIsDirty(path: string): boolean {
+export const DEFAULT_SKILLS_REL = "skills";
+
+export function resolveSkillsRel(rel?: string): string {
+  const value = rel ?? DEFAULT_SKILLS_REL;
+  if (!/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/.test(value)
+    || value.split("/").some((part) => part === "." || part === "..")) {
+    throw new Error(`invalid skillsRel: ${rel ?? ""}`);
+  }
+  return value;
+}
+
+function indexedSourceIsDirty(path: string, skillsRel: string): boolean {
+  if (!gitOwnsPack(path)) return false;
   try {
     return Boolean(execFileSync(
       "git",
-      ["-C", path, "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", "--", "skills"],
+      ["-C", path, "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", "--", skillsRel],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
     ).trim());
   } catch { return false; }
@@ -37,40 +86,28 @@ function indexedSourceIsDirty(path: string): boolean {
 function indexedSourceChanged(snapshots: Map<string, string>): boolean {
   for (const [file, digest] of snapshots) {
     try {
-      if (sha256(readFileSync(file, "utf8")) !== digest) return true;
+      if (sha256(readUtf8Text(file, "indexed source")) !== digest) return true;
     } catch { return true; }
   }
   return false;
 }
 
-// Minimal YAML frontmatter reader: returns the raw scalar fields we need (name,
-// description) and the body. Handles inline + folded multi-line scalar continuations
-// (indented lines following a key), which is how these packs write `description`.
+// Split the Markdown body here; the YAML library owns frontmatter syntax.
 export function parseFrontmatter(text: string): { fields: Record<string, string>; body: string } | null {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
   if (!m) return null;
-  const block = m[1] ?? "";
-  const body = text.slice(m[0].length);
-  const lines = block.split(/\r?\n/);
-  const fields: Record<string, string> = {};
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
-    const kv = /^([A-Za-z0-9_][A-Za-z0-9_-]*):(.*)$/.exec(line); // top-level key (no leading indent)
-    if (!kv) continue;
-    const key = kv[1]!;
-    let value = (kv[2] ?? "").trim();
-    // Block scalar indicators (>, |, with optional chomp) → value is the folded block.
-    if (value === ">" || value === "|" || value === ">-" || value === "|-" || value === ">+" || value === "|+") value = "";
-    // Absorb indented continuation lines (folded scalar); stop at the next top-level key or a list.
-    const parts: string[] = value ? [value] : [];
-    while (i + 1 < lines.length) {
-      const next = lines[i + 1] ?? "";
-      if (/^\s+\S/.test(next) && !/^\s*-\s/.test(next)) { parts.push(next.trim()); i++; }
-      else break;
-    }
-    if (parts.length) fields[key] = parts.join(" ");
+  try {
+    // Third-party packs sometimes have malformed nonessential fields. YAML's
+    // recovery mode still provides the scalar name/description we index.
+    const parsed = parseYamlDocument(m[1] ?? "", { strict: false, logLevel: "silent" }).toJS();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const fields = Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    );
+    return { fields, body: text.slice(m[0].length) };
+  } catch {
+    return null;
   }
-  return { fields, body };
 }
 
 function listSupportingFiles(skillDir: string): string[] {
@@ -92,6 +129,16 @@ export function buildIndex(opts: {
   indexedAt?: string;
   onSourceRead?: (path: string) => void;
 }): BuildResult {
+  if (opts.packs.length === 0) throw new Error("no packs given");
+  const packIds = new Set<string>();
+  for (const pack of opts.packs) {
+    if (!SLUG_RE.test(pack.serviceId)) throw new Error(`invalid pack id: ${pack.serviceId}`);
+    if (packIds.has(pack.serviceId)) throw new Error(`duplicate pack id: ${pack.serviceId}`);
+    if (typeof pack.attribution !== "string" || !pack.attribution.trim()) {
+      throw new Error(`pack ${pack.serviceId}: attribution is required`);
+    }
+    packIds.add(pack.serviceId);
+  }
   const { indexPath, manifestPath, dir } = resolvePaths(opts.outDir);
   const indexedAt = opts.indexedAt ?? new Date().toISOString();
   mkdirSync(dir, { recursive: true });
@@ -114,16 +161,25 @@ export function buildIndex(opts: {
     const updateSourceCommit = db.prepare("UPDATE skills SET source_commit=? WHERE pack=?");
 
     for (const pack of opts.packs) {
+      const attribution = pack.attribution.trim();
       const initialHead = gitHead(pack.path);
-      const baseCommit = pack.commit ?? initialHead ?? "uncommitted";
+      if (pack.commit && initialHead && !/^[0-9a-f]{40}$/.test(pack.commit)) {
+        throw new Error(`pack ${pack.serviceId}: declared commit must be a clean 40-hex Git revision`);
+      }
+      if (pack.commit && initialHead && pack.commit !== initialHead) {
+        throw new Error(`pack ${pack.serviceId}: git HEAD ${initialHead} != declared commit ${pack.commit}`);
+      }
+      const baseCommit = initialHead ?? "uncommitted";
       let commit = baseCommit;
-      const skillsDir = join(pack.path, "skills");
-      // A pack was explicitly requested: a missing skills/ dir is a hard error, not a skip.
+      const skillsRel = resolveSkillsRel(pack.skillsRel);
+      const skillsDir = join(pack.path, skillsRel);
+      // A pack was explicitly requested: a missing skills dir is a hard error, not a skip.
       // Failing here (vs. quietly producing an empty index) prevents a broken/incomplete
       // checkout from clobbering a good index or shipping a contradictory manifest.
-      if (!existsSync(skillsDir)) throw new Error(`pack ${pack.serviceId}: no skills/ directory at ${skillsDir}`);
+      if (!existsSync(skillsDir)) throw new Error(`pack ${pack.serviceId}: no skills directory at ${skillsDir}`);
       const fingerprints: string[] = []; // per-skill stable digests → pack sourceHash
       const sourceSnapshots = new Map<string, string>();
+      let packFiles = 0;
 
       db.exec("BEGIN");
       for (const e of readdirSync(skillsDir, { withFileTypes: true })) {
@@ -131,7 +187,10 @@ export function buildIndex(opts: {
         const skillDir = join(skillsDir, e.name);
         const skillMd = join(skillDir, "SKILL.md");
         if (!existsSync(skillMd)) { result.skipped.push({ dir: e.name, reason: "no SKILL.md" }); continue; }
-        const raw = readFileSync(skillMd, "utf8");
+        if (lstatSync(skillMd).isSymbolicLink()) {
+          throw new Error(`pack ${pack.serviceId}: symbolic SKILL.md is not allowed: ${skillMd}`);
+        }
+        const raw = readUtf8Text(skillMd, `pack ${pack.serviceId}: SKILL.md`);
         sourceSnapshots.set(skillMd, sha256(raw));
         opts.onSourceRead?.(skillMd);
         const parsed = parseFrontmatter(raw);
@@ -156,19 +215,20 @@ export function buildIndex(opts: {
         const fileDigests: string[] = [];
         for (const rel of listSupportingFiles(skillDir)) {
           const file = join(skillDir, rel);
-          const content = readFileSync(file, "utf8");
+          const content = readUtf8Text(file, `pack ${pack.serviceId}: supporting file`);
           sourceSnapshots.set(file, sha256(content));
           opts.onSourceRead?.(file);
           const size = Buffer.byteLength(content, "utf8");
           const fsha = sha256(content);
           insFile.run(id, rel, content, fsha, size);
           result.files++;
+          packFiles++;
           fileDigests.push(`${rel}:${fsha}`);
         }
-        fingerprints.push(`${id}|${bodySha}|${fileDigests.join(",")}`);
+        fingerprints.push(`${id}|${sha256(raw)}|${fileDigests.join(",")}`);
       }
       if (baseCommit !== "uncommitted" && !baseCommit.endsWith("-dirty")
-        && (indexedSourceIsDirty(pack.path) || indexedSourceChanged(sourceSnapshots)
+        && (indexedSourceIsDirty(pack.path, skillsRel) || indexedSourceChanged(sourceSnapshots)
           || (initialHead !== undefined && gitHead(pack.path) !== initialHead))) {
         commit = `${baseCommit}-dirty`;
         updateSourceCommit.run(commit, pack.serviceId);
@@ -177,11 +237,13 @@ export function buildIndex(opts: {
 
       const sourceHash = sha256(fingerprints.sort().join("\n"));
       insMeta.run(`pack:${pack.serviceId}:source_commit`, commit);
-      insMeta.run(`pack:${pack.serviceId}:file_count`, String(result.files));
+      insMeta.run(`pack:${pack.serviceId}:file_count`, String(packFiles));
       insMeta.run(`pack:${pack.serviceId}:source_hash`, sourceHash);
+      insMeta.run(`pack:${pack.serviceId}:attribution`, attribution);
       insMeta.run(`pack:${pack.serviceId}:built_at`, indexedAt);
-      result.manifest.packs.push({ serviceId: pack.serviceId, path: pack.path, commit, sourceHash });
+      result.manifest.packs.push({ serviceId: pack.serviceId, path: pack.path, commit, sourceHash, attribution });
     }
+    insMeta.run("pack_ids", JSON.stringify([...packIds].sort()));
   } catch (e) {
     // Non-destructive: a failed build leaves any existing index + manifest untouched and
     // removes only the half-written temp db (the rename below never ran).
@@ -191,9 +253,17 @@ export function buildIndex(opts: {
   }
   db.close();
 
-  renameSync(tmp, indexPath);
-  try { chmodSync(indexPath, 0o600); } catch { /* best effort */ }
-  writeFileSync(manifestPath, JSON.stringify(result.manifest, null, 2) + "\n", { mode: 0o600 });
+  const manifestTmp = `${manifestPath}.tmp.${process.pid}`;
+  try {
+    if (existsSync(manifestTmp)) rmSync(manifestTmp, { force: true });
+    writeFileSync(manifestTmp, JSON.stringify(result.manifest, null, 2) + "\n", { mode: 0o600 });
+    renameSync(tmp, indexPath);
+    try { chmodSync(indexPath, 0o600); } catch { /* best effort */ }
+    renameSync(manifestTmp, manifestPath);
+  } finally {
+    if (existsSync(tmp)) rmSync(tmp, { force: true });
+    if (existsSync(manifestTmp)) rmSync(manifestTmp, { force: true });
+  }
   return result;
 }
 
@@ -207,7 +277,20 @@ function main(argv: string[]): void {
       const spec = argv[++i] ?? "";
       const c = spec.indexOf(":");
       if (c <= 0) { process.stderr.write(`[grimoire-index] bad --pack (want serviceId:path): ${spec}\n`); process.exit(2); }
-      packs.push({ serviceId: spec.slice(0, c), path: spec.slice(c + 1) });
+      packs.push({ serviceId: spec.slice(0, c), path: spec.slice(c + 1), attribution: "" });
+    } else if (a === "--skills-rel") {
+      const last = packs[packs.length - 1];
+      if (!last) { process.stderr.write("[grimoire-index] --skills-rel must follow --pack\n"); process.exit(2); }
+      try { last.skillsRel = resolveSkillsRel(argv[++i]); }
+      catch (e) { process.stderr.write(`[grimoire-index] ${e instanceof Error ? e.message : String(e)}\n`); process.exit(2); }
+    } else if (a === "--commit") {
+      const last = packs[packs.length - 1];
+      if (!last) { process.stderr.write("[grimoire-index] --commit must follow --pack\n"); process.exit(2); }
+      last.commit = argv[++i] ?? "";
+    } else if (a === "--attribution") {
+      const last = packs[packs.length - 1];
+      if (!last) { process.stderr.write("[grimoire-index] --attribution must follow --pack\n"); process.exit(2); }
+      last.attribution = argv[++i] ?? "";
     } else if (a === "--out") {
       outDir = argv[++i];
     }
