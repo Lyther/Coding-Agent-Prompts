@@ -4,7 +4,7 @@
 // then publishes them fail-closed. Not imported by the server.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { TextDecoder } from "node:util";
@@ -187,6 +187,9 @@ export function buildIndex(opts: {
         const skillDir = join(skillsDir, e.name);
         const skillMd = join(skillDir, "SKILL.md");
         if (!existsSync(skillMd)) { result.skipped.push({ dir: e.name, reason: "no SKILL.md" }); continue; }
+        if (lstatSync(skillMd).isSymbolicLink()) {
+          throw new Error(`pack ${pack.serviceId}: symbolic SKILL.md is not allowed: ${skillMd}`);
+        }
         const raw = readUtf8Text(skillMd, `pack ${pack.serviceId}: SKILL.md`);
         sourceSnapshots.set(skillMd, sha256(raw));
         opts.onSourceRead?.(skillMd);

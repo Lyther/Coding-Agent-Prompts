@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -72,6 +72,27 @@ test("non-UTF-8 SKILL.md fails instead of being silently corrupted", () => {
         outDir: join(dir, "out"),
       }),
       /SKILL\.md is not UTF-8 text/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("symbolic SKILL.md is rejected instead of indexing its target", () => {
+  const dir = join(tmpdir(), `grimoire-symbolic-skill-${process.pid}-${Date.now()}`);
+  const pack = join(dir, "pack");
+  const skillDir = join(pack, "skills", "linked-skill");
+  const outside = join(dir, "outside.md");
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(outside, "---\nname: linked-skill\ndescription: Outside the pack.\n---\nDo not index this.\n");
+  symlinkSync(outside, join(skillDir, "SKILL.md"));
+  try {
+    assert.throws(
+      () => buildIndex({
+        packs: [{ serviceId: "fixture", path: pack, attribution: ATTRIBUTION }],
+        outDir: join(dir, "out"),
+      }),
+      /symbolic SKILL\.md/,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
