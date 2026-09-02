@@ -52,6 +52,25 @@ const mustExist = [
   ["kimi-code", path.join("agents", "boss.md")],
   ["kimi-code", "config.toml"],
   ["kimi-code", "mcp.json"],
+  ["dsh", path.join(".dsh", "skills", "workflow-runtime", "SKILL.md")],
+  ["qoder", path.join(".qoder", "skills", "workflow-runtime", "SKILL.md")],
+  ["qoder", path.join(".qoder", "agents", "boss.md")],
+  ["qoder", path.join(".qoder", "settings.json")],
+  ["qwen-code", path.join(".qwen", "skills", "workflow-runtime", "SKILL.md")],
+  ["qwen-code", path.join(".qwen", "agents", "boss.md")],
+  ["qwen-code", path.join(".qwen", "settings.json")],
+  ["kiro", path.join(".kiro", "skills", "workflow-runtime", "SKILL.md")],
+  ["kiro", path.join(".kiro", "agents", "boss.md")],
+  ["kiro", path.join(".kiro", "settings", "mcp.json")],
+  ["kiro", path.join(".kiro", "settings", "permissions.yaml")],
+  ["copilot", path.join(".copilot", "agents", "boss.agent.md")],
+  ["copilot", path.join(".copilot", "mcp-config.json")],
+  ["antigravity-cli", path.join("antigravity-cli", "plugins", "agent-surface", "plugin.json")],
+  ["trae", path.join(".trae-cn", "agents", "boss.md")],
+  ["trae", path.join(".traecli", "agents", "boss.md")],
+  ["trae", path.join(".traecli", "skills", "workflow-runtime", "SKILL.md")],
+  ["trae", path.join(".trae-cn", "user_rules", "00-precedence-and-safety.md")],
+  ["trae", path.join(".trae", "traecli.toml")],
   ["openhands", path.join(".openhands", "mcp.json")],
   ["goose", path.join(".config", "goose", "config.yaml")],
 ];
@@ -62,7 +81,13 @@ for (const [target, rel] of mustExist) {
     `missing build output: ${target}/${rel}`,
   );
 }
+const antigravityPlugin = JSON.parse(readFileSync(
+  path.join(root, "dist", "antigravity-cli", "antigravity-cli", "plugins", "agent-surface", "plugin.json"),
+  "utf8",
+));
+assert.deepEqual(Object.keys(antigravityPlugin).sort(), ["description", "name"]);
 assert.equal(generated.some((file) => file.includes(`${path.sep}gemini-cli${path.sep}`)), false);
+assert.equal(generated.some((file) => file.includes(`${path.sep}vscodium${path.sep}`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}qa-sec${path.sep}`) || file.endsWith(`${path.sep}qa-sec.md`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}verify-spec${path.sep}`) || file.endsWith(`${path.sep}verify-spec.md`)), false);
 assert.equal(generated.some((file) => file.includes(`${path.sep}arch-api${path.sep}`) || file.endsWith(`${path.sep}arch-api.md`)), false);
@@ -78,24 +103,29 @@ for (const target of [
   "cursor",
   "deepagents",
   "droid",
+  "dsh",
   "goose",
   "grok-build",
+  "kiro",
   "kilo",
   "kimi-code",
   "opencode",
   "openhands",
   "pi",
   "pool",
+  "qoder",
+  "qwen-code",
   "trae",
   "vscode",
-  "vscodium",
   "windsurf",
   "zed",
 ]) {
   const targetFiles = generated.filter((file) => file.includes(`${path.sep}dist${path.sep}${target}${path.sep}`));
-  if (hasLocalOpsServerCommand) {
+  if (hasLocalOpsServerCommand && target !== "dsh") {
     assert.equal(
-      targetFiles.some((file) => file.includes(`${path.sep}ops-server${path.sep}`) || file.endsWith(`${path.sep}ops-server.md`)),
+      targetFiles.some((file) => file.includes(`${path.sep}ops-server${path.sep}`)
+        || file.endsWith(`${path.sep}ops-server.md`)
+        || file.endsWith(`${path.sep}command-ops-server.md`)),
       true,
       `${target}: local ops-server command missing`,
     );
@@ -180,6 +210,44 @@ const bossWorker = [
     bossOk: (t) => /^ {2}- "Read"$/m.test(t) && !/^ {2}- "Bash"$/m.test(t),
     workerOk: (t) => /^ {2}- "\*"$/m.test(t),
   },
+  {
+    boss: path.join(root, "dist", "qoder", ".qoder", "agents", "boss.md"),
+    worker: path.join(root, "dist", "qoder", ".qoder", "agents", "worker.md"),
+    bossOk: (t) => /^tools: Read, Glob, Grep$/m.test(t) && /^permissionMode: plan$/m.test(t),
+    workerOk: (t) => /^tools: Read, Glob, Grep, Edit, Write, Bash$/m.test(t),
+  },
+  {
+    boss: path.join(root, "dist", "qwen-code", ".qwen", "agents", "boss.md"),
+    worker: path.join(root, "dist", "qwen-code", ".qwen", "agents", "worker.md"),
+    bossOk: (t) => /^approvalMode: plan$/m.test(t) && !/^ {2}- run_shell_command$/m.test(t),
+    workerOk: (t) => /^approvalMode: yolo$/m.test(t) && /^ {2}- run_shell_command$/m.test(t),
+  },
+  {
+    boss: path.join(root, "dist", "kiro", ".kiro", "agents", "boss.md"),
+    worker: path.join(root, "dist", "kiro", ".kiro", "agents", "worker.md"),
+    bossOk: (t) => /^tools: \["read"\]$/m.test(t) && !/capability: all/.test(t),
+    workerOk: (t) => /^tools: \["\*"\]$/m.test(t) && /capability: all/.test(t) && /effect: allow/.test(t),
+  },
+  {
+    boss: path.join(root, "dist", "copilot", ".copilot", "agents", "boss.agent.md"),
+    worker: path.join(root, "dist", "copilot", ".copilot", "agents", "worker.agent.md"),
+    bossOk: (t) => /^tools: \["read", "search"\]$/m.test(t),
+    workerOk: (t) => /^tools: \["\*"\]$/m.test(t),
+  },
+  {
+    boss: path.join(root, "dist", "trae", ".trae-cn", "agents", "boss.md"),
+    worker: path.join(root, "dist", "trae", ".trae-cn", "agents", "worker.md"),
+    bossOk: (t) => /^tools: Read, Glob, Grep, Skill$/m.test(t),
+    workerOk: (t) => /^tools: Read, Glob, Grep, Skill, Edit, Write, Bash$/m.test(t),
+  },
+  {
+    boss: path.join(root, "dist", "antigravity-cli", "antigravity-cli", "plugins", "agent-surface", "agents", "boss.md"),
+    worker: path.join(root, "dist", "antigravity-cli", "antigravity-cli", "plugins", "agent-surface", "agents", "worker.md"),
+    bossOk: (t) => /^ {2}- view_file$/m.test(t) && /^ {2}- list_dir$/m.test(t)
+      && /^ {2}- grep_search$/m.test(t) && !/read_file|list_directory/.test(t),
+    workerOk: (t) => /^ {2}- replace_file_content$/m.test(t) && /^ {2}- write_to_file$/m.test(t)
+      && /^ {2}- run_command$/m.test(t),
+  },
 ];
 for (const row of bossWorker) {
   assert.equal(row.bossOk(readFileSync(row.boss, "utf8")), true, `boss contract: ${row.boss}`);
@@ -196,6 +264,10 @@ const jsonMcpHosts = [
   [path.join(root, "dist", "claude-code", ".claude.json"), "mcpServers"],
   [path.join(root, "dist", "cline", ".cline", "data", "settings", "cline_mcp_settings.json"), "mcpServers"],
   [path.join(root, "dist", "kimi-code", "mcp.json"), "mcpServers"],
+  [path.join(root, "dist", "qoder", ".qoder", "settings.json"), "mcpServers"],
+  [path.join(root, "dist", "qwen-code", ".qwen", "settings.json"), "mcpServers"],
+  [path.join(root, "dist", "kiro", ".kiro", "settings", "mcp.json"), "mcpServers"],
+  [path.join(root, "dist", "copilot", ".copilot", "mcp-config.json"), "mcpServers"],
   [path.join(root, "dist", "cursor", ".cursor", "mcp.json"), "mcpServers"],
   [path.join(root, "dist", "openhands", ".openhands", "mcp.json"), "mcpServers"],
   [path.join(root, "dist", "vscode", vsCodeUserRoot("Code", { scope: "user" }), "mcp.json"), "servers"],
@@ -210,6 +282,8 @@ for (const [file, rootKey] of jsonMcpHosts) {
 }
 const kimiMcp = JSON.parse(readFileSync(path.join(root, "dist", "kimi-code", "mcp.json"), "utf8"));
 assert.equal(Object.hasOwn(kimiMcp.mcpServers.synapse, "type"), false);
+const copilotMcp = JSON.parse(readFileSync(path.join(root, "dist", "copilot", ".copilot", "mcp-config.json"), "utf8"));
+assert.equal(copilotMcp.mcpServers.synapse.type, "stdio");
 assert.doesNotMatch(
   readFileSync(path.join(root, "dist", "kimi-code", "skills", "ops-flow", "SKILL.md"), "utf8"),
   /^disableModelInvocation:/m,
@@ -232,11 +306,29 @@ assert.match(codexMcp, /^approval_policy = "never"$/m);
 assert.match(codexMcp, /^sandbox_mode = "danger-full-access"$/m);
 assert.match(codexMcp, /\[mcp_servers\.synapse\]/);
 assert.match(codexMcp, /\[mcp_servers\.grimoire\]/);
+const grokConfig = readFileSync(path.join(root, "dist", "grok-build", ".grok", "config.toml"), "utf8");
+assert.match(grokConfig, /^\[ui\]$/m);
+assert.match(grokConfig, /^permission_mode = "always-approve"$/m);
+assert.match(grokConfig, /\[mcp_servers\.synapse\]/);
+assert.match(grokConfig, /\[mcp_servers\.grimoire\]/);
+const qoderSettings = JSON.parse(readFileSync(path.join(root, "dist", "qoder", ".qoder", "settings.json"), "utf8"));
+assert.equal(qoderSettings.general.defaultPermissionMode, "bypass_permissions");
+assert.equal(qoderSettings.skills.loadFromAgentsDirectory, false);
+const qwenSettings = JSON.parse(readFileSync(path.join(root, "dist", "qwen-code", ".qwen", "settings.json"), "utf8"));
+assert.equal(qwenSettings.tools.approvalMode, "yolo");
+const traeCliConfig = readFileSync(path.join(root, "dist", "trae", ".trae", "traecli.toml"), "utf8");
+assert.match(traeCliConfig, /^approval_policy = "never"$/m);
+assert.match(traeCliConfig, /^default_permissions = ":danger-full-access"$/m);
+assert.match(traeCliConfig, /^\[mcp_servers\.synapse\]$/m);
+assert.match(
+  readFileSync(path.join(root, "dist", "kiro", ".kiro", "settings", "permissions.yaml"), "utf8"),
+  /^rules:\n  - capability: all\n    effect: allow\n$/,
+);
 const gooseMcp = readFileSync(path.join(root, "dist", "goose", ".config", "goose", "config.yaml"), "utf8");
 assert.match(gooseMcp, /^ {2}grimoire:/m);
 assert.match(gooseMcp, /cmd: ~\/\.local\/bin\/grimoire-server/);
 
-const mcpsDefaultPlan = run(["install", "--target", "vscodium", "--dest", "/tmp/agent-surface-f001", "--category", "mcps", "--dry-run"]);
+const mcpsDefaultPlan = run(["install", "--target", "qwen-code", "--dest", "/tmp/agent-surface-f001", "--category", "mcps", "--dry-run"]);
 assert.match(mcpsDefaultPlan, /MCP \+= grimoire, synapse/);
 
 const targetsRegistry = JSON.parse(readFileSync(path.join(root, "registry", "targets.json"), "utf8"));

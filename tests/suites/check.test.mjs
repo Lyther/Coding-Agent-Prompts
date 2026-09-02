@@ -42,6 +42,10 @@ assert.equal(clineCapabilities.surfaces.subagents.generation, "generated");
 assert.match(clineCapabilities.surfaces.subagents.notes, /subagents\/\*\.md source primitive compiles to Cline Configured Agents/);
 assert.equal(clineCapabilities.surfaces["runtime-subagents"].generation, "not-applicable");
 assert.match(clineCapabilities.surfaces["runtime-subagents"].notes, /separate from Configured Agents/);
+assert.deepEqual(targetCapabilities.targets["grok-build"].surfaces.rules.paths, [
+  "AGENTS.md",
+  ".grok/references/rules/<rule>.md",
+]);
 
 // renders validation: registry must not claim a surface token that no producer emits
 const targetsRegistryPath = path.join(root, "registry", "targets.json");
@@ -55,6 +59,27 @@ try {
   assert.match(bogusRenders.stderr, /renders token not emitted by producer: bogus-token/);
 } finally {
   writeFileSync(targetsRegistryPath, targetsRegistryOriginal);
+}
+assert.equal(run(["check"]).trim(), "check: ok");
+
+// SUBSTITUTE_JUSTIFICATION
+// - substitute: one malformed legacy-owned registry value restored immediately after the check
+// - replaces: a historical ownership typo that would otherwise require corrupting a real release registry
+// - necessity: schema rejection requires a deterministic invalid value and must not leave repository state changed
+// - real-option: the production check command and real registry loader are used; only the invalid input is controlled
+// - proof-limit: proves structural validation, not the later filesystem cleanup operation
+// - real-proof: tests/suites/install.test.mjs exercises real retired-target cleanup on a disposable filesystem
+const legacyOwnedPath = path.join(root, "registry", "legacy-owned.json");
+const legacyOwnedOriginal = readFileSync(legacyOwnedPath, "utf8");
+try {
+  const malformedLegacyOwned = JSON.parse(legacyOwnedOriginal);
+  malformedLegacyOwned.files[0].output = 17;
+  writeFileSync(legacyOwnedPath, `${JSON.stringify(malformedLegacyOwned, null, 2)}\n`);
+  const malformedLegacy = status(["check"]);
+  assert.equal(malformedLegacy.status, 1);
+  assert.match(`${malformedLegacy.stdout}${malformedLegacy.stderr}`, /registry\/legacy-owned\.json/);
+} finally {
+  writeFileSync(legacyOwnedPath, legacyOwnedOriginal);
 }
 assert.equal(run(["check"]).trim(), "check: ok");
 
@@ -123,6 +148,16 @@ try {
 } finally {
   writeFileSync(optionalServicesPath, optionalServicesOriginal);
 }
+try {
+  const mutated = JSON.parse(optionalServicesOriginal);
+  mutated.services["anthropic-cybersecurity-skills"].attribution = "   ";
+  writeFileSync(optionalServicesPath, `${JSON.stringify(mutated, null, 2)}\n`);
+  const r = status(["check"]);
+  assert.equal(r.status, 1, "served Grimoire pack attribution must contain non-whitespace text");
+  assert.match(`${r.stdout}${r.stderr}`, /registry\/optional-services\.json/);
+} finally {
+  writeFileSync(optionalServicesPath, optionalServicesOriginal);
+}
 assert.equal(run(["check"]).trim(), "check: ok");
 
 const inventory = run(["inventory"]);
@@ -181,7 +216,10 @@ assert.deepEqual(registry.commands.map((command) => command.name).sort(), expect
 assert.equal(registry.commands.every((command) => command.model_invocation === false), true);
 const opsServer = registry.commands.find((command) => command.name === "ops-server");
 assert.equal(Boolean(opsServer), hasLocalOpsServerCommand);
-if (opsServer) assert.equal(Object.keys(opsServer.targets).length, Object.keys(targets).length);
+if (opsServer) {
+  assert.equal(Object.hasOwn(opsServer.targets, "dsh"), false);
+  assert.equal(Object.keys(opsServer.targets).length, Object.keys(targets).length - 1);
+}
 
 const shipCommands = JSON.parse(run(["commands", "--phase", "ship", "--json"]));
 assert.equal(shipCommands.commands.every((command) => command.phase === "ship"), true);

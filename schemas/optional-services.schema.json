@@ -9,6 +9,9 @@
     "services": {
       "type": "object",
       "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
       "additionalProperties": {
         "type": "object",
         "required": [
@@ -37,6 +40,10 @@
           "commit": {
             "type": "string",
             "pattern": "^[0-9a-f]{40}$"
+          },
+          "attribution": {
+            "type": "string",
+            "pattern": "\\S"
           },
           "kind": {
             "enum": [
@@ -153,6 +160,42 @@
                   "const": true
                 }
               }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "source-pack"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "attribution"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "served_by": {
+                  "contains": {
+                    "const": "grimoire"
+                  }
+                }
+              },
+              "required": [
+                "served_by"
+              ]
+            },
+            "then": {
+              "required": [
+                "attribution"
+              ]
             }
           },
           {

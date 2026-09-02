@@ -6,20 +6,25 @@ Notable changes to agent-surface and its first-party MCP services. Format: [Keep
 
 ### Added
 
-- **Grimoire MCP (v0.1)** — read-only, just-in-time retrieval over large Agent-Skill packs. Serves the 754-skill `anthropic-cybersecurity-skills` pack from a self-contained `node:sqlite` FTS5 index so the model searches for a skill instead of loading a 750-entry startup catalog. 4 tools (`grimoire_search`/`list`/`get`/`file_get`), build-on-install index, real-pack eval gate (hit@5 0.80 / MRR 0.686). See `mcps/grimoire/`.
-- **First-party MCP auto-wiring across all 17 MCP-capable hosts** — Synapse + Grimoire are generated and **non-destructively merged** into each host's native config across JSON, TOML, and YAML families. Adds VSCodium, Grok Build, Antigravity CLI (JSON) and Goose, Poolside (YAML, via a new safe block-merge that preserves keys/comments/siblings and is idempotent). Full matrix: `docs/reference/targets.md`.
+- **Grimoire MCP (v0.1 package; v1.0 tool contract)** - read-only, just-in-time retrieval over the `anthropic-cybersecurity-skills` and `rev-skills` packs from a self-contained `node:sqlite` FTS5 index. Four tools (`grimoire_search`/`list`/`get`/`file_get`) expose source/license attribution and fail closed on stale provenance.
+- **First-party MCP auto-wiring across all 22 MCP-capable hosts** - Synapse + Grimoire are generated and non-destructively merged into each host's native config across JSON, TOML, and YAML families. Full matrix: `docs/reference/targets.md`.
+- **2026 runtime portfolio refresh** - adds DSH, Qoder, Qwen Code, and Kiro; upgrades Copilot CLI, Grok Build, Antigravity CLI, and Trae; retires VSCodium; records Amp, Auggie, Crush, and Warp as planned.
 - **`doctor` MCP health** — checks linked binaries, the synapse sidecar, and grimoire **index freshness** (installed manifest pin vs the repo registry pin).
 - **CI** — a Node-22 `mcp` job runs the grimoire (incl. real-pack eval) and synapse package suites + audits on every PR.
 
 ### Changed
 
-- **`/ops:docs` command** rewritten to the Diátaxis + minimalism model: aggressive, repo-fit, opinionated on a clean/less-is-more house style (653 → 159 lines).
+- **`ops-docs` skill** rewritten to the Diátaxis + minimalism model: aggressive, repo-fit, and concise by default.
 - **README** rewritten lean (203 → ~100 lines); the full target matrix moved to `docs/reference/targets.md`.
+- **Full-access policy ownership** - Kilo and OpenCode full installs replace the complete permission object with wildcard allow while preserving unrelated top-level settings; category-only MCP installs do not alter host-wide permission or sharing controls.
 
 ### Fixed
 
 - **MCP opt-in** — `--category mcps` without `--service` now selects first-party services only; external/secret-bearing MCPs (e.g. `agentmemory`) require an explicit `--service`.
 - **Install correctness** — `grimoire-index` wrapper resolves the real entrypoint (derived from `package.json#bin`); a missing required pack fails the install (exit 1) non-destructively instead of silently succeeding.
+- **Grimoire provenance and lifecycle** - requires explicit attribution, marks Git-less input `uncommitted`, fingerprints complete skill source, cleans failed publication temporaries, and reopens atomic index replacements.
+- **Reinstall safety** - cleans exact declared Gemini/VSCodium and adapter-migration routes while preserving outputs still shared with active targets; maintained JSONC, TOML, and YAML libraries preserve unrelated config; Claude Code and Copilot can share the standard project `.mcp.json` route.
+- **Synapse cross-project reads** - binds the cursor to the selected project and returns non-mutable cross-project ids, preventing row-id collisions from reaching local `memory_get` or `memory_forget`.
 
 ## Components
 

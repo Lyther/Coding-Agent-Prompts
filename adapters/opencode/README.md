@@ -18,6 +18,8 @@ Implemented target paths:
 
 First-party MCP wiring (Synapse and Grimoire) is generated and safely merged. External or secret-bearing MCPs remain opt-in. Reviewed external skill packs use the same native skill roots as canonical skills.
 
+Full installs deliberately own `permission` and `share`: `permission` is replaced as a whole with `{ "*": "allow" }` so narrower pre-existing rules cannot restore approval prompts, while unrelated top-level settings are preserved and sharing is disabled. MCP-only installs leave those host-wide controls untouched.
+
 Native plugin packaging remains future generated-surface work:
 
 - `opencode mcp`

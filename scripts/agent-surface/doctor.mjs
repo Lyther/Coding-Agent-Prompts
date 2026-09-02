@@ -11,6 +11,8 @@ import { commandVersion } from "./proc.mjs";
 import { readOptionalServices, root } from "./registry.mjs";
 import { exists } from "./util.mjs";
 
+const GRIMOIRE_SCHEMA_VERSION = 2;
+
 export async function doctor() {
   const checks = [];
   checks.push(["node", process.version]);
@@ -54,18 +56,24 @@ async function grimoireIndexStatus() {
   let manifest;
   try { manifest = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")); }
   catch { return "stale: unreadable manifest (npm run install:grimoire)"; }
-  const registry = await readOptionalServices();
-  const requiredServed = Object.entries(registry.services ?? {})
-    .filter(([, service]) => Array.isArray(service.served_by) && service.served_by.includes("grimoire")
-      && (service.optional === false || service.status === "required"))
-    .map(([id]) => id);
-  const installedIds = new Set((manifest.packs ?? []).map((pack) => pack.serviceId));
-  const missingRequired = requiredServed.filter((id) => !installedIds.has(id));
-  if (missingRequired.length) {
-    return `stale: required pack ${missingRequired.join(",")} missing from index (npm run install:grimoire)`;
+  if (!Array.isArray(manifest?.packs)
+    || manifest.packs.some((pack) => !pack || typeof pack !== "object" || typeof pack.serviceId !== "string")) {
+    return "stale: malformed manifest (npm run install:grimoire)";
   }
-  for (const pack of manifest.packs ?? []) {
+  const packs = manifest.packs;
+  if (!packs.length) return "stale: empty manifest (npm run install:grimoire)";
+  const registry = await readOptionalServices();
+  const installedIds = new Set(packs.map((pack) => pack.serviceId));
+  const servedIds = Object.entries(registry.services ?? {})
+    .filter(([, service]) => Array.isArray(service.served_by) && service.served_by.includes("grimoire"))
+    .map(([id]) => id)
+    .sort();
+  if (JSON.stringify([...installedIds].sort()) !== JSON.stringify(servedIds)) {
+    return "stale: manifest pack set differs from registry (npm run install:grimoire)";
+  }
+  for (const pack of packs) {
     const pin = registry.services?.[pack.serviceId]?.commit;
+    const attribution = registry.services?.[pack.serviceId]?.attribution;
     const installed = String(pack.commit ?? "");
     if (pin && installed.endsWith("-dirty")) {
       const builtFrom = installed.slice(0, -"-dirty".length);
@@ -77,9 +85,13 @@ async function grimoireIndexStatus() {
     if (pin && pack.commit !== pin) {
       return `stale: ${pack.serviceId} installed ${installed.slice(0, 8)} but repo pins ${String(pin).slice(0, 8)} (npm run install:grimoire)`;
     }
+    if (attribution && pack.attribution !== attribution) {
+      return `stale: ${pack.serviceId} attribution differs from registry (npm run install:grimoire)`;
+    }
   }
-  const packs = Array.isArray(manifest.packs) ? manifest.packs : [];
-  if (!packs.length) return "ok (no packs)";
+  if (manifest.schemaVersion !== GRIMOIRE_SCHEMA_VERSION) {
+    return `stale: manifest schema ${String(manifest.schemaVersion)} != ${GRIMOIRE_SCHEMA_VERSION} (npm run install:grimoire)`;
+  }
   return `ok (${packs.map((pack) => `${pack.serviceId}@${String(pack.commit ?? "").slice(0, 8)}`).join(", ")})`;
 }
 

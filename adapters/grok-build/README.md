@@ -1,18 +1,18 @@
-# Grok Build Adapter
+# Grok Build adapter
 
-Generates Grok Build skills, project instructions, and external Agent Skills.
+Generates native skills, project `AGENTS.md` instructions, external Agent Skills, and current TOML configuration.
 
-## Outputs
+Outputs:
 
 - `.grok/skills/<name>/SKILL.md`
 - `.grok/skills/<external-skill>/...`
-- `AGENTS.md` for project-scope installs
-- `.grok/references/rules/<rule>.md` for project-scope scoped language references
+- `AGENTS.md` and `.grok/references/rules/<rule>.md` for project instructions
+- `.grok/config.toml` with `mcp_servers`; user-scope installs also set `ui.permission_mode = "always-approve"`
 
-## Notes
+The installer merges owned TOML fields and MCP tables while preserving unrelated top-level values, table siblings, and user-owned MCP servers. Project installs do not write the user-scoped UI permission default. The obsolete `.grok/settings.json` route is no longer generated.
 
-- Grok reads `.grok/skills/`, `~/.grok/skills/`, enabled plugin skills, and Agent Skills compatibility roots.
-- External skill packs render only when the optional-service entry declares `skill_roots`. `anthropic-cybersecurity-skills` is kept as a pinned source asset but is not emitted into Grok Build skill roots by default.
-- Project instructions use the `AGENTS.md` family. User-scope installs only emit skill folders.
-- Project instruction files bundle only always-on rules. Scoped language policies are reference files for project-aware commands.
-- Available high-impact commands use explicit-invocation compatibility skills with `disable-model-invocation: true`; Grok Build enforcement remains unproven.
+References:
+
+- [Grok Build settings](https://docs.x.ai/build/settings)
+- [MCP servers](https://docs.x.ai/build/features/mcp-servers)
+- [Skills and plugins](https://docs.x.ai/build/features/skills-plugins-marketplaces)

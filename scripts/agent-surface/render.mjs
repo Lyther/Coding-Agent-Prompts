@@ -83,6 +83,83 @@ export function renderKimiCodeSubagent(source) {
   ].join("\n");
 }
 
+export function renderQwenCodeSubagent(source) {
+  const mapped = qwenCodeSubagentAccess(source.metadata.access);
+  const lines = [
+    "---",
+    `name: ${source.metadata.name}`,
+    `description: "${yamlString(source.metadata.description)}"`,
+    `approvalMode: ${mapped.approvalMode}`,
+  ];
+  if (source.metadata.model !== "inherit") lines.push(`model: ${source.metadata.model}`);
+  lines.push(
+    "tools:",
+    ...mapped.tools.map((tool) => `  - ${tool}`),
+    "---",
+    "",
+    source.body.trim(),
+    "",
+  );
+  return lines.join("\n");
+}
+
+export function renderKiroSubagent(source) {
+  const mapped = kiroSubagentAccess(source.metadata.access);
+  const lines = [
+    "---",
+    `name: ${source.metadata.name}`,
+    `description: "${yamlString(source.metadata.description)}"`,
+    `tools: ${JSON.stringify(mapped.tools)}`,
+  ];
+  if (source.metadata.model !== "inherit") lines.push(`model: ${source.metadata.model}`);
+  lines.push(
+    "permissions:",
+    "  rules:",
+    ...mapped.capabilities.flatMap((capability) => [
+      `    - capability: ${capability}`,
+      "      effect: allow",
+    ]),
+    "resources:",
+    '  - "file://.kiro/steering/**/*.md"',
+    '  - "file://~/.kiro/steering/**/*.md"',
+    '  - "skill://.kiro/skills/**/SKILL.md"',
+    '  - "skill://~/.kiro/skills/**/SKILL.md"',
+    "---",
+    "",
+    source.body.trim(),
+    "",
+  );
+  return lines.join("\n");
+}
+
+export function renderCopilotSubagent(source) {
+  const tools = copilotSubagentTools(source.metadata.access);
+  return [
+    "---",
+    `name: ${source.metadata.name}`,
+    `description: "${yamlString(source.metadata.description)}"`,
+    `tools: [${tools.map((tool) => JSON.stringify(tool)).join(", ")}]`,
+    "---",
+    "",
+    source.body.trim(),
+    "",
+  ].join("\n");
+}
+
+export function renderTraeSubagent(source) {
+  const tools = traeSubagentTools(source.metadata.access);
+  return [
+    "---",
+    `name: ${source.metadata.name}`,
+    `description: "${yamlString(source.metadata.description)}"`,
+    `tools: ${tools.join(", ")}`,
+    "---",
+    "",
+    source.body.trim(),
+    "",
+  ].join("\n");
+}
+
 export function renderCursorSubagent(source) {
   return [
     "---",
@@ -98,8 +175,8 @@ export function renderCursorSubagent(source) {
   ].join("\n");
 }
 
-export function renderGeminiSubagent(source) {
-  const tools = geminiSubagentAccess(source.metadata.access);
+export function renderAntigravityCliSubagent(source) {
+  const tools = antigravityCliSubagentTools(source.metadata.access);
   return [
     "---",
     `name: ${source.metadata.name}`,
@@ -190,6 +267,39 @@ export async function renderDroidCommand(source) {
 
 export async function renderOpenCodeCommand(source) {
   return source.body;
+}
+
+export async function renderNativeMarkdownCommand(source) {
+  const description = yamlString(source.metadata.description ?? firstHeading(source.body) ?? `Run ${source.name.replaceAll("-", " ")}.`);
+  return [
+    "---",
+    `name: ${source.name}`,
+    `description: "${description}"`,
+    "---",
+    "",
+    source.body,
+  ].join("\n");
+}
+
+export async function renderQwenCodeCommand(source) {
+  const description = yamlString(source.metadata.description ?? firstHeading(source.body) ?? `Run ${source.name.replaceAll("-", " ")}.`);
+  return [
+    "---",
+    `description: "${description}"`,
+    "---",
+    "",
+    source.body,
+  ].join("\n");
+}
+
+export async function renderKiroManualSteering(source) {
+  return [
+    "---",
+    "inclusion: manual",
+    "---",
+    "",
+    source.body,
+  ].join("\n");
 }
 
 export async function renderWindsurfWorkflow(source) {
@@ -334,6 +444,20 @@ export function renderKiloRuleDocument(rule) {
   ].join("\n");
 }
 
+export function renderKiroRuleDocument(rule) {
+  const frontmatter = rule.alwaysApply === false
+    ? ["inclusion: fileMatch", `fileMatchPattern: ${JSON.stringify(rule.globs ?? [])}`]
+    : ["inclusion: always"];
+  return [
+    "---",
+    ...frontmatter,
+    "---",
+    "",
+    stripFrontmatter(rule.text).trim(),
+    "",
+  ].join("\n");
+}
+
 export async function renderVsCodeInstructionDocument(title, target) {
   return [
     "---",
@@ -439,12 +563,46 @@ export function kimiCodeSubagentTools(access) {
   fail(`unsupported subagent access: ${access}`);
 }
 
-export function geminiSubagentAccess(access) {
-  const readOnly = ["glob", "grep_search", "list_directory", "read_file", "read_many_files"];
+export function qwenCodeSubagentAccess(access) {
+  const readOnly = ["read_file", "grep_search", "glob", "web_fetch"];
+  if (access === "read-only") return { approvalMode: "plan", tools: readOnly };
+  const readWrite = [...readOnly, "write_file", "edit"];
+  if (access === "read-write") return { approvalMode: "auto-edit", tools: readWrite };
+  if (access === "read-write-shell") {
+    return { approvalMode: "yolo", tools: [...readWrite, "run_shell_command"] };
+  }
+  fail(`unsupported subagent access: ${access}`);
+}
+
+export function kiroSubagentAccess(access) {
+  if (access === "read-only") return { tools: ["read"], capabilities: ["fs_read"] };
+  if (access === "read-write") return { tools: ["read", "write"], capabilities: ["fs_read", "fs_write"] };
+  if (access === "read-write-shell") return { tools: ["*"], capabilities: ["all"] };
+  fail(`unsupported subagent access: ${access}`);
+}
+
+export function copilotSubagentTools(access) {
+  if (access === "read-only") return ["read", "search"];
+  if (access === "read-write") return ["read", "search", "edit"];
+  if (access === "read-write-shell") return ["*"];
+  fail(`unsupported subagent access: ${access}`);
+}
+
+export function traeSubagentTools(access) {
+  const readOnly = ["Read", "Glob", "Grep", "Skill"];
   if (access === "read-only") return readOnly;
-  const readWrite = [...readOnly, "replace", "write_file"];
+  const readWrite = [...readOnly, "Edit", "Write"];
   if (access === "read-write") return readWrite;
-  if (access === "read-write-shell") return [...readWrite, "run_shell_command"];
+  if (access === "read-write-shell") return [...readWrite, "Bash"];
+  fail(`unsupported subagent access: ${access}`);
+}
+
+export function antigravityCliSubagentTools(access) {
+  const readOnly = ["view_file", "list_dir", "grep_search"];
+  if (access === "read-only") return readOnly;
+  const readWrite = [...readOnly, "replace_file_content", "write_to_file"];
+  if (access === "read-write") return readWrite;
+  if (access === "read-write-shell") return [...readWrite, "run_command"];
   fail(`unsupported subagent access: ${access}`);
 }
 

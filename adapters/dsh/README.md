@@ -1,0 +1,11 @@
+# DSH adapter
+
+DSH (DeepSeek Harness) is supported at its stable Developer Preview boundary: native Agent Skills only. Canonical and reviewed external skills render to `~/.dsh/skills/<name>/SKILL.md` or `.dsh/skills/<name>/SKILL.md`.
+
+Manual commands, Cordis profiles, subagents, and MCP are not generated. Those contracts are still changing, and DSH's workspace-scoped MCP design is unresolved. Add them only after the runtime publishes stable file formats and a real discovery run passes.
+
+References:
+
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+- [DSH skills](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md)
+- [Workspace MCP discussion](https://github.com/deepseek-ai/deepseek-harness/discussions/941)

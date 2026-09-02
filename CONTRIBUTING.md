@@ -1,6 +1,6 @@
 # Contributing
 
-agent-surface compiles one source tree into 21 agent-host targets. Architecture: [docs/architecture.md](docs/architecture.md). Registries are the source of truth; `check` + `test` gate every change.
+agent-surface compiles one source tree into 25 agent-host targets. Architecture: [docs/architecture.md](docs/architecture.md). Registries are the source of truth; `check` + `test` gate every change.
 
 ## Setup
 
@@ -10,7 +10,7 @@ npm run check   # registry/schema/producer coherence
 npm test        # behaviour snapshots
 ```
 
-No runtime dependencies. Node 20 runs the repo; the MCP packages under `mcps/` need Node ≥ 22.17 (`node:sqlite`).
+The root compiler uses locked Ajv and JSONC/TOML/YAML format dependencies and supports Node >= 18. The MCP packages under `mcps/` need Node >= 22.17 (`node:sqlite`).
 
 ## The loop
 
@@ -21,7 +21,7 @@ No runtime dependencies. Node 20 runs the repo; the MCP packages under `mcps/` n
 
 ## Adding things
 
-- **Command / rule / subagent** — add the file under `commands/`, `rules/`, or `subagents/`. It renders to every target automatically. Run `check` + `test`.
+- **Command / rule / subagent** - add the file under `commands/`, `rules/`, or `subagents/`. It renders only through adapters that declare that source surface; update normalized subagent target flags when adding a target. Run `check` + `test`.
 - **Target** — add the adapter entry (+ its producers) to `scripts/agent-surface/targets.mjs`, its render fns to `scripts/agent-surface/render.mjs`, and its install root to `scripts/agent-surface/roots.mjs`; then a matching entry in **`registry/targets.json`** (`renders` tokens) and **`registry/target-capabilities.json`** (`generated_render_tokens` + `surfaces`). The three must agree — `check` enforces it. Add an `adapters/<target>/README.md` and snapshot assertions in `tests/`.
 - **MCP wiring for a host** — add `mcpConfig` to the adapter in `targets.mjs` (`relativeOutput`, `format`, `defaultEnabled`; `scopes`/`emitOutput` as needed), with the merge logic in `scripts/agent-surface/merge.mjs`, and add the `mcps` token to both registries. New config formats need a **non-destructive merge** that preserves siblings/comments, is idempotent, and **blocks (never corrupts)** on an ambiguous shape — plus a merge test. Then classify the target `generated` in `surfaces.mcp`.
 - **External skill pack** — add it as a pinned submodule under `external/` and a `skill-pack` entry with `skill_roots` in `registry/optional-services.json`. Large packs that shouldn't load at startup stay `source-pack` (no `skill_roots`) and are served by an MCP via `served_by`.
@@ -29,7 +29,7 @@ No runtime dependencies. Node 20 runs the repo; the MCP packages under `mcps/` n
 
 ## Rules
 
-- **Merge, never clobber.** The compiler owns only the keys it writes; user entries and comments are preserved.
+- **Merge, never clobber.** The compiler owns only the keys it writes; user sibling values and comments outside regenerated owned subtrees are preserved.
 - **Honest matrix.** Every target is `generated` / `manual` / `not-generated` / `not-applicable` with a reason in `target-capabilities.json` — no silent gaps.
 - **Evidence, not invention.** Docs claims trace to a file/command/config; unknowns are marked, not guessed.
 - **CI is the gate.** `check`, `test`, `build --target all`, and the MCP package suites must be green before merge.
