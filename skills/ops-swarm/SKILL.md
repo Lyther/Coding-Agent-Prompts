@@ -91,10 +91,10 @@ Runtime assignment fields:
 
 ```json
 {
-  "runtime": "kilo-cli|kilo-ide|codex-exec|claude-code|grok-build|opencode|goose|cursor-agent|antigravity-cli|antigravity-desktop|ollama-cloud|current-session|manual",
+  "runtime": "kilo-cli|kilo-ide|codex-exec|claude-code|dsh|grok-build|opencode|cline|kimi-code|goose|cursor-agent|antigravity-cli|antigravity-desktop|ollama-cloud|current-session|manual",
   "model": "exact provider/model id or env placeholder",
   "agent_or_mode": "code|plan|debug|ask|custom-agent|not_applicable",
-  "launch_shape": "headless_cli|ide_agent_manager|ollama_launch|ollama_api|native_subagent|interactive_supervised|manual",
+  "launch_shape": "headless_cli|native_agent_manager|ollama_launch|ollama_api|native_subagent|interactive_supervised|manual",
   "subagent_policy": "parallel_allowed|serial_only|disabled",
   "worktree_policy": "required|preferred|not_needed",
   "probe_ref": "command output or skipped reason"
@@ -106,6 +106,7 @@ Before assigning worker-led subagents, verify the target's subagent mechanism an
 Use runtime-specific prompt variants instead of a generic "use subagents" instruction:
 
 - Kilo CLI: use Task-tool or `@agent-name` subagents after `kilo run --help`, `kilo agent list`, and model/config probes pass.
+- Kilo VS Code: query `agent_manager_models`, then use `agent_manager` with explicit task model/provider/variant overrides; do not shell out to another Kilo process.
 - Claude Code: use the Agent tool or agent teams for small fan-out; use dynamic workflows only for large repeatable fan-out where script-managed orchestration is worth the overhead.
 - Antigravity CLI: validate the staged plugin under `~/.gemini/antigravity-cli/plugins/agent-surface`, register it with `agy plugin install`, then use its agents.
 - Codex: explicitly ask the parent Codex session to spawn one subagent per independent point, wait for all results, and summarize. Use `codex exec` for single role sessions unless the current Codex surface confirms subagent visibility.
@@ -114,9 +115,9 @@ For aggressive Kilo worker assignment, use a prompt shape like this after probin
 
 ```text
 Runtime: Kilo CLI.
-Model: $KILO_WORKER_MODEL, expected to resolve to Kimi-K2.7 or the approved replacement.
+Model: $KILO_WORKER_MODEL, expected to resolve to an ID returned by the current `kilo models` output.
 Agent/mode: code or the configured implementation agent.
-Launch: kilo run --dir "$repo" --model "$KILO_WORKER_MODEL" --agent code --format json --title "$packet_id" < "$prompt_file"
+Launch: kilo run --auto --dir "$repo" --model "$KILO_WORKER_MODEL" --variant "$KILO_WORKER_EFFORT" --agent code --format json --title "$packet_id" "<packet prompt>"
 
 You are the worker lead for packet <packet_id>.
 Use Kilo subagents in parallel via the Task tool when subtasks are independent.
@@ -131,6 +132,7 @@ Kilo-specific notes from current docs and local probe:
 - Kilo CLI exposes `kilo run`, `kilo serve`, `kilo agent`, `kilo models`, and `kilo roll-call`.
 - `kilo run` accepts `--model`, `--agent`, `--format json`, `--dir`, `--variant`, and `--auto`; use `--auto` for this distribution and record the effective full-access mode.
 - Kilo subagents run isolated sessions with tailored prompts, models, tool access, and permissions. Primary agents can invoke them through the Task tool, and users can invoke configured subagents with `@agent-name`.
+- Kilo Agent Manager is an extension feature. When the driver is Kilo VS Code, use its native model search and session tools; do not assume those tools exist in Kilo CLI.
 - Current Kilo docs say dedicated Orchestrator mode is deprecated; agents with full tool access now support subagents natively. Prefer explicit agent/mode assignment over relying on a legacy orchestrator label.
 - If Kilo config validation fails, do not launch packet work. Record the config error as `probe_result=failed` and choose another approved runtime or ask for config repair.
 
@@ -362,9 +364,9 @@ Use provider/model diversity only where it reduces correlated failure. Prefer on
 
 Provider selection order for non-trivial swarms:
 
-1. Probe approved installed headless CLIs and Ollama Cloud models.
-2. Assign distinct providers/model families to independent packets where privacy and budget allow.
-3. Use native subagent tools for local parallelism, cheap decomposition, or when external providers are unavailable, unapproved, or a poor fit.
+1. Use the driver's native subagent or agent-manager tool when it can select the required model, isolate the task, and return the required artifact.
+2. Probe approved installed headless CLIs and Ollama Cloud models when native delegation is unavailable, lacks the needed model/capability, or would defeat provider-family independence.
+3. Assign distinct providers/model families to independent packets where privacy and budget allow.
 4. Preserve provider failures as evidence instead of pretending the swarm was diverse.
 
 Selection rules:
@@ -385,7 +387,7 @@ Provider adapter record:
   "role": "worker|critic|judge|synthesizer",
   "capabilities": ["tools", "web", "long-context"],
   "privacy": "local|private|external",
-  "launch_shape": "native_subagent|headless_cli|ollama_launch|ollama_api|other",
+  "launch_shape": "native_subagent|native_agent_manager|headless_cli|ollama_launch|ollama_api|other",
   "observed_latency": "fast|medium|slow|unknown",
   "probe_command": "redacted command or null",
   "probe_result": "ok|failed|skipped",
@@ -393,26 +395,37 @@ Provider adapter record:
 }
 ```
 
-### Locally Verified Launch Shapes
+### Current Runtime and Model Hints
 
-Refresh these probes before a real run. The following entries were locally verified on 2026-06-11 and are examples, not permanent truth.
+Refresh before assignment. This is a preference table, not an allowlist or a readiness claim. Evidence was refreshed on 2026-09-03 from installed CLI help/catalogs and first-party model catalogs; `live` means only that a bounded exact-output headless call passed on this machine.
 
-| Provider | Verified entry | Notes |
-|----------|----------------|-------|
-| Ollama Cloud | `kimi-k2.6:cloud`, `glm-5.1:cloud`, `deepseek-v4-pro:cloud`, `minimax-m3:cloud` | `ollama show` reports completion, tools, and thinking capabilities for all four. Use `ollama launch <integration> --model <model>` for agent integrations or the local API for bounded packet calls. |
-| Kilo | `kilo run --dir "$repo" --model <provider/model> --agent code --format json "..."` | Assign runtime/model/agent explicitly. Local `kilo run --help` on 2026-06-16 exposed `--model`, `--agent`, `--format`, `--dir`, `--variant`, and `--auto`; local `kilo agent list` was blocked by invalid user config keys, so do not assign Kilo work until the config probe passes. |
-| Claude Code | `claude -p "..." --output-format json --max-budget-usd <amount>` | Headless print mode works locally. Use `--model`, `--tools`, `--allowedTools`, `--permission-mode`, and `--add-dir` to scope role sessions. |
-| Grok Build | `grok -m grok-build -p "..." --output-format json --max-turns <N>` | Headless single-turn works locally. Output may include a `thought` field; never persist it. `grok models` reports `grok-build` and `grok-composer-2.5-fast`. |
-| Cursor Agent | `cursor agent -p --workspace "$repo" --output-format json --sandbox enabled "..."` | Headless print mode is the `cursor agent` subcommand with `-p/--print`; `--output-format` works only with print mode. Local `cursor agent models` reported no models for this account, so do not assign packet work until account models are available. |
-| Codex | `codex exec -m <model> -C "$repo" -s read-only\|workspace-write --json "..."` | Use for OpenAI-family diversity or current-agent-compatible packet execution. |
-| OpenCode | `opencode run -m <provider/model> --format json --dir "$repo" "..."` | Use when provider credentials and model IDs are configured. |
-| Goose | `goose --version` | Installed-probe only. Inspect current CLI help before assigning packet work. |
-| Antigravity desktop | `antigravity chat -m agent "..."` | Local help exposes a desktop chat handoff, not a verified non-interactive JSON/headless worker. Record as `interactive_supervised` unless a current probe proves a headless output mode. |
-| Antigravity CLI | `agy --print --print-timeout 5m --model <model> "..."` | Current `agy` exposes print mode, model listing, and plugin validation. The target stages at `~/.gemini/antigravity-cli/plugins/agent-surface`; run `agy plugin validate` and `agy plugin install` before assignment. Local model pinning probes fell back to Gemini 3.5 Flash, so verify the actual model before assigning model-specific work. |
+| Runtime | Preferred models | Role fit | Current evidence and boundary |
+|---|---|---|---|
+| Codex 0.148.0 | `gpt-daybreak-blue-latest` for provisioned defensive-security work; `gpt-5.6-sol` for hard core/BOSS/review; `gpt-5.6-terra` for normal development; `gpt-5.6-luna` for cheap workers; `gpt-5.5` fallback; Ollama pool when its cost/family trade-off wins | Operator-preferred general runtime and OpenAI-family coordinator | Luna headless `live`; all listed OpenAI IDs in local Codex catalog. `gpt-daybreak-blue-latest` is the valid Daybreak alias and resolves to Sol. Do not assign `gpt-5.4` in this operator profile even though it remains catalog-visible. Use `ollama launch codex --model <ollama-id>` for Ollama models. |
+| Claude Code 2.1.227 | `fable` / `claude-fable-5-1` for the hardest long runs; `opus` / `claude-opus-5` for deep review; `sonnet` / `claude-sonnet-5` for routine work; Ollama pool only when its trade-off is explicit | Strong architecture, implementation, and independent review | CLI shape and current IDs verified; local CLI auth is currently unavailable. Prefer native Claude models: the operator observes poor cache reuse for non-Claude compatibility models. Ollama uses `ollama launch claude --model <ollama-id>`. |
+| DSH 0.1.1-rc.2 | Native `deepseek-v4-pro` for hard work and `deepseek-v4-flash` for routine work; exact dated snapshots through the Ollama pool below | DeepSeek-family independent worker/reviewer | Headless help and composed default (`deepseek-v4-flash`) verified; no live call. Model selection is settings/patch-owned, not a headless flag. |
+| Grok Build 1.0.13 | `grok-4.6` | Large independent coding/review packets when its operator-reported high allowance is available | CLI/model catalog verified; local account is not authenticated, so quota and execution are not currently proven. Never encode the allowance as infinite or guaranteed. |
+| Cursor Agent 2026.08.25 | `composer-2.5` for fast routine work; `cursor-grok-4.6-high-fast` for strong high-volume work; `cursor-grok-4.6-xhigh` for hard reasoning; account-listed GPT/Claude models only when their API-priced use is justified | Fast native worker or independent model-family route | `composer-2.5` headless `live`; account model list verified. Resolve `cursor-agent` explicitly. The bare `agent` alias is unstable even though it currently resolves to Cursor here. |
+| Kimi Code 0.36.1 | `kimi-code/k3` with `low`, `high`, or `max` effort | Long-context Kimi-family core or implementation work | Native K3 headless `live` with normal TLS. Prompt mode is already non-interactive and rejects `--auto`; use `-p` without it. |
+| Kilo 7.2.52 | Ollama pool below; start with `ollama-cloud/glm-5.3-flash` for ordinary workers | Flexible multi-model worker; native orchestration when Kilo is the driver | GLM-5.3-Flash headless `live`. VS Code Agent Manager can select per-task provider/model/variant through `agent_manager_models` + `agent_manager`; CLI uses native `task` subagents or `kilo run`. Re-probe CLI and extension state separately. |
+| OpenCode 1.18.15 | Ollama pool below | Low-cost headless worker after provider setup | Launch flags verified, but this machine currently has no `ollama-cloud` provider or credentials; assignment is blocked until `ollama launch opencode --model <id> --config` and a live probe pass. |
+| Cline | Ollama pool below | Alternate worker after exact binary qualification | `ollama launch` supports Cline, but this host exposed conflicting Cline 3.0.60 and legacy 1.0.8 installations during the refresh. Resolve the executable and re-read its help before every assignment; no standing headless command is currently certified. |
 
-Cursor and Grok both use `agent` in their command surface, but they are not interchangeable. Cursor headless starts with `cursor agent -p`; Grok Build starts with `grok -m grok-build ...` or its own probed `grok ... agent headless` path.
+Recommended Ollama Cloud pool, verified by `ollama show` on 2026-09-03:
 
-Google's Antigravity CLI target stages its `agy` plugin package under `~/.gemini/antigravity-cli/plugins/agent-surface`; `agy plugin install` creates the runtime-owned import. The local `antigravity` binary may be the desktop application entrypoint. If the desktop app appears, treat that launch as supervised UI work, not a completed headless swarm packet.
+| Ollama model ID | Kilo selectable ID | Prefer for |
+|---|---|---|
+| `glm-5.3-flash:cloud` | `ollama-cloud/glm-5.3-flash` | Default low-cost worker; tools, thinking, vision, 1M context |
+| `glm-5.3:cloud` | `ollama-cloud/glm-5.3` | Hard core work, synthesis, or review when stronger reasoning earns the cost |
+| `deepseek-v4-flash:0731-cloud` | `ollama-cloud/deepseek-v4-flash:0731` | Low-cost DeepSeek-family worker |
+| `deepseek-v4-pro:0813-cloud` | `ollama-cloud/deepseek-v4-pro-0813` | DeepSeek-family core or independent review |
+| `kimi-k3:cloud` | `ollama-cloud/kimi-k3` | Capable long-context fallback, but expensive; prefer native `kimi-code/k3` when available |
+
+The Kilo IDs above were listed by the installed runtime. OpenCode and Cline may expose different provider aliases after `ollama launch`; use their live model/config output rather than translating the raw Ollama ID by assumption.
+
+Other installed targets remain probe-on-demand candidates; absence from this recommendation table does not remove support.
+
+When Kilo is the driver inside VS Code, prefer its native `agent_manager_models` and `agent_manager` tools over shelling out to `kilo run`. For CLI Kilo and other runtimes, prefer their native `task`/subagent tool when it can satisfy model, isolation, and artifact requirements. Use a headless subprocess when provider-family independence or a missing native capability actually requires it.
 
 Ollama thinking policy for swarm packets:
 
@@ -424,16 +437,17 @@ Ollama thinking policy for swarm packets:
 Example bounded packet probes:
 
 ```bash
-ollama show kimi-k2.6:cloud
-ollama show glm-5.1:cloud
-ollama show deepseek-v4-pro:cloud
-ollama show minimax-m3:cloud
-curl -sS http://localhost:11434/api/generate \
-  -d '{"model":"kimi-k2.6:cloud","prompt":"Reply OK only.","stream":false,"think":true,"options":{"num_predict":128}}'
-claude -p "Reply OK only." --output-format json --max-budget-usd 0.05
-grok -m grok-build -p "Reply OK only." --output-format json --max-turns 1
-cursor agent -p --workspace "$PWD" --output-format json --sandbox enabled "Reply OK only."
-antigravity chat --help
+unset NODE_TLS_REJECT_UNAUTHORIZED
+ollama show glm-5.3-flash:cloud
+ollama show glm-5.3:cloud
+ollama show deepseek-v4-flash:0731-cloud
+ollama show deepseek-v4-pro:0813-cloud
+ollama show kimi-k3:cloud
+codex exec -m gpt-5.6-luna -c 'model_reasoning_effort="low"' -C "$PWD" -s read-only --ephemeral --json "Reply OK only."
+kilo run --dir "$PWD" --model ollama-cloud/glm-5.3-flash --variant low --agent ask --format json "Reply OK only."
+kimi -m kimi-code/k3 -p "Reply OK only." --output-format stream-json
+cursor-agent -p --workspace "$PWD" --mode ask --model composer-2.5 --output-format json "Reply OK only."
+grok --cwd "$PWD" -m grok-4.6 --reasoning-effort low -p "Reply OK only." --output-format json --max-turns 1
 ```
 
 ## PROTOCOL
