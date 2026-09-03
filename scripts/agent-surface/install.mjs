@@ -298,11 +298,17 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     (item) => localCommandOverlays.has(item.source) && !liveCommandSources.has(item.source),
   );
   const retainedLocalOverlayOutputs = new Set(retainedLocalOverlayEntries.map((item) => item.output));
+  const staleExternalManaged = categoryFilter?.has("external")
+    ? previousFileEntries.filter(
+      (item) => /^external[\\/]/.test(item.source) && !liveOutputs.has(item.output),
+    )
+    : [];
   const staleManaged = !partialInstall
     ? [...previousFileEntries, ...legacyOwnership.files]
       .filter((item) => !liveOutputs.has(item.output) && !retainedLocalOverlayOutputs.has(item.output))
       .sort((left, right) => left.output.localeCompare(right.output))
-    : [];
+    : staleExternalManaged.sort((left, right) => left.output.localeCompare(right.output));
+  const staleManagedOutputs = new Set(staleManaged.map((item) => item.output));
   const staleRemovalActions = [];
   const configMerges = [];
   const previousConfigEntries = manifestConfigEntries(previousManifest);
@@ -396,7 +402,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
 
   const retainedManaged = partialInstall
     ? previousFileEntries
-      .filter((item) => !liveOutputs.has(item.output))
+      .filter((item) => !liveOutputs.has(item.output) && !staleManagedOutputs.has(item.output))
     : retainedLocalOverlayEntries;
   const manifestManaged = [...retainedManaged, ...managed].sort((left, right) => left.output.localeCompare(right.output));
   const nextConfigEntries = mergedManifestConfigEntries(

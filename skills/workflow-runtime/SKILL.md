@@ -60,7 +60,9 @@ Remove inherited `NODE_TLS_REJECT_UNAUTHORIZED` from networked Node launches so 
 
 The runtime executing this skill is the driver. The runtime named by `--runtime` is the candidate.
 
-Before calling the candidate:
+A driver-owned native subagent or agent-manager tool is not an external CLI candidate. Qualify it through its native tool call, resolved model, isolated session/worktree behavior, and materialized artifact. This is the preferred path when those controls are sufficient. Do not shell-launch the driver's own executable.
+
+Before calling an external CLI candidate:
 
 1. Resolve the driver family and candidate family.
 2. If they are the same CLI family or resolve to the same executable, stop with `BLOCKED: external_driver_required`.
@@ -120,6 +122,7 @@ codex exec \
   --dangerously-bypass-approvals-and-sandbox \
   -C "$repo" --ephemeral --json \
   -o "$out" -m "$model" \
+  -c "model_reasoning_effort=\"$effort\"" \
   '$workflow-runtime --role worker ...'
 ```
 
@@ -138,32 +141,29 @@ Verify `claude auth status` first. An IDE subscription session does not prove CL
 
 ### Cline
 
-```bash
-cline --cwd "$repo" \
-  --auto-approve true \
-  --json "$prompt"
-```
+Resolve and version the exact binary before constructing a command. Current Cline releases have incompatible headless surfaces: recent Node CLI builds expose `--cwd`, `--provider`, `--model`, `--thinking`, `--auto-approve`, and `--json`; legacy Core CLI builds use `--oneshot`, `--yolo`, `--output-format`, and settings-owned model selection. This machine exposed both families during the 2026-09-03 probe, so no unversioned Cline command is a valid standing recipe.
 
-Cline CLI and the VS Code/Cursor/Windsurf extensions do not share one MCP settings file. Prove the route used by the selected host and observe its native skill action. A plain prompt without a skill-selection event proves the agent, not skill discovery. Use a different runtime as the driver; do not run `cline` recursively from an active Cline workflow.
+Use `ollama launch cline --model "$ollama_model" --config` when configuring the Ollama integration, then re-read the resolved `cline --help` and run a task-shaped probe. Cline CLI and the VS Code/Cursor/Windsurf extensions do not share one MCP settings file. A plain prompt without a skill-selection event proves the agent, not skill discovery.
 
 ### Kilo and OpenCode
 
 ```bash
-kilo run --auto --dir "$repo" --model "$provider_model" --format json "$prompt"
-opencode run --auto --dir "$repo" --model "$provider_model" --format json "$prompt"
+kilo run --auto --dir "$repo" --model "$provider_model" --variant "$effort" --agent code --format json "$prompt"
+opencode run --auto --dir "$repo" --model "$provider_model" --variant "$effort" --agent build --format json "$prompt"
 ```
 
 Before either launch, inspect the effective runtime config and require `share` to be exactly `disabled`. An inherited `auto` setting publishes every new session even when the command omits `--share`. If a probe creates a share, stop, revoke it through the runtime's unshare operation, and exclude that transcript from evidence. Never print or retain a share secret or URL in the report.
 
-Require the live runtime to list or resolve the generated skill through its native skill tool. Provider credentials are runtime-specific; an extension login does not prove the headless CLI.
+Require the live runtime to list or resolve the generated skill through its native skill tool. Provider credentials and model aliases are runtime-specific; an extension login does not prove the headless CLI, and a raw Ollama `:cloud` ID must not be assumed to equal the runtime's `provider/model` selector.
 
 ### Grok Build
 
 ```bash
 grok --cwd "$repo" \
-  --always-approve \
+  --permission-mode bypassPermissions \
   -p "$prompt" -m "$model" \
-  --output-format json --no-memory
+  --reasoning-effort "$effort" \
+  --output-format json --max-turns "$max_turns"
 ```
 
 Confirm entitlement and resolved model. Remove thought-like fields before retaining output.
@@ -192,12 +192,34 @@ Do not substitute `--auto high`: the unsafe bypass is the CLI's actual no-check 
 ### Cursor Agent
 
 ```bash
-cursor-agent --print \
+cursor_agent="$(command -v cursor-agent)"
+"$cursor_agent" --print \
   --force --sandbox disabled --approve-mcps \
   --workspace "$repo" \
+  --model "$model" \
   --output-format stream-json \
   "$prompt"
 ```
+
+Do not rely on the bare `agent` command. Multiple products claim that name; resolve `cursor-agent` or the editor's `cursor agent` subcommand and record the real executable.
+
+### DSH
+
+```bash
+dsh --profile headless "$prompt"
+```
+
+DSH headless has no per-run model flag. Its `agent-default-model` settings or a deliberate `--patch` select `{ provider, model, reasoningEffort? }` for new agents. For Ollama-backed use, configure the integration with `ollama launch dsh --model "$ollama_model" --config`, then probe the resulting headless path. Do not claim a dated DeepSeek snapshot from the unversioned native default.
+
+### Kimi Code
+
+```bash
+env -u NODE_TLS_REJECT_UNAUTHORIZED \
+  kimi -m "$model" -p "$prompt" \
+  --output-format stream-json
+```
+
+Kimi prompt mode is already non-interactive and rejects `--auto` combined with `-p`. The native current model alias is `kimi-code/k3`; verify configured effort separately because `-m` selects the alias, not an effort flag.
 
 ### Goose
 

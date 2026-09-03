@@ -40,6 +40,7 @@ const mustExist = [
   ["claude-code", path.join(".claude", "skills", "dev-spec", "SKILL.md")],
   ["claude-code", path.join(".claude", "skills", "arch-contract", "SKILL.md")],
   ["codex", path.join(".agents", "skills", "workflow-runtime", "SKILL.md")],
+  ["codex", path.join(".agents", "skills", "dev-core", "SKILL.md")],
   ["codex", path.join(".agents", "skills", "arch-contract", "SKILL.md")],
   ["codex", path.join(".codex", "AGENTS.md")],
   ["cline", path.join(".cline", "skills", "verify-readiness", "SKILL.md")],

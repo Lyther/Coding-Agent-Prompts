@@ -56,7 +56,9 @@ Otherwise downgrade to `reviewed` or `standard`.
 
 ## STEP 3: CHOOSE AND PROBE THE RUNTIME
 
-Use the current session or native subagents when they satisfy the role. External provider diversity is optional for ordinary work and valuable for independent high-risk review only after operational fit is proven.
+Use the current runtime's native subagent or agent-manager tools first when they can select the required model, isolate the task, and materialize the required artifact. Do not open a terminal merely to launch another copy of the current runtime. For example, a Kilo VS Code driver should query `agent_manager_models` and launch through `agent_manager`; Kilo CLI should use its native `task` subagents when they fit.
+
+Use an external headless runtime when native delegation lacks a required model or capability, or when a different provider family materially improves independence. External provider diversity is optional for ordinary work and valuable for independent high-risk review only after operational fit is proven. Use the current dated recommendation table in `ops-swarm`, then verify the exact candidate through `workflow-runtime`.
 
 Before assigning any external/headless runtime, invoke `workflow-runtime`. The probe must demonstrate the task-shaped capabilities the role needs:
 
@@ -73,12 +75,13 @@ Full-execution consent covers external service calls, provider probes, live inst
 
 Select by this order:
 
-1. tool and repository fit;
-2. privacy and authorization fit;
-3. task quality;
-4. liveness and reliability;
-5. latency and cost;
-6. provider-family independence when review independence matters.
+1. driver-native delegation with adequate model, isolation, and artifact control;
+2. tool and repository fit;
+3. privacy and authorization fit;
+4. task quality;
+5. liveness and reliability;
+6. latency and cost;
+7. provider-family independence when review independence matters.
 
 Do not infer capability from a model name, extension login, prior snapshot, or provider reputation.
 

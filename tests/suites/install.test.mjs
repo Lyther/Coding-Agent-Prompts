@@ -86,7 +86,16 @@ planHas(qwenCodePlan, [
   /\.qwen\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/,
   /\.qwen\/agents\/boss\.md <- subagents\/boss\.md/,
   /\.qwen\/settings\.json MCP \+= grimoire, synapse/,
+  /\.qwen\/skills\/ctf-ai-ml\/SKILL\.md <- external\/ctf-skills\/ctf-ai-ml\/SKILL\.md/,
 ], "qwen-code");
+planLacks(qwenCodePlan, [/karpathy-guidelines/, /skills\/book-study\//], "qwen-code default excludes optional packs");
+
+const qwenCodeExternalPlan = dryRun("qwen-code", ["--category", "external"]);
+planHas(qwenCodeExternalPlan, [
+  /\.qwen\/skills\/karpathy-guidelines\/SKILL\.md/,
+  /\.qwen\/skills\/book-study\/SKILL\.md/,
+  /\.qwen\/skills\/ctf-ai-ml\/SKILL\.md/,
+], "qwen-code explicit external packs");
 
 const kiroPlan = dryRun("kiro");
 planHas(kiroPlan, [
@@ -103,7 +112,7 @@ assert.match(`${geminiPlan.stdout}${geminiPlan.stderr}`, /unsupported install ta
 for (const [target, patterns] of [
   ["claude-code", [/\.claude\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/, /\.claude\/agents\/boss\.md <- subagents\/boss\.md/]],
   ["cursor", [/\.cursor\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/, /\.cursor\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/, /\.cursor\/agents\/boss\.md <- subagents\/boss\.md/]],
-  ["droid", [/\.factory\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/, /\.factory\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/, /\.factory\/mcp\.json MCP \+= grimoire, synapse/, /karpathy-guidelines\/SKILL\.md/]],
+  ["droid", [/\.factory\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/, /\.factory\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/, /\.factory\/mcp\.json MCP \+= grimoire, synapse/]],
   ["codex", [/\.agents\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
   ["openhands", [/\.agents\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
   ["antigravity-cli", [/antigravity-cli\/plugins\/agent-surface\/skills\/workflow-boss\/SKILL\.md <- skills\/workflow-boss\/SKILL\.md/]],
@@ -179,25 +188,60 @@ assert.equal(existsSync(path.join(sharedRootHome, ".codex", "skills", "ops-nuke"
 assert.equal(existsSync(path.join(sharedRootHome, ".agents", "skills", "ops-flow", "SKILL.md")), true);
 rmSync(sharedRootHome, { recursive: true, force: true });
 
-// Strict-sync: prune managed external skill that is no longer generated.
+// SUBSTITUTE_JUSTIFICATION
+// - substitute: historical managed files and manifest in a disposable install root
+// - replaces: an installation made before a canonical or external skill was removed
+// - necessity: removed source files no longer exist, so their prior owned state must be seeded
+// - real-option: the real installer and filesystem are exercised; mutating shared source/submodule state would disturb user work
+// - proof-limit: does not prove a particular host discovers the installed skill
+// - real-proof: BLOCKED until an optional pack publishes a revision that removes a skill; rerun against that revision pair
+// Strict-sync: prune managed skills that are no longer generated.
 const syncDest = "/tmp/agent-surface-strict-sync";
 rmSync(syncDest, { recursive: true, force: true });
 const ghostRel = path.join(".factory", "skills", "ghost-descoped-skill", "SKILL.md");
 const ghostPath = path.join(syncDest, ghostRel);
+const retainedCanonicalRel = path.join(".factory", "skills", "retained-canonical-skill", "SKILL.md");
 mkdirSync(path.dirname(ghostPath), { recursive: true });
 writeFileSync(ghostPath, "---\nname: ghost-descoped-skill\ndescription: removed upstream\n---\nbody\n");
+mkdirSync(path.dirname(path.join(syncDest, retainedCanonicalRel)), { recursive: true });
+writeFileSync(path.join(syncDest, retainedCanonicalRel), "previously installed\n");
 mkdirSync(path.join(syncDest, ".agent-surface"), { recursive: true });
 writeFileSync(
   path.join(syncDest, ".agent-surface", "droid-manifest.json"),
   `${JSON.stringify({
     target: "droid",
-    managed: [{ target: "droid", output: ghostRel, version: "test" }],
+    managed: [
+      {
+        target: "droid",
+        source: "external/sanyuan-skills/skills/ghost-descoped-skill/SKILL.md",
+        output: ghostRel,
+        version: "test",
+      },
+      {
+        target: "droid",
+        source: "skills/retained-canonical-skill/SKILL.md",
+        output: retainedCanonicalRel,
+        version: "test",
+      },
+    ],
   }, null, 2)}\n`,
 );
 const syncPlan = run(["install", "--target", "droid", "--dest", syncDest, "--dry-run"]);
 assert.match(syncPlan, /planned stale managed removals:/);
 assert.match(syncPlan, /\.factory\/skills\/ghost-descoped-skill\/SKILL\.md/);
-assert.match(syncPlan, /\.factory\/skills\/karpathy-guidelines\/SKILL\.md/);
+assert.doesNotMatch(syncPlan, /\.factory\/skills\/karpathy-guidelines\/SKILL\.md/);
+assert.match(syncPlan, /\.factory\/skills\/ctf-ai-ml\/SKILL\.md/);
+const externalSyncPlan = run(["install", "--target", "droid", "--dest", syncDest, "--category", "external", "--dry-run"]);
+assert.match(externalSyncPlan, /\.factory\/skills\/ghost-descoped-skill\/SKILL\.md/);
+assert.doesNotMatch(externalSyncPlan, /\.factory\/skills\/retained-canonical-skill\/SKILL\.md/);
+run(["install", "--target", "droid", "--dest", syncDest, "--category", "external"]);
+assert.equal(existsSync(ghostPath), false);
+assert.equal(existsSync(path.join(syncDest, retainedCanonicalRel)), true);
+assert.equal(existsSync(path.join(syncDest, ".factory", "skills", "karpathy-guidelines", "SKILL.md")), true);
+assert.doesNotMatch(
+  run(["install", "--target", "droid", "--dest", syncDest, "--category", "external", "--dry-run"]),
+  /\.factory\/skills\/ghost-descoped-skill\/SKILL\.md/,
+);
 rmSync(syncDest, { recursive: true, force: true });
 
 // SUBSTITUTE_JUSTIFICATION
@@ -303,7 +347,7 @@ assert.match(liveInstall, /^installed:$/m);
 assert.match(readFileSync(path.join(liveDest, ".cline", "skills", "workflow-boss", "SKILL.md"), "utf8"), /^---\nname: workflow-boss\n/);
 assert.match(readFileSync(path.join(liveDest, ".cline", "skills", "verify-readiness", "SKILL.md"), "utf8"), /^---\nname: verify-readiness\n/);
 assert.match(readFileSync(path.join(liveDest, ".cline", "agents", "boss.yaml"), "utf8"), /^---\nname: boss\n/);
-assert.match(readFileSync(path.join(liveDest, ".cline", "skills", "karpathy-guidelines", "SKILL.md"), "utf8"), /^---\n/);
+assert.equal(existsSync(path.join(liveDest, ".cline", "skills", "karpathy-guidelines", "SKILL.md")), false);
 assert.match(readFileSync(path.join(liveDest, ".clineignore"), "utf8"), /agent-surface canonical AI-tool ignore baseline/);
 const liveManifest = JSON.parse(readFileSync(path.join(liveDest, ".agent-surface", "cline-manifest.json"), "utf8"));
 assert.equal(liveManifest.target, "cline");
@@ -444,7 +488,7 @@ assert.match(clineUserScope.stdout, /\.cline\/skills\/workflow-boss\/SKILL\.md <
 assert.match(clineUserScope.stdout, /Documents\/Cline\/Workflows\/ops-nuke\.md <- commands\/ops-nuke\.md/);
 assert.match(clineUserScope.stdout, /Documents\/Cline\/Rules\/agent-surface\.md <- rules\/\*\.mdc/);
 assert.match(clineUserScope.stdout, /\.cline\/agents\/boss\.yaml <- subagents\/boss\.md/);
-assert.match(clineUserScope.stdout, /\.cline\/skills\/karpathy-guidelines\/SKILL\.md/);
+assert.doesNotMatch(clineUserScope.stdout, /\.cline\/skills\/karpathy-guidelines\/SKILL\.md/);
 assert.match(clineUserScope.stdout, /\.cline\/data\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
 assert.match(clineUserScope.stdout, /Code\/User\/globalStorage\/saoudrizwan\.claude-dev\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
 assert.match(clineUserScope.stdout, /Cursor\/User\/globalStorage\/saoudrizwan\.claude-dev\/settings\/cline_mcp_settings\.json MCP \+= grimoire, synapse/);
@@ -1255,7 +1299,7 @@ try {
     ]) {
       assert.equal(
         sources.some((source) => source.startsWith(optionalPack)),
-        true,
+        false,
         `${target}: ${optionalPack}`,
       );
     }

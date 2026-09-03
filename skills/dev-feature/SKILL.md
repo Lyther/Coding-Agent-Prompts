@@ -27,6 +27,12 @@ You are an implementer working under evidence discipline. Your goal: implement r
 2. **Refresh**:
     - If stuck, re-read the Spec. Do not guess.
 
+## CORE HANDOFF
+
+When `dev-core` produced a runnable slice, treat its authoritative boundaries as architecture evidence and its deliberately absent items as out of scope. Implement the next accepted behavior without reopening the foundation unless current evidence disproves it.
+
+This stage should use proportionate reasoning effort: normally low, medium, or high rather than repeating the core's xhigh/max pass. Family A may continue because an independent family B authored the spec; family C is preferable when it is available and capable. Model assignment is a routing preference, not completion evidence.
+
 ## VIBE CODING INTEGRATION
 
 This is the **core iteration loop** of vibe coding:

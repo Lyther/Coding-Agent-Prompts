@@ -6,6 +6,7 @@ Notable changes to agent-surface and its first-party MCP services. Format: [Keep
 
 ### Added
 
+- **`dev-core` staged development skill** - turns an independently specified RED core slice into one runnable architectural spine, then pauses before lower-effort feature expansion.
 - **Grimoire MCP (v0.1 package; v1.0 tool contract)** - read-only, just-in-time retrieval over the `anthropic-cybersecurity-skills` and `rev-skills` packs from a self-contained `node:sqlite` FTS5 index. Four tools (`grimoire_search`/`list`/`get`/`file_get`) expose source/license attribution and fail closed on stale provenance.
 - **First-party MCP auto-wiring across all 22 MCP-capable hosts** - Synapse + Grimoire are generated and non-destructively merged into each host's native config across JSON, TOML, and YAML families. Full matrix: `docs/reference/targets.md`.
 - **2026 runtime portfolio refresh** - adds DSH, Qoder, Qwen Code, and Kiro; upgrades Copilot CLI, Grok Build, Antigravity CLI, and Trae; retires VSCodium; records Amp, Auggie, Crush, and Warp as planned.
@@ -14,6 +15,8 @@ Notable changes to agent-surface and its first-party MCP services. Format: [Keep
 
 ### Changed
 
+- **Runtime/model routing refresh** - replaces the June model table with current Codex, Claude, DeepSeek, Grok, Cursor, Kimi, and Ollama Cloud recommendations; refreshes headless command shapes and prefers driver-native subagent or agent-manager tools before subprocess orchestration.
+- **`ops-clean` simplification gate** - requires a concrete reduction in owners, layers, dependencies, configuration axes, or failure modes instead of counting rearrangement or raw line changes as simplification.
 - **`ops-docs` skill** rewritten to the Diátaxis + minimalism model: aggressive, repo-fit, and concise by default.
 - **README** rewritten lean (203 → ~100 lines); the full target matrix moved to `docs/reference/targets.md`.
 - **Full-access policy ownership** - Kilo and OpenCode full installs replace the complete permission object with wildcard allow while preserving unrelated top-level settings; category-only MCP installs do not alter host-wide permission or sharing controls.

@@ -361,4 +361,4 @@ Final response must include:
 - Changed: full paths to written docs.
 - Checks: commands or scenario checks run as `passed`, `failed`, or `not run`.
 - Blockers: only unresolved issues, including whether human input is required and exactly how to unblock.
-- Next command: usually `arch-contract`, `workflow-boss`, or a named spike only when the roadmap gates justify it.
+- Next command: `dev-spec` when architecture and contracts are sufficient for the first vertical slice; otherwise `arch-contract` or a named spike that closes the remaining decision.

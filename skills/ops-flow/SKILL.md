@@ -67,7 +67,7 @@ Routing defaults:
 ## STEP 3: SELECT THE NEXT WORKFLOW
 
 ```text
-direct/standard: dev-feature | dev-fix | dev-chore | dev-refactor
+direct/standard: dev-feature | dev-fix | dev-core | dev-chore | dev-refactor
 reviewed:        route-specific dev command -> qa-review|qa-audit|qa-trace
 orchestrated:    workflow-orchestrator
 release:         verify-prove -> verify-readiness when the claim requires it
@@ -77,6 +77,17 @@ ship:            ship-commit | ship-artifact | ship-cicd | ship-release | ship-d
 ```
 
 Use `workflow-boss` only inside an admitted `orchestrated` or `release` run, or when the user explicitly requests formal decomposition.
+
+For architecture-heavy development with an accepted roadmap, prefer the staged path:
+
+```text
+arch-roadmap (family A)
+  -> dev-spec (fresh family B; requirement-derived RED core slice)
+  -> dev-core (family A; frontier xhigh/max; runnable spine, then pause)
+  -> dev-feature (family A at lower effort, or family C)
+```
+
+Repeat `dev-spec` for later behavior slices when independent specification adds value. Skip `dev-core` when the architecture and central ownership already exist.
 
 For brownfield fixes, prefer a compact contract:
 
@@ -147,3 +158,4 @@ For `orchestrated`, `parallel_width` must be at least 2 or `why` must name the l
 - Do not generate release-grade provenance for an unstable intermediate patch.
 - Do not choose a provider before proving the runtime can read, edit when authorized, run checks, and materialize the required output.
 - Do not count workflow artifacts, agent messages, or model diversity as product progress.
+- Do not route a localized feature or bug through `dev-core` merely because a stronger model is available.
