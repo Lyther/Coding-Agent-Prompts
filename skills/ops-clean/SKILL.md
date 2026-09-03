@@ -32,6 +32,16 @@ Before deleting or consolidating:
 
 If a cleanup would intentionally change supported behavior, public contracts, persistent data, or architecture, route that item through `dev-fix`, `dev-refactor`, or an architecture workflow. Do not hide a redesign inside hygiene work.
 
+## NET SIMPLIFICATION GATE
+
+A successful apply must make the preserved behavior easier to own, not merely rearrange it.
+
+- Name the concrete owner, implementation, layer, dependency, configuration axis, script, test framework, or failure mode being removed or consolidated.
+- Prefer deletion and consolidation before rewriting. A new abstraction is justified only when it replaces existing concepts or is required to preserve the accepted contract.
+- Compare before and after with concrete nouns; do not invent a complexity score or optimize raw line count.
+- Do not claim simplification for renames, moves, formatting, or added wrappers that leave the same responsibilities and failure modes in place.
+- Run the real primary path after behavior-adjacent simplification.
+
 ## QUALITY DOMAINS
 
 ### Design

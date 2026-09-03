@@ -42,6 +42,15 @@ parallel -> ops-swarm for independent read-only or isolated probes
 ship     -> ship-commit | ship-artifact | ship-cicd | ship-release | ship-deploy
 ```
 
+Architecture-first development may use a staged model boundary without starting the formal ledger:
+
+```text
+arch-roadmap [family A] -> dev-spec [fresh family B] -> dev-core [family A, xhigh/max]
+  -> pause -> dev-feature [family A at lower effort, or family C]
+```
+
+The first spec covers the runnable core slice. Repeat `dev-spec` for later slices when independence is worth the handoff cost.
+
 Invoke `ops-flow` for the evidence-backed routing object. High risk normally upgrades `standard` to `reviewed`; it does not automatically create several writers. Orchestration is for real parallel width or durable long-running/release state.
 
 ## PROFILE DETAILS

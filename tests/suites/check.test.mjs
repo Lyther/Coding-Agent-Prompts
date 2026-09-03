@@ -207,6 +207,9 @@ for (const name of ["arch-diagram", "qa-self-critique", "verify-test"]) {
 assert.equal(skillRegistry.skills.find((skill) => skill.name === "qa-sec"), undefined);
 assert.equal(skillRegistry.skills.find((skill) => skill.name === "verify-spec"), undefined);
 assert.equal(skillRegistry.skills.find((skill) => skill.name === "dev-spec")?.phase, "build");
+const devCoreSkill = skillRegistry.skills.find((skill) => skill.name === "dev-core");
+assert.equal(devCoreSkill?.phase, "build");
+assert.equal(devCoreSkill?.model_invocation, true);
 
 const registry = JSON.parse(run(["commands", "--json"]));
 assert.equal(registry.count, expectedCommandCount);

@@ -9,6 +9,8 @@ Turn a requirement into executable checks that fail on the current tree and pass
 
 This is a development workflow: it defines the contract and writes RED tests or interfaces before production implementation. It does not certify an existing implementation and does not replace `verify-test`, `verify-prove`, or `verify-readiness`.
 
+For architecture-first work, run `dev-spec` in a fresh session after `arch-roadmap`, preferably with a model family different from the architecture and core implementer. Carry the accepted roadmap and public contracts, not the previous model's hidden reasoning or conversation. Model diversity is supporting independence, not an oracle.
+
 ## INPUTS
 
 - Exact user outcome and acceptance criteria.
@@ -31,18 +33,19 @@ A development spec is accepted only when:
 
 ## PROTOCOL
 
-1. **Locate the contract.** Read the current entry point, tests, types, public docs, and callers.
-2. **Write the behavior table.**
+1. **Ground expected behavior.** Derive outcomes from the user requirement, accepted roadmap or contract, standards, and human-locked examples before using implementation details as an oracle.
+2. **Locate the contract.** Read the current entry point, tests, types, public docs, and callers to preserve compatibility and place the checks.
+3. **Write the behavior table.**
 
 ```text
 Case | Input/state | Observable outcome | Error/effect | Invariant
 ```
 
-3. **Choose independent oracles.** Prefer standards-derived vectors, state invariants, metamorphic relations, or externally observable outcomes.
-4. **Write the smallest test set that distinguishes the change.** Do not generate a broad suite merely to increase coverage.
-5. **Run the focused test on the current tree.** Capture the exact intended failure.
-6. **Run an anti-cheat probe when risk warrants it.** Confirm a trivial constant or no-op implementation would still fail.
-7. **Stop before production implementation.** Hand the accepted spec to `dev-feature` or `dev-fix`.
+4. **Choose independent oracles.** Prefer standards-derived vectors, state invariants, metamorphic relations, or externally observable outcomes.
+5. **Write the smallest test set that distinguishes the next slice.** For an initial architecture-first path, cover only the runnable core slice so `dev-core` can finish with normal gates green. Do not generate a broad future suite merely to increase coverage.
+6. **Run the focused test on the current tree.** Capture the exact intended failure.
+7. **Run an anti-cheat probe when risk warrants it.** Confirm a trivial constant or no-op implementation would still fail.
+8. **Stop before production implementation.** Hand an initial architecture-first slice to `dev-core`, an established path to `dev-feature`, or a regression to `dev-fix`.
 
 ## TEST SHAPES
 
@@ -67,6 +70,7 @@ Test substitutes are default-denied. A justified substitute remains diagnostic a
 - Outcome:
 - Preserved behavior:
 - Cases and invariants:
+- Independence: session, model family when known, and oracle sources
 
 ## RED Evidence
 - Command:
