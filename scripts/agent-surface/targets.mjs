@@ -7,7 +7,7 @@ import path from "node:path";
 import { directDirectories, filesUnder } from "./fs-tree.mjs";
 import { optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { normalizeExternalSkillFile } from "./postprocess.mjs";
-import { assetCategoryNames, readAssetCategories, readOptionalServices, relative, root } from "./registry.mjs";
+import { assetCategoryFor, assetCategoryNames, readAssetCategories, readOptionalServices, relative, root } from "./registry.mjs";
 import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityCliSubagent, renderAntigravityWorkflow, renderClaudeSubagent, renderClineSubagent, renderClineWorkflow, renderCodexSubagent, renderCopilotSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGooseRecipe, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderKimiCodeSubagent, renderKiroManualSteering, renderKiroRuleDocument, renderKiroSubagent, renderManualClaudeSkill, renderManualKimiCodeSkill, renderManualPortableSkill, renderNativeMarkdownCommand, renderOpenCodeCommand, renderOpenCodeSubagent, renderQwenCodeCommand, renderQwenCodeSubagent, renderScopedRuleReferenceDocument, renderTraeSubagent, renderVanillaSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
 import { antigravitySkillRoot, antigravityWorkflowRoot, claudeMcpPath, clineAgentRoot, clineCursorExtensionMcpPath, clineMcpPath, clineRuleRoot, clineSkillRoot, clineVsCodeExtensionMcpPath, clineWindsurfExtensionMcpPath, clineWorkflowRoot, codexSkillOutputName, copilotAgentRoot, copilotInstructionPath, copilotMcpPath, copilotSkillRoot, cursorSkillRoot, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, droidSkillRoot, dshSkillRoot, flatMarkdownCommandOutputName, gooseRecipeOutputName, gooseSkillRoot, grokBuildSkillRoot, installRootAntigravity, installRootAntigravityCli, installRootCodex, installRootHomeOnly, installRootKimiCode, installRootUserOrProject, installRootVsCode, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloSkillRoot, kiloWorkflowRoot, kimiCodeAgentRoot, kimiCodeConfigPath, kimiCodeConfigRoot, kimiCodeCursorSettingsPath, kimiCodeInstructionPath, kimiCodeMcpPath, kimiCodeSkillRoot, kimiCodeVsCodeSettingsPath, kiroAgentRoot, kiroMcpPath, kiroPermissionsPath, kiroSkillRoot, kiroSteeringRoot, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, opencodeSkillRoot, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, qoderAgentRoot, qoderCommandRoot, qoderConfigRoot, qoderInstructionPath, qoderSettingsPath, qoderSkillRoot, qwenCodeAgentRoot, qwenCodeCommandRoot, qwenCodeConfigRoot, qwenCodeInstructionPath, qwenCodeSettingsPath, qwenCodeSkillRoot, sharedAgentSkillRoot, traeAgentRoot, traeCliConfigPath, traeCliSkillRoot, traeRuleRoot, traeSkillRoot, vsCodeUserRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
@@ -16,13 +16,6 @@ import { exists, fail, isSafeRelativePath } from "./util.mjs";
 
 export function selectedAssetCategories(categoryFilter) {
   return new Set([...(categoryFilter ?? [])].filter((name) => assetCategoryNames.has(name)));
-}
-
-function categoryFor(categories, kind, id) {
-  for (const [name, category] of Object.entries(categories)) {
-    if (category[kind].includes(id)) return name;
-  }
-  return null;
 }
 
 function categoryAllowed(context, category) {
@@ -827,7 +820,7 @@ export async function produceCommandOutputs(adapter, commands, context) {
   const outputs = [];
   const categories = await readAssetCategories();
   for (const command of commands) {
-    const assetCategory = categoryFor(categories, "commands", command.name);
+    const assetCategory = assetCategoryFor(categories, "commands", command.name);
     if (!categoryAllowed(context, assetCategory)) continue;
     if (adapter.renderCommand) {
       outputs.push({
@@ -849,7 +842,7 @@ export async function produceSkillOutputs(adapter, skills, context) {
   const outputs = [];
   const categories = await readAssetCategories();
   for (const skill of skills) {
-    const assetCategory = categoryFor(categories, "skills", skill.name);
+    const assetCategory = assetCategoryFor(categories, "skills", skill.name);
     if (!categoryAllowed(context, assetCategory)) continue;
     if (adapter.renderSkill) {
       outputs.push({
@@ -933,7 +926,7 @@ export async function optionalMcpOutputs(adapter, context) {
       : await selectedMcpServiceEntries(mcpConfig.defaultEnabled, context);
     const rootProperties = mcpConfigRootProperties(mcpConfig, context);
     if (entries.length === 0 && Object.keys(rootProperties).length === 0) continue;
-    const entryCategories = [...new Set(entries.map(([id]) => categoryFor(categories, "services", id)).filter(Boolean))];
+    const entryCategories = [...new Set(entries.map(([id]) => assetCategoryFor(categories, "services", id)).filter(Boolean))];
     outputs.push({
       sourceKind: "external",
       renderKind: "mcps",
@@ -961,10 +954,10 @@ export async function selectedMcpServiceEntries(defaultEnabled, context) {
     .filter(([id, service]) => {
       if (context.optionalServices) return true;
       if (selectedCategories.size > 0) {
-        const category = categoryFor(categories, "services", id);
+        const category = assetCategoryFor(categories, "services", id);
         return category !== null && selectedCategories.has(category);
       }
-      return service.first_party === true && categoryFor(categories, "services", id) === null;
+      return service.first_party === true && assetCategoryFor(categories, "services", id) === null;
     });
   if (context.optionalServices) {
     const known = new Set(entries.map(([id]) => id));
@@ -996,7 +989,7 @@ export async function externalSkillRoots({ includeOptional = true, context = { m
 
   for (const [serviceName, service] of Object.entries(registry.services)) {
     if (!["skill-pack", "behavior-pack"].includes(service.kind)) continue;
-    const assetCategory = categoryFor(categories, "services", serviceName);
+    const assetCategory = assetCategoryFor(categories, "services", serviceName);
     if (!categoryAllowed(context, assetCategory)) continue;
     const required = service.optional === false || service.status === "required";
     if (!required && !includeOptional) continue;
@@ -1061,7 +1054,10 @@ export function outputAppliesToScope(output, scope, sourceKindsConfig) {
 export function outputAppliesToCategory(output, categoryFilter) {
   if (!categoryFilter) return true;
   const selected = selectedAssetCategories(categoryFilter);
-  if (selected.size > 0) return output.assetCategory !== null && selected.has(output.assetCategory);
+  if (selected.size > 0) {
+    return output.requiredForAssetCategories === true
+      || (output.assetCategory !== null && selected.has(output.assetCategory));
+  }
   return categoryFilter.has(output.renderKind) || categoryFilter.has(output.sourceKind);
 }
 
@@ -1141,6 +1137,7 @@ export async function antigravityCliStaticOutputs(catalog, context) {
       renderKind: "plugins",
       source: "package.json",
       relativeOutput: path.join("antigravity-cli", "plugins", "agent-surface", "plugin.json"),
+      requiredForAssetCategories: true,
       content: `${JSON.stringify({
         name: "agent-surface",
         description: "Portable agent-surface command, skill, subagent, and rule pack generated from Lyther/agent-surface.",

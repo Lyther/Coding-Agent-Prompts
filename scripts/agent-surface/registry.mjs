@@ -45,6 +45,13 @@ export async function readAssetCategories() {
   return assetCategoriesCache;
 }
 
+export function assetCategoryFor(categories, kind, id) {
+  for (const [name, category] of Object.entries(categories)) {
+    if (category[kind].includes(id)) return name;
+  }
+  return null;
+}
+
 export async function packageVersion() {
   const metadata = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
   return metadata.version;

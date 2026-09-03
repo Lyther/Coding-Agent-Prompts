@@ -116,6 +116,16 @@ const qwenCodeModdingPlan = dryRun("qwen-code", ["--category", "modding"]);
 planHas(qwenCodeModdingPlan, [/\.qwen\/skills\/stellaris-design\/SKILL\.md/], "qwen-code modding assets");
 planLacks(qwenCodeModdingPlan, [/skills\/ctf-ai-ml\//, /karpathy-guidelines/], "qwen-code modding isolation");
 
+const qwenCodeAllPlan = dryRun("qwen-code", ["--category", "all"]);
+planHas(qwenCodeAllPlan, [/\.qwen\/skills\/workflow-boss\/SKILL\.md/], "qwen-code all general outputs");
+planLacks(qwenCodeAllPlan, [/skills\/ctf-ai-ml\//, /skills\/stellaris-design\//, /karpathy-guidelines/], "qwen-code all keeps opt-in assets explicit");
+
+const antigravityCliModdingPlan = dryRun("antigravity-cli", ["--category", "modding"]);
+planHas(antigravityCliModdingPlan, [
+  /antigravity-cli\/plugins\/agent-surface\/plugin\.json <- package\.json/,
+  /antigravity-cli\/plugins\/agent-surface\/skills\/stellaris-design\/SKILL\.md/,
+], "antigravity-cli category scaffold");
+
 if (hasLocalOpsServerCommand) {
   const codexPrivatePlan = dryRun("codex", ["--category", "private"]);
   planHas(codexPrivatePlan, [/\.agents\/skills\/ops-server\/SKILL\.md <- commands\/ops-server\.md/], "codex private assets");
@@ -272,6 +282,44 @@ assert.doesNotMatch(
   /\.factory\/skills\/ghost-descoped-skill\/SKILL\.md/,
 );
 rmSync(syncDest, { recursive: true, force: true });
+
+/*
+SUBSTITUTE_JUSTIFICATION
+- substitute: a disposable Qwen user root with one previously owned categorized MCP id
+- replaces: the operator's live Qwen skills, MCP config, and install manifest
+- necessity: category resync must exercise removal and preservation without changing the operator profile or source registry
+- real-option: the production installer, source packs, config merger, and filesystem are used; only prior owned state is controlled
+- proof-limit: proves sequential install state, not Qwen runtime MCP invocation
+- real-proof: the completed user-scope distribution plus native runtime MCP inventory
+*/
+{
+  const dest = mkdtempSync(path.join(os.tmpdir(), "agent-surface-category-sequence-"));
+  try {
+    const cyberSkill = path.join(dest, ".qwen", "skills", "ctf-ai-ml", "SKILL.md");
+    const settingsPath = path.join(dest, ".qwen", "settings.json");
+    const manifestPath = path.join(dest, ".agent-surface", "qwen-code-manifest.json");
+    run(["install", "--target", "qwen-code", "--scope", "user", "--dest", dest, "--category", "cybersecurity"]);
+
+    const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    settings.mcpServers["old-cyber"] = { command: "remove-me", args: [] };
+    writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const configEntry = manifest.config_entries.find((entry) => entry.path === ".qwen/settings.json");
+    assert.deepEqual(configEntry.asset_categories, { openosint: "cybersecurity" });
+    configEntry.ids.push("old-cyber");
+    configEntry.asset_categories = { openosint: "cybersecurity", "old-cyber": "cybersecurity" };
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    run(["install", "--target", "qwen-code", "--scope", "user", "--dest", dest, "--category", "cybersecurity"]);
+    assert.equal(Object.hasOwn(JSON.parse(readFileSync(settingsPath, "utf8")).mcpServers, "old-cyber"), false);
+    run(["install", "--target", "qwen-code", "--scope", "user", "--dest", dest, "--category", "mcps"]);
+    assert.equal(Object.hasOwn(JSON.parse(readFileSync(settingsPath, "utf8")).mcpServers, "openosint"), true);
+    run(["install", "--target", "qwen-code", "--scope", "user", "--dest", dest, "--category", "external"]);
+    assert.equal(existsSync(cyberSkill), true);
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+}
 
 // SUBSTITUTE_JUSTIFICATION
 // - substitute: retired Gemini/VSCodium manifests and config in a disposable user root

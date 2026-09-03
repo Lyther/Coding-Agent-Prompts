@@ -70,7 +70,7 @@ node scripts/agent-surface.mjs build --target <t> --dry-run
 node scripts/agent-surface.mjs install --target <t> --scope user --dry-run
 ```
 
-`install` accepts repeated/comma-separated `--target` (or `--runtime`) IDs and `--category` selectors. Output selectors are `commands`, `rules`, `subagents`, `skills`, `recipes`, `mcps`, `external`, `instructions`, `prompts`, `plugins`, and `ignores`. Asset selectors are `cybersecurity`, `private`, and `modding`; run asset and output selectors as separate installs. `--service <id>` narrows `--category mcps` to one service.
+`install` accepts repeated/comma-separated `--target` (or `--runtime`) IDs and `--category` selectors. Output selectors are `commands`, `rules`, `subagents`, `skills`, `recipes`, `mcps`, `external`, `instructions`, `prompts`, `plugins`, and `ignores`. Asset selectors are `cybersecurity`, `private`, and `modding`; run asset and output selectors as separate installs. Omitting `--category` or using `--category all` performs the general full sync; opt-in asset categories remain explicit. `--service <id>` narrows `--category mcps` to one service.
 
 ## Install behavior
 
