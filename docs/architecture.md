@@ -39,7 +39,7 @@ Unacceptable outcomes are a target that cannot discover its files, a provider re
 
 Actors:
 
-- The author maintains canonical skills, explicit commands, rules, subagents, optional services, and runtime evidence.
+- The author maintains canonical skills, explicit commands, rules, subagents, asset categories, optional services, and runtime evidence.
 - The operator builds for inspection or installs to user/project/custom roots.
 - Agent runtimes consume generated native files and connect to first-party MCP services where the target contract supports MCP.
 - External skill packs remain pinned inputs; model providers, credentials, subscriptions, runtime binaries, and editor extensions remain outside the compiler boundary.
@@ -72,7 +72,7 @@ First-party MCP processes are separate products. Their distribution entries are 
 ### Component View
 
 - **Source readers** own parsing of skills, commands, rules, subagents, ignores, and external packs. They do not know runtime paths.
-- **Portfolio registries** own target lifecycle, rendered surface tokens, capability evidence, and optional service declarations.
+- **Portfolio registries** own target lifecycle, rendered surface tokens, capability evidence, asset-category membership, and optional service declarations.
 - **Target adapter table** owns the mapping from canonical source kinds to native roots/renderers/config formats. It does not parse shared config or perform writes.
 - **Renderers** own host-specific file syntax. A renderer should exist only when a generic vanilla skill/instruction/agent renderer cannot represent the host contract.
 - **Merge layer** owns format-aware read-modify-write behavior for shared JSON/JSONC/TOML/YAML config. It preserves unknown siblings and rejects ambiguous shapes.

@@ -8,13 +8,13 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-import { exportableCatalog, localCommandOverlays, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
+import { exportableCatalog, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
 import { readFileIfExists, readJsonIfExists, removeTree } from "./io.mjs";
 import { mergeKiloInstructionJsonc, parseJsoncResult, setJsoncRootProperty } from "./jsonc.mjs";
 import { YAML_MCP_FORMATS, assertJsonPropertyType, mergeCodexMcpToml, mergeJsonMcpConfig, mergeKiroPermissions, mergeYamlMcpConfig, optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
-import { packageVersion, readSourceKinds, relative, root } from "./registry.mjs";
+import { assetCategoryNames, packageVersion, readSourceKinds, relative, root } from "./registry.mjs";
 import { readRules } from "./rules.mjs";
-import { adapterMcpConfigs, kiloRuleInstructionPaths, mcpConfigRootProperties, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, retiredInstallTargets, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
+import { adapterMcpConfigs, kiloRuleInstructionPaths, mcpConfigRootProperties, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, retiredInstallTargets, selectedAssetCategories, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
 import { argValue, argValues, fail, isPathInside, isSafeRelativePath, isSafeTargetName, splitArgValues, uniqueStrings } from "./util.mjs";
 
 export async function build(args) {
@@ -202,10 +202,15 @@ function installCategoryFilter(args) {
     "external",
     "mcps",
     "recipes",
+    ...assetCategoryNames,
   ]);
   const selected = new Set(values);
   for (const value of selected) {
     if (!known.has(value)) fail(`unsupported install category: ${value}`);
+  }
+  const assetCategories = selectedAssetCategories(selected);
+  if (assetCategories.size > 0 && assetCategories.size !== selected.size) {
+    fail("asset categories cannot be mixed with output categories; run them as separate installs");
   }
   return selected;
 }
@@ -263,6 +268,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       source: item.source,
       output: relativeOutput,
       version,
+      asset_category: item.assetCategory ?? undefined,
     });
   }
 
@@ -290,24 +296,25 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const partialInstall = categoryFilter !== null || optionalServices !== null;
   const liveOutputs = new Set(managed.map((item) => item.output));
   const previousFileEntries = manifestFileEntries(previousManifest, target);
-  const liveCommandSources = new Set(catalog.commands.map((command) => command.relativePath));
-  // Public packages intentionally omit private local command overlays. Their
-  // absence is not a de-scoping signal: retain prior ownership and files until
-  // a checkout that actually carries the overlay updates them.
-  const retainedLocalOverlayEntries = previousFileEntries.filter(
-    (item) => localCommandOverlays.has(item.source) && !liveCommandSources.has(item.source),
-  );
-  const retainedLocalOverlayOutputs = new Set(retainedLocalOverlayEntries.map((item) => item.output));
+  const selectedCategories = selectedAssetCategories(categoryFilter);
   const staleExternalManaged = categoryFilter?.has("external")
     ? previousFileEntries.filter(
       (item) => /^external[\\/]/.test(item.source) && !liveOutputs.has(item.output),
     )
     : [];
+  const staleCategoryManaged = selectedCategories.size > 0
+    ? previousFileEntries.filter(
+      (item) => selectedCategories.has(item.asset_category) && !liveOutputs.has(item.output),
+    )
+    : [];
+  const partialStaleManaged = [...new Map(
+    [...staleExternalManaged, ...staleCategoryManaged].map((item) => [item.output, item]),
+  ).values()];
   const staleManaged = !partialInstall
     ? [...previousFileEntries, ...legacyOwnership.files]
-      .filter((item) => !liveOutputs.has(item.output) && !retainedLocalOverlayOutputs.has(item.output))
+      .filter((item) => !liveOutputs.has(item.output))
       .sort((left, right) => left.output.localeCompare(right.output))
-    : staleExternalManaged.sort((left, right) => left.output.localeCompare(right.output));
+    : partialStaleManaged.sort((left, right) => left.output.localeCompare(right.output));
   const staleManagedOutputs = new Set(staleManaged.map((item) => item.output));
   const staleRemovalActions = [];
   const configMerges = [];
@@ -332,10 +339,12 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     relativeOutput: outputRootFor(mcpConfig.relativeOutput, configRouteContext),
     format: mcpConfig.format,
   }));
-  if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps"))) {
+  const categorySelectsMcp = selectedCategories.size > 0
+    && (await selectedMcpServiceEntries(true, configRouteContext)).length > 0;
+  if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps") || categorySelectsMcp)) {
     const merge = await kiloConfigMerge(installRoot, scope, {
       includeInstructions: !categoryFilter || categoryFilter.has("rules"),
-      includeMcp: !categoryFilter || categoryFilter.has("mcps"),
+      includeMcp: !categoryFilter || categoryFilter.has("mcps") || categorySelectsMcp,
       includeRootProperties: !categoryFilter,
       categoryFilter,
       optionalServices,
@@ -344,7 +353,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     declaredConfigRoutes.push(merge);
     const prepared = await prepareKiloConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
     if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
-  } else if (!categoryFilter || categoryFilter.has("mcps")) {
+  } else if (!categoryFilter || categoryFilter.has("mcps") || categorySelectsMcp) {
     for (const mcpConfig of adapterMcpConfigs(adapter).filter((item) => mcpConfigScopeAllows(item, scope))) {
       const merge = await mcpConfigMerge(mcpConfig, installRoot, scope, {
         ...configRouteContext,
@@ -403,7 +412,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const retainedManaged = partialInstall
     ? previousFileEntries
       .filter((item) => !liveOutputs.has(item.output) && !staleManagedOutputs.has(item.output))
-    : retainedLocalOverlayEntries;
+    : [];
   const manifestManaged = [...retainedManaged, ...managed].sort((left, right) => left.output.localeCompare(right.output));
   const nextConfigEntries = mergedManifestConfigEntries(
     previousConfigEntries,
@@ -476,6 +485,7 @@ function manifestFileEntries(manifest, target) {
       source: typeof item.source === "string" ? item.source : "",
       output: item.output,
       version: typeof item.version === "string" ? item.version : undefined,
+      asset_category: typeof item.asset_category === "string" ? item.asset_category : undefined,
     }));
 }
 

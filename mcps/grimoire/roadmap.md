@@ -48,6 +48,6 @@ The honest blockers before an unqualified "production-ready" claim. Items marked
 ## Later (deferred-by-design — open only if a trigger fires)
 
 - **Hybrid / embedding retrieval** — only if the eval gate floor proves insufficient or higher recall is required (current BM25 v0 baseline: hit@5 0.80 / MRR 0.686).
-- **More packs** — add `--pack` + `served_by` as other large packs are de-scoped to grimoire (now: `anthropic-cybersecurity-skills` + `rev-skills`; further packs still deferred).
+- **More packs** — add `--pack` + `served_by` as other large packs are de-scoped to grimoire (now: `anthropic-cybersecurity-skills`, `rev-skills`, and `hack-skills`; further packs still require the same native Agent-Skill contract).
 - **`resource_link`** — expose skills/files as MCP resources once client support is even (`grimoire_file_get` covers it today).
 - **Binary supporting files** — not supported by the text tool contract; indexing fails clearly on non-UTF-8 bytes instead of corrupting them.

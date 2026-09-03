@@ -86,16 +86,47 @@ planHas(qwenCodePlan, [
   /\.qwen\/commands\/ops-nuke\.md <- commands\/ops-nuke\.md/,
   /\.qwen\/agents\/boss\.md <- subagents\/boss\.md/,
   /\.qwen\/settings\.json MCP \+= grimoire, synapse/,
-  /\.qwen\/skills\/ctf-ai-ml\/SKILL\.md <- external\/ctf-skills\/ctf-ai-ml\/SKILL\.md/,
 ], "qwen-code");
-planLacks(qwenCodePlan, [/karpathy-guidelines/, /skills\/book-study\//], "qwen-code default excludes optional packs");
+planLacks(qwenCodePlan, [
+  /karpathy-guidelines/,
+  /skills\/book-study\//,
+  /skills\/ctf-ai-ml\//,
+  /skills\/stellaris-design\//,
+], "qwen-code default excludes optional and categorized packs");
 
 const qwenCodeExternalPlan = dryRun("qwen-code", ["--category", "external"]);
 planHas(qwenCodeExternalPlan, [
   /\.qwen\/skills\/karpathy-guidelines\/SKILL\.md/,
   /\.qwen\/skills\/book-study\/SKILL\.md/,
-  /\.qwen\/skills\/ctf-ai-ml\/SKILL\.md/,
 ], "qwen-code explicit external packs");
+planLacks(qwenCodeExternalPlan, [/skills\/ctf-ai-ml\//], "qwen-code general external packs");
+
+const qwenCodeCybersecurityPlan = dryRun("qwen-code", ["--category", "cybersecurity"]);
+planHas(qwenCodeCybersecurityPlan, [
+  /\.qwen\/skills\/ctf-ai-ml\/SKILL\.md/,
+  /\.qwen\/skills\/red-team-command-doctrine\/SKILL\.md/,
+  /\.qwen\/settings\.json MCP \+= openosint/,
+], "qwen-code cybersecurity assets");
+planLacks(qwenCodeCybersecurityPlan, [/karpathy-guidelines/, /skills\/stellaris-design\//, /pentest-ai/], "qwen-code cybersecurity isolation");
+
+const qwenCodePentestAiPlan = dryRun("qwen-code", ["--category", "mcps", "--service", "pentest-ai"]);
+planHas(qwenCodePentestAiPlan, [/\.qwen\/settings\.json MCP \+= pentest-ai/], "qwen-code explicit pentest-ai MCP");
+
+const qwenCodeModdingPlan = dryRun("qwen-code", ["--category", "modding"]);
+planHas(qwenCodeModdingPlan, [/\.qwen\/skills\/stellaris-design\/SKILL\.md/], "qwen-code modding assets");
+planLacks(qwenCodeModdingPlan, [/skills\/ctf-ai-ml\//, /karpathy-guidelines/], "qwen-code modding isolation");
+
+if (hasLocalOpsServerCommand) {
+  const codexPrivatePlan = dryRun("codex", ["--category", "private"]);
+  planHas(codexPrivatePlan, [/\.agents\/skills\/ops-server\/SKILL\.md <- commands\/ops-server\.md/], "codex private assets");
+}
+
+const mixedCategory = status([
+  "install", "--target", "codex", "--dest", "/tmp/agent-surface-mixed-category",
+  "--category", "external,cybersecurity", "--dry-run",
+]);
+assert.notEqual(mixedCategory.status, 0);
+assert.match(mixedCategory.stderr, /asset categories cannot be mixed with output categories/);
 
 const kiroPlan = dryRun("kiro");
 planHas(kiroPlan, [
@@ -141,9 +172,7 @@ try {
   );
   assert.match(gooseUserPlan, /\.config\/goose\/config\.yaml MCP/);
   assert.doesNotMatch(gooseUserPlan, /recipes\//);
-  if (hasLocalOpsServerCommand) {
-    assert.match(gooseUserPlan, /\.agents\/skills\/ops-server\/SKILL\.md <- commands\/ops-server\.md/);
-  }
+  assert.doesNotMatch(gooseUserPlan, /\.agents\/skills\/ops-server\/SKILL\.md/);
 } finally {
   rmSync(gooseHome, { recursive: true, force: true });
 }
@@ -230,7 +259,7 @@ const syncPlan = run(["install", "--target", "droid", "--dest", syncDest, "--dry
 assert.match(syncPlan, /planned stale managed removals:/);
 assert.match(syncPlan, /\.factory\/skills\/ghost-descoped-skill\/SKILL\.md/);
 assert.doesNotMatch(syncPlan, /\.factory\/skills\/karpathy-guidelines\/SKILL\.md/);
-assert.match(syncPlan, /\.factory\/skills\/ctf-ai-ml\/SKILL\.md/);
+assert.doesNotMatch(syncPlan, /\.factory\/skills\/ctf-ai-ml\/SKILL\.md/);
 const externalSyncPlan = run(["install", "--target", "droid", "--dest", syncDest, "--category", "external", "--dry-run"]);
 assert.match(externalSyncPlan, /\.factory\/skills\/ghost-descoped-skill\/SKILL\.md/);
 assert.doesNotMatch(externalSyncPlan, /\.factory\/skills\/retained-canonical-skill\/SKILL\.md/);
@@ -1206,9 +1235,8 @@ for (const required of [
 assert.equal(packedPaths.has("commands/ops-server.md"), false, "npm package leaked private ops-server command");
 assert.equal([...packedPaths].some((file) => file.startsWith(".agent-surface/")), false, "npm package leaked local agent state");
 
-// A public package cannot carry the ignored private command overlay. Installing
-// that package later must not interpret the absent private source as a request
-// to delete a locally installed overlay that the maintainer checkout owns.
+// A default install explicitly excludes private assets, even when the public
+// package cannot carry their source. Re-enable them with `--category private`.
 {
   const dest = mkdtempSync(path.join(os.tmpdir(), "agent-surface-private-overlay-dest-"));
   const packageDir = mkdtempSync(path.join(os.tmpdir(), "agent-surface-public-package-"));
@@ -1216,10 +1244,10 @@ assert.equal([...packedPaths].some((file) => file.startsWith(".agent-surface/"))
     // SUBSTITUTE_JUSTIFICATION
     // - substitute: representative private skill and policy bytes in this temporary install root
     // - replaces: the ignored commands/ops-server.md source, which is intentionally unavailable in public CI
-    // - necessity: the deletion regression requires prior manifest-owned private files without publishing the secret source
-    // - real-option: installing the real overlay is exercised by the maintainer-only all-target local distribution audit
-    // - proof-limit: this setup does not prove rendering from the private source; it proves package reinstall preservation
-    // - real-proof: node scripts/agent-surface.mjs install --target all --scope user --allow-scope-root
+    // - necessity: the de-scoping regression requires prior manifest-owned private files without publishing the secret source
+    // - real-option: the production public package and installer are exercised; only the unavailable private bytes are seeded
+    // - proof-limit: this setup does not prove rendering from the private source; it proves default removal
+    // - real-proof: node scripts/agent-surface.mjs install --target codex --scope user --allow-scope-root --category private
     const privateSkillRel = path.join(".codex", "skills", "ops-server", "SKILL.md");
     const privatePolicyRel = path.join(".codex", "skills", "ops-server", "agents", "openai.yaml");
     const privateSkill = path.join(dest, privateSkillRel);
@@ -1241,9 +1269,6 @@ assert.equal([...packedPaths].some((file) => file.startsWith(".agent-surface/"))
         config_entries: [],
       }, null, 2)}\n`,
     );
-    const privateSkillBefore = readFileSync(privateSkill);
-    const privatePolicyBefore = readFileSync(privatePolicy);
-
     const packageInfo = JSON.parse(execFileSync(
       "npm",
       ["pack", "--json", "--pack-destination", packageDir, "--loglevel=silent"],
@@ -1264,14 +1289,14 @@ assert.equal([...packedPaths].some((file) => file.startsWith(".agent-surface/"))
       { cwd: packagedRoot, encoding: "utf8" },
     );
 
-    assert.deepEqual(readFileSync(privateSkill), privateSkillBefore);
-    assert.deepEqual(readFileSync(privatePolicy), privatePolicyBefore);
+    assert.equal(existsSync(privateSkill), false);
+    assert.equal(existsSync(privatePolicy), false);
     const manifest = JSON.parse(
       readFileSync(path.join(dest, ".agent-surface", "codex-manifest.json"), "utf8"),
     );
     assert.equal(
       manifest.managed.filter((item) => item.source === "commands/ops-server.md").length,
-      2,
+      0,
     );
   } finally {
     rmSync(dest, { recursive: true, force: true });
@@ -1290,8 +1315,8 @@ try {
     const sources = manifest.managed.map((item) => item.source);
     assert.equal(
       sources.includes("commands/ops-server.md"),
-      hasLocalOpsServerCommand && target !== "dsh",
-      `${target}: local ops-server overlay`,
+      false,
+      `${target}: default excludes private ops-server overlay`,
     );
     for (const optionalPack of [
       "external/andrej-karpathy-skills/",

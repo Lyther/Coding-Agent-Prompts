@@ -26,6 +26,25 @@ export async function readOptionalServices() {
   return optionalServicesCache;
 }
 
+export const assetCategoryFiles = {
+  cybersecurity: "cybersecurity-assets.json",
+  private: "private-secret.json",
+  modding: "modding.json",
+};
+export const assetCategoryNames = new Set(Object.keys(assetCategoryFiles));
+
+let assetCategoriesCache;
+export async function readAssetCategories() {
+  if (assetCategoriesCache !== undefined) return assetCategoriesCache;
+  const entries = await Promise.all(Object.entries(assetCategoryFiles).map(async ([name, file]) => {
+    const value = JSON.parse(await readFile(path.join(root, "registry", file), "utf8"));
+    if (value.category !== name) throw new Error(`asset category ${file} declares ${value.category ?? "no category"}`);
+    return [name, value];
+  }));
+  assetCategoriesCache = Object.fromEntries(entries);
+  return assetCategoriesCache;
+}
+
 export async function packageVersion() {
   const metadata = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
   return metadata.version;

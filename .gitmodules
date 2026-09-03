@@ -16,3 +16,6 @@
 [submodule "external/rev-skills"]
 	path = external/rev-skills
 	url = https://github.com/Lyther/rev-skills.git
+[submodule "external/hack-skills"]
+	path = external/hack-skills
+	url = https://github.com/yaklang/hack-skills

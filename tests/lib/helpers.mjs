@@ -70,6 +70,9 @@ export function files(dir) {
 const guardedRepoFiles = [
   path.join(root, "registry", "targets.json"),
   path.join(root, "registry", "optional-services.json"),
+  path.join(root, "registry", "cybersecurity-assets.json"),
+  path.join(root, "registry", "private-secret.json"),
+  path.join(root, "registry", "modding.json"),
   path.join(root, "registry", "legacy-owned.json"),
   path.join(root, "subagents", "boss.md"),
 ];

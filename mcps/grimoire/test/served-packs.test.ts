@@ -12,6 +12,10 @@ test("servedPacksFromRegistry reads the real optional-services registry", () => 
   const packs = servedPacksFromRegistry(REPO, loadRegistry(REPO));
   const byId = new Map(packs.map((p) => [p.serviceId, p]));
   assert.equal(byId.get("anthropic-cybersecurity-skills")?.skillsRel, "skills");
+  assert.equal(byId.get("hack-skills")?.skillsRel, "skills");
+  assert.equal(byId.get("hack-skills")?.required, true);
+  assert.match(byId.get("hack-skills")?.commit ?? "", /^[0-9a-f]{40}$/);
+  assert.match(byId.get("hack-skills")?.attribution ?? "", /Yaklang.*MIT/);
   assert.equal(byId.get("rev-skills")?.skillsRel, ".claude/skills");
   assert.equal(byId.get("rev-skills")?.required, true);
   assert.match(byId.get("rev-skills")?.commit ?? "", /^[0-9a-f]{40}$/);

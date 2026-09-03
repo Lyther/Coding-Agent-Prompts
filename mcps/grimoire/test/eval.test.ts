@@ -108,3 +108,24 @@ test("rev-skills pack: 121 skills, ghidra search, get", { skip: existsSync(REV_S
     }
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+const HACK_PACK = join(HERE, "..", "..", "..", "..", "external", "hack-skills");
+const HACK_SKILLS = join(HACK_PACK, "skills");
+test("hack-skills pack: 102 skills and direct retrieval", { skip: existsSync(HACK_SKILLS) ? false : "hack-skills submodule not checked out" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "grimoire-hackskills-"));
+  const store = new Store({ dir });
+  try {
+    const built = buildIndex({
+      packs: [{ serviceId: "hack-skills", path: HACK_PACK, attribution: "hack-skills test index." }],
+      outDir: dir,
+      indexedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.equal(built.skills, 102);
+    const got = store.get("hack-skills:api-auth-and-jwt-abuse");
+    assert.equal(got.status, "ok");
+    if (got.status === "ok") {
+      assert.equal(got.skill.pack, "hack-skills");
+      assert.match(got.skill.body, /JWT/i);
+    }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
