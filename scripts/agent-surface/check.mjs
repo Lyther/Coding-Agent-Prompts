@@ -12,7 +12,7 @@ import { approximateTokens } from "./format.mjs";
 import { directDirectories, directories, files, filesUnder } from "./fs-tree.mjs";
 import { readFileIfExists } from "./io.mjs";
 import { gitIgnoredPaths, gitStagedGitlinkMap, gitSubmoduleStatusMap } from "./proc.mjs";
-import { readOptionalServices, readSourceKinds, relative, root } from "./registry.mjs";
+import { readAssetCategories, readOptionalServices, readSourceKinds, relative, root } from "./registry.mjs";
 import { vsCodeUserRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
 import { readSkills } from "./skills.mjs";
@@ -50,6 +50,9 @@ export const registrySchemaFiles = [
   { schema: "artifacts.schema.json", file: "registry/artifacts.json" },
   { schema: "source-kinds.schema.json", file: "registry/source-kinds.json" },
   { schema: "optional-services.schema.json", file: "registry/optional-services.json" },
+  { schema: "asset-category.schema.json", file: "registry/cybersecurity-assets.json" },
+  { schema: "asset-category.schema.json", file: "registry/private-secret.json" },
+  { schema: "asset-category.schema.json", file: "registry/modding.json" },
   { schema: "legacy-owned.schema.json", file: "registry/legacy-owned.json" },
 ];
 
@@ -229,6 +232,7 @@ export async function check() {
 
   await checkWorkflowSchemas(errors);
   await checkRegistrySchemas(errors);
+  await checkAssetCategories(commands, skills, errors);
   await checkTargetCapabilities(targetsConfig, errors);
   await checkExternalServicePins(errors);
   await checkServedBy(errors);
@@ -248,6 +252,35 @@ export async function check() {
   }
 
   console.log("check: ok");
+}
+
+async function checkAssetCategories(commands, skills, errors) {
+  const categories = await readAssetCategories();
+  const services = await readOptionalServices();
+  const commandNames = new Set(commands.map((command) => command.name));
+  const skillNames = new Set(skills.map((skill) => skill.name));
+  const owners = new Map();
+
+  for (const [categoryName, category] of Object.entries(categories)) {
+    for (const [kind, known] of [
+      ["commands", commandNames],
+      ["skills", skillNames],
+      ["services", new Set(Object.keys(services.services))],
+    ]) {
+      for (const id of category[kind]) {
+        const key = `${kind}:${id}`;
+        const previous = owners.get(key);
+        if (previous) errors.push(`asset ${key} belongs to both ${previous} and ${categoryName}`);
+        owners.set(key, categoryName);
+        const declaredLocalCommand = categoryName === "private"
+          && kind === "commands"
+          && localCommandOverlays.has(`commands/${id}.md`);
+        if (!known.has(id) && !declaredLocalCommand) {
+          errors.push(`${categoryName} asset category references unknown ${kind.slice(0, -1)}: ${id}`);
+        }
+      }
+    }
+  }
 }
 
 export function checkBossArtifactCoherence(data, source, errors) {

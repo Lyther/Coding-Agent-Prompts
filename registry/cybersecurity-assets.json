@@ -1,0 +1,13 @@
+{
+  "category": "cybersecurity",
+  "skills": [],
+  "commands": [],
+  "services": [
+    "anthropic-cybersecurity-skills",
+    "codex-redteam-mode",
+    "ctf-skills",
+    "hack-skills",
+    "openosint",
+    "rev-skills"
+  ]
+}

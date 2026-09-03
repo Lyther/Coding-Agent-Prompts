@@ -7,12 +7,22 @@ import path from "node:path";
 import { directDirectories, filesUnder } from "./fs-tree.mjs";
 import { optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
 import { normalizeExternalSkillFile } from "./postprocess.mjs";
-import { readOptionalServices, relative, root } from "./registry.mjs";
+import { assetCategoryFor, assetCategoryNames, readAssetCategories, readOptionalServices, relative, root } from "./registry.mjs";
 import { firstHeading, renderAntigravityCliRuleDocument, renderAntigravityCliSubagent, renderAntigravityWorkflow, renderClaudeSubagent, renderClineSubagent, renderClineWorkflow, renderCodexSubagent, renderCopilotSubagent, renderCursorCommand, renderCursorSubagent, renderDeepAgentsSubagent, renderDroidCommand, renderDroidSubagent, renderGooseRecipe, renderInstructionDocument, renderKiloRuleDocument, renderKiloSubagent, renderKiloWorkflow, renderKimiCodeSubagent, renderKiroManualSteering, renderKiroRuleDocument, renderKiroSubagent, renderManualClaudeSkill, renderManualKimiCodeSkill, renderManualPortableSkill, renderNativeMarkdownCommand, renderOpenCodeCommand, renderOpenCodeSubagent, renderQwenCodeCommand, renderQwenCodeSubagent, renderScopedRuleReferenceDocument, renderTraeSubagent, renderVanillaSkill, renderVsCodeInstructionDocument, renderVsCodePromptDocument, renderWindsurfWorkflow } from "./render.mjs";
 import { antigravitySkillRoot, antigravityWorkflowRoot, claudeMcpPath, clineAgentRoot, clineCursorExtensionMcpPath, clineMcpPath, clineRuleRoot, clineSkillRoot, clineVsCodeExtensionMcpPath, clineWindsurfExtensionMcpPath, clineWorkflowRoot, codexSkillOutputName, copilotAgentRoot, copilotInstructionPath, copilotMcpPath, copilotSkillRoot, cursorSkillRoot, deepagentsAgentRoot, deepagentsConfigRoot, deepagentsInstructionPath, deepagentsMcpPath, deepagentsSkillRoot, deepagentsSubagentOutputName, droidConfigRoot, droidInstructionPath, droidSkillRoot, dshSkillRoot, flatMarkdownCommandOutputName, gooseRecipeOutputName, gooseSkillRoot, grokBuildSkillRoot, installRootAntigravity, installRootAntigravityCli, installRootCodex, installRootHomeOnly, installRootKimiCode, installRootUserOrProject, installRootVsCode, kiloAgentRoot, kiloConfigPath, kiloRuleReferenceRoot, kiloRuleRoot, kiloSkillRoot, kiloWorkflowRoot, kimiCodeAgentRoot, kimiCodeConfigPath, kimiCodeConfigRoot, kimiCodeCursorSettingsPath, kimiCodeInstructionPath, kimiCodeMcpPath, kimiCodeSkillRoot, kimiCodeVsCodeSettingsPath, kiroAgentRoot, kiroMcpPath, kiroPermissionsPath, kiroSkillRoot, kiroSteeringRoot, opencodeAgentRoot, opencodeCommandRoot, opencodeConfigRoot, opencodeInstructionPath, opencodeMcpPath, opencodeSkillRoot, openhandsConfigRoot, openhandsInstructionPath, openhandsMcpPath, openhandsSkillRoot, piConfigRoot, piInstructionPath, piSkillRoot, poolConfigRoot, poolInstructionPath, poolSkillRoot, qoderAgentRoot, qoderCommandRoot, qoderConfigRoot, qoderInstructionPath, qoderSettingsPath, qoderSkillRoot, qwenCodeAgentRoot, qwenCodeCommandRoot, qwenCodeConfigRoot, qwenCodeInstructionPath, qwenCodeSettingsPath, qwenCodeSkillRoot, sharedAgentSkillRoot, traeAgentRoot, traeCliConfigPath, traeCliSkillRoot, traeRuleRoot, traeSkillRoot, vsCodeUserRoot, windsurfConfigRoot, windsurfMcpPath, windsurfRulePath, windsurfSkillRoot, windsurfWorkflowRoot, zedConfigRoot, zedInstructionPath, zedMcpPath, zedSkillRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
 import { ignoreOutputs, subagentOutputs } from "./source-primitives.mjs";
 import { exists, fail, isSafeRelativePath } from "./util.mjs";
+
+export function selectedAssetCategories(categoryFilter) {
+  return new Set([...(categoryFilter ?? [])].filter((name) => assetCategoryNames.has(name)));
+}
+
+function categoryAllowed(context, category) {
+  if (context.mode !== "install") return true;
+  const selected = selectedAssetCategories(context.categoryFilter);
+  return selected.size > 0 ? category !== null && selected.has(category) : category === null;
+}
 
 export const targets = {
   "claude-code": {
@@ -808,17 +818,21 @@ export async function produceCommandOutputs(adapter, commands, context) {
     return [];
   }
   const outputs = [];
+  const categories = await readAssetCategories();
   for (const command of commands) {
+    const assetCategory = assetCategoryFor(categories, "commands", command.name);
+    if (!categoryAllowed(context, assetCategory)) continue;
     if (adapter.renderCommand) {
       outputs.push({
         source: command.relativePath,
         relativeOutput: commandRelativeOutput(adapter, command, context),
         content: await adapter.renderCommand(command, context),
+        assetCategory,
       });
     }
 
     for (const buildOutput of adapter.additionalCommandOutputs ?? []) {
-      outputs.push(await buildOutput(command, context));
+      outputs.push({ ...await buildOutput(command, context), assetCategory });
     }
   }
   return outputs;
@@ -826,16 +840,20 @@ export async function produceCommandOutputs(adapter, commands, context) {
 
 export async function produceSkillOutputs(adapter, skills, context) {
   const outputs = [];
+  const categories = await readAssetCategories();
   for (const skill of skills) {
+    const assetCategory = assetCategoryFor(categories, "skills", skill.name);
+    if (!categoryAllowed(context, assetCategory)) continue;
     if (adapter.renderSkill) {
       outputs.push({
         source: skill.relativePath,
         relativeOutput: skillRelativeOutput(adapter, skill, context),
         content: await adapter.renderSkill(skill, context),
+        assetCategory,
       });
     }
     for (const buildOutput of adapter.additionalSkillOutputs ?? []) {
-      outputs.push(await buildOutput(skill, context));
+      outputs.push({ ...await buildOutput(skill, context), assetCategory });
     }
   }
   return outputs;
@@ -844,18 +862,25 @@ export async function produceSkillOutputs(adapter, skills, context) {
 export async function externalSkillOutputs(adapter, context) {
   const externalOutputRoot = adapter.externalSkillOutputRoot ?? adapter.skillOutputRoot;
   if (!externalOutputRoot) return [];
-  // Required external packs are part of the default distribution. Optional packs are
-  // added only by an explicit external-category install; build mode keeps the full
+  // Uncategorized required packs are part of the default distribution. Optional general
+  // packs and categorized packs require their matching category; build mode keeps the full
   // superset for generated-output validation.
-  if (context.mode === "install" && context.categoryFilter && !context.categoryFilter.has("external")) return [];
+  if (
+    context.mode === "install"
+    && context.categoryFilter
+    && !context.categoryFilter.has("external")
+    && selectedAssetCategories(context.categoryFilter).size === 0
+  ) return [];
   const outputs = [];
-  const includeOptional = context.mode !== "install" || Boolean(context.categoryFilter?.has("external"));
-  const roots = await externalSkillRoots({ includeOptional });
+  const includeOptional = context.mode !== "install"
+    || Boolean(context.categoryFilter?.has("external"))
+    || selectedAssetCategories(context.categoryFilter).size > 0;
+  const roots = await externalSkillRoots({ includeOptional, context });
   const outputRoot = outputRootFor(externalOutputRoot, context);
   const textExtensions = [".md", ".mdx", ".json", ".yaml", ".yml", ".toml", ".txt", ".sh", ".py", ".js", ".ts", ".ps1"];
 
   let totalBytes = 0;
-  for (const { root: sourceRoot, serviceName } of roots) {
+  for (const { root: sourceRoot, serviceName, assetCategory } of roots) {
     const skillName = path.basename(sourceRoot);
     const skillFiles = await filesUnder(sourceRoot, textExtensions);
     for (const file of skillFiles) {
@@ -880,6 +905,7 @@ export async function externalSkillOutputs(adapter, context) {
         source: relative(file),
         relativeOutput: path.join(outputRoot, skillName, relativeFile),
         content: normalizeExternalSkillFile(relativeFile, await readFile(file, "utf8"), skillName),
+        assetCategory,
       });
     }
   }
@@ -889,6 +915,7 @@ export async function externalSkillOutputs(adapter, context) {
 
 export async function optionalMcpOutputs(adapter, context) {
   const outputs = [];
+  const categories = await readAssetCategories();
   for (const mcpConfig of adapterMcpConfigs(adapter)) {
     if (mcpConfig.emitOutput === false) continue;
     if (context.mode === "install" && mcpConfig.installMode !== "write") continue;
@@ -899,29 +926,39 @@ export async function optionalMcpOutputs(adapter, context) {
       : await selectedMcpServiceEntries(mcpConfig.defaultEnabled, context);
     const rootProperties = mcpConfigRootProperties(mcpConfig, context);
     if (entries.length === 0 && Object.keys(rootProperties).length === 0) continue;
+    const entryCategories = [...new Set(entries.map(([id]) => assetCategoryFor(categories, "services", id)).filter(Boolean))];
     outputs.push({
       sourceKind: "external",
       renderKind: "mcps",
       source: "registry/optional-services.json",
       relativeOutput: outputRootFor(mcpConfig.relativeOutput, context),
       content: renderMcpConfig(mcpConfig.format, entries, rootProperties),
+      assetCategory: entryCategories.length === 1 ? entryCategories[0] : null,
     });
   }
   return outputs;
 }
 
 export async function selectedMcpServiceEntries(defaultEnabled, context) {
-  const explicitMcp = context.categoryFilter?.has("mcps") || context.optionalServices;
+  const selectedCategories = selectedAssetCategories(context.categoryFilter);
+  const explicitMcp = context.categoryFilter?.has("mcps") || context.optionalServices || selectedCategories.size > 0;
   if (!defaultEnabled && !explicitMcp) return [];
 
   const registry = await readOptionalServices();
-  // Opt-in contract: external/secret-bearing MCPs are included ONLY when named explicitly
-  // via --service. `--category mcps` alone (no --service) selects first-party MCPs only —
-  // it must never auto-add any non-first-party server.
+  const categories = await readAssetCategories();
+  // `--category mcps` selects first-party MCPs only. Non-first-party MCPs require
+  // either an explicit service id or membership in an explicitly selected asset category.
   const entries = Object.entries(registry.services)
     .filter(([, service]) => service.kind === "mcp")
     .filter(([id]) => !context.optionalServices || context.optionalServices.has(id))
-    .filter(([, service]) => context.optionalServices || service.first_party === true);
+    .filter(([id, service]) => {
+      if (context.optionalServices) return true;
+      if (selectedCategories.size > 0) {
+        const category = assetCategoryFor(categories, "services", id);
+        return category !== null && selectedCategories.has(category);
+      }
+      return service.first_party === true && assetCategoryFor(categories, "services", id) === null;
+    });
   if (context.optionalServices) {
     const known = new Set(entries.map(([id]) => id));
     for (const id of context.optionalServices) {
@@ -944,19 +981,22 @@ export async function selectedMcpServiceEntries(defaultEnabled, context) {
   });
 }
 
-export async function externalSkillRoots({ includeOptional = true } = {}) {
+export async function externalSkillRoots({ includeOptional = true, context = { mode: "build", categoryFilter: null } } = {}) {
   const registry = await readOptionalServices();
+  const categories = await readAssetCategories();
   const candidates = [];
   const declaredPacks = [];
 
   for (const [serviceName, service] of Object.entries(registry.services)) {
     if (!["skill-pack", "behavior-pack"].includes(service.kind)) continue;
+    const assetCategory = assetCategoryFor(categories, "services", serviceName);
+    if (!categoryAllowed(context, assetCategory)) continue;
     const required = service.optional === false || service.status === "required";
     if (!required && !includeOptional) continue;
     declaredPacks.push(serviceName);
     for (const item of service.skill_roots ?? []) {
       for (const dir of await expandSkillRoot(item)) {
-        candidates.push({ root: dir, serviceName, required });
+        candidates.push({ root: dir, serviceName, required, assetCategory });
       }
     }
   }
@@ -1013,6 +1053,11 @@ export function outputAppliesToScope(output, scope, sourceKindsConfig) {
 
 export function outputAppliesToCategory(output, categoryFilter) {
   if (!categoryFilter) return true;
+  const selected = selectedAssetCategories(categoryFilter);
+  if (selected.size > 0) {
+    return output.requiredForAssetCategories === true
+      || (output.assetCategory !== null && selected.has(output.assetCategory));
+  }
   return categoryFilter.has(output.renderKind) || categoryFilter.has(output.sourceKind);
 }
 
@@ -1092,6 +1137,7 @@ export async function antigravityCliStaticOutputs(catalog, context) {
       renderKind: "plugins",
       source: "package.json",
       relativeOutput: path.join("antigravity-cli", "plugins", "agent-surface", "plugin.json"),
+      requiredForAssetCategories: true,
       content: `${JSON.stringify({
         name: "agent-surface",
         description: "Portable agent-surface command, skill, subagent, and rule pack generated from Lyther/agent-surface.",

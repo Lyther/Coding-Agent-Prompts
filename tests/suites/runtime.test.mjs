@@ -199,11 +199,14 @@ try {
   const registry = JSON.parse(readFileSync(path.join(root, "registry", "optional-services.json"), "utf8"));
   const serviceId = "anthropic-cybersecurity-skills";
   const pin = registry.services[serviceId].commit;
+  const otherServedPacks = Object.entries(registry.services)
+    .filter(([id, service]) => id !== serviceId && service.served_by?.includes("grimoire"))
+    .map(([id, service]) => ({ serviceId: id, commit: service.commit }));
   writeFileSync(path.join(grimoireDir, "manifest.json"), JSON.stringify({
     schemaVersion: 1,
     packs: [
       { serviceId, commit: `${pin}-dirty` },
-      { serviceId: "rev-skills", commit: registry.services["rev-skills"].commit },
+      ...otherServedPacks,
     ],
   }));
 

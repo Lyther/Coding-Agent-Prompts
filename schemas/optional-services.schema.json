@@ -237,6 +237,43 @@
           },
           {
             "if": {
+              "allOf": [
+                {
+                  "not": {
+                    "properties": {
+                      "first_party": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "first_party"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "properties": {
+                      "kind": {
+                        "const": "mcp"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                }
+              ]
+            },
+            "then": {
+              "required": [
+                "source_url",
+                "path",
+                "commit"
+              ]
+            }
+          },
+          {
+            "if": {
               "not": {
                 "properties": {
                   "first_party": {
@@ -250,9 +287,7 @@
             },
             "then": {
               "required": [
-                "source_url",
-                "path",
-                "commit"
+                "source_url"
               ]
             }
           }

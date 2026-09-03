@@ -8,13 +8,13 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-import { exportableCatalog, localCommandOverlays, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
+import { exportableCatalog, outputSourceKindError, requireKnownSourceKind } from "./check.mjs";
 import { readFileIfExists, readJsonIfExists, removeTree } from "./io.mjs";
 import { mergeKiloInstructionJsonc, parseJsoncResult, setJsoncRootProperty } from "./jsonc.mjs";
 import { YAML_MCP_FORMATS, assertJsonPropertyType, mergeCodexMcpToml, mergeJsonMcpConfig, mergeKiroPermissions, mergeYamlMcpConfig, optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
-import { packageVersion, readSourceKinds, relative, root } from "./registry.mjs";
+import { assetCategoryFor, assetCategoryNames, packageVersion, readAssetCategories, readSourceKinds, relative, root } from "./registry.mjs";
 import { readRules } from "./rules.mjs";
-import { adapterMcpConfigs, kiloRuleInstructionPaths, mcpConfigRootProperties, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, retiredInstallTargets, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
+import { adapterMcpConfigs, kiloRuleInstructionPaths, mcpConfigRootProperties, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, retiredInstallTargets, selectedAssetCategories, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
 import { argValue, argValues, fail, isPathInside, isSafeRelativePath, isSafeTargetName, splitArgValues, uniqueStrings } from "./util.mjs";
 
 export async function build(args) {
@@ -188,7 +188,9 @@ function selectedInstallTargets(args) {
 
 function installCategoryFilter(args) {
   const values = splitArgValues([...argValues(args, "--category"), ...argValues(args, "--categories")]);
-  if (values.length === 0 || values.includes("all")) return null;
+  if (values.length === 0) return null;
+  // `all` retains the full general sync; sensitive and specialized assets stay opt-in.
+  if (values.includes("all")) return null;
   const known = new Set([
     "commands",
     "commands-as-workflows",
@@ -202,10 +204,15 @@ function installCategoryFilter(args) {
     "external",
     "mcps",
     "recipes",
+    ...assetCategoryNames,
   ]);
   const selected = new Set(values);
   for (const value of selected) {
     if (!known.has(value)) fail(`unsupported install category: ${value}`);
+  }
+  const assetCategories = selectedAssetCategories(selected);
+  if (assetCategories.size > 0 && assetCategories.size !== selected.size) {
+    fail("asset categories cannot be mixed with output categories; run them as separate installs");
   }
   return selected;
 }
@@ -263,6 +270,7 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       source: item.source,
       output: relativeOutput,
       version,
+      asset_category: item.assetCategory ?? undefined,
     });
   }
 
@@ -290,30 +298,34 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const partialInstall = categoryFilter !== null || optionalServices !== null;
   const liveOutputs = new Set(managed.map((item) => item.output));
   const previousFileEntries = manifestFileEntries(previousManifest, target);
-  const liveCommandSources = new Set(catalog.commands.map((command) => command.relativePath));
-  // Public packages intentionally omit private local command overlays. Their
-  // absence is not a de-scoping signal: retain prior ownership and files until
-  // a checkout that actually carries the overlay updates them.
-  const retainedLocalOverlayEntries = previousFileEntries.filter(
-    (item) => localCommandOverlays.has(item.source) && !liveCommandSources.has(item.source),
-  );
-  const retainedLocalOverlayOutputs = new Set(retainedLocalOverlayEntries.map((item) => item.output));
+  const selectedCategories = selectedAssetCategories(categoryFilter);
   const staleExternalManaged = categoryFilter?.has("external")
     ? previousFileEntries.filter(
-      (item) => /^external[\\/]/.test(item.source) && !liveOutputs.has(item.output),
+      (item) => item.asset_category === undefined
+        && /^external[\\/]/.test(item.source)
+        && !liveOutputs.has(item.output),
     )
     : [];
+  const staleCategoryManaged = selectedCategories.size > 0
+    ? previousFileEntries.filter(
+      (item) => selectedCategories.has(item.asset_category) && !liveOutputs.has(item.output),
+    )
+    : [];
+  const partialStaleManaged = [...new Map(
+    [...staleExternalManaged, ...staleCategoryManaged].map((item) => [item.output, item]),
+  ).values()];
   const staleManaged = !partialInstall
     ? [...previousFileEntries, ...legacyOwnership.files]
-      .filter((item) => !liveOutputs.has(item.output) && !retainedLocalOverlayOutputs.has(item.output))
+      .filter((item) => !liveOutputs.has(item.output))
       .sort((left, right) => left.output.localeCompare(right.output))
-    : staleExternalManaged.sort((left, right) => left.output.localeCompare(right.output));
+    : partialStaleManaged.sort((left, right) => left.output.localeCompare(right.output));
   const staleManagedOutputs = new Set(staleManaged.map((item) => item.output));
   const staleRemovalActions = [];
   const configMerges = [];
   const previousConfigEntries = manifestConfigEntries(previousManifest);
   const ownedConfigEntries = [...previousConfigEntries, ...legacyOwnership.config_entries];
-  const pruneConfigEntries = (!categoryFilter || categoryFilter.has("mcps")) && optionalServices === null;
+  const categoryRegistry = await readAssetCategories();
+  const pruneMcpCategories = mcpPruneCategories(categoryFilter, optionalServices);
   const liveConfigRoutes = new Set();
   const configRouteContext = {
     target,
@@ -332,26 +344,32 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
     relativeOutput: outputRootFor(mcpConfig.relativeOutput, configRouteContext),
     format: mcpConfig.format,
   }));
-  if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps"))) {
+  const categorySelectsMcp = selectedCategories.size > 0 && (
+    (await selectedMcpServiceEntries(true, configRouteContext)).length > 0
+    || ownedConfigEntries.some((entry) => entry.ids.some(
+      (id) => selectedCategories.has(configEntryAssetCategory(entry, id, categoryRegistry)),
+    ))
+  );
+  if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps") || categorySelectsMcp)) {
     const merge = await kiloConfigMerge(installRoot, scope, {
       includeInstructions: !categoryFilter || categoryFilter.has("rules"),
-      includeMcp: !categoryFilter || categoryFilter.has("mcps"),
+      includeMcp: !categoryFilter || categoryFilter.has("mcps") || categorySelectsMcp,
       includeRootProperties: !categoryFilter,
       categoryFilter,
       optionalServices,
     });
     liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
     declaredConfigRoutes.push(merge);
-    const prepared = await prepareKiloConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
+    const prepared = await prepareKiloConfigMerge(merge, ownedConfigEntries, pruneMcpCategories, categoryRegistry);
     if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
-  } else if (!categoryFilter || categoryFilter.has("mcps")) {
+  } else if (!categoryFilter || categoryFilter.has("mcps") || categorySelectsMcp) {
     for (const mcpConfig of adapterMcpConfigs(adapter).filter((item) => mcpConfigScopeAllows(item, scope))) {
       const merge = await mcpConfigMerge(mcpConfig, installRoot, scope, {
         ...configRouteContext,
       });
       liveConfigRoutes.add(configEntryKey(merge.relativeOutput, merge.format));
       declaredConfigRoutes.push(merge);
-      const prepared = await prepareMcpConfigMerge(merge, ownedConfigEntries, pruneConfigEntries);
+      const prepared = await prepareMcpConfigMerge(merge, ownedConfigEntries, pruneMcpCategories, categoryRegistry);
       if (!isEmptyConfigNoop(prepared)) configMerges.push(prepared);
     }
   }
@@ -403,12 +421,11 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
   const retainedManaged = partialInstall
     ? previousFileEntries
       .filter((item) => !liveOutputs.has(item.output) && !staleManagedOutputs.has(item.output))
-    : retainedLocalOverlayEntries;
+    : [];
   const manifestManaged = [...retainedManaged, ...managed].sort((left, right) => left.output.localeCompare(right.output));
   const nextConfigEntries = mergedManifestConfigEntries(
     previousConfigEntries,
     configMerges,
-    pruneConfigEntries,
     pruneObsoleteConfigRoutes ? liveConfigRoutes : null,
   );
   const manifest = {
@@ -476,6 +493,7 @@ function manifestFileEntries(manifest, target) {
       source: typeof item.source === "string" ? item.source : "",
       output: item.output,
       version: typeof item.version === "string" ? item.version : undefined,
+      asset_category: typeof item.asset_category === "string" ? item.asset_category : undefined,
     }));
 }
 
@@ -483,19 +501,49 @@ function manifestConfigEntries(manifest) {
   if (!Array.isArray(manifest?.config_entries)) return [];
   return manifest.config_entries
     .filter((item) => typeof item?.path === "string" && typeof item?.format === "string" && Array.isArray(item?.ids))
-    .map((item) => ({
-      path: item.path,
-      format: item.format,
-      ids: uniqueStrings(item.ids.filter((id) => typeof id === "string")),
-    }))
+    .map((item) => {
+      const ids = uniqueStrings(item.ids.filter((id) => typeof id === "string"));
+      const assetCategories = Object.fromEntries(
+        Object.entries(item.asset_categories ?? {}).filter(
+          ([id, category]) => ids.includes(id) && typeof category === "string",
+        ),
+      );
+      return {
+        path: item.path,
+        format: item.format,
+        ids,
+        ...(Object.keys(assetCategories).length > 0 ? { asset_categories: assetCategories } : {}),
+      };
+    })
     .filter((item) => item.ids.length > 0);
 }
 
-function previousConfigIds(entries, relativeOutput, format) {
+function mcpPruneCategories(categoryFilter, optionalServices) {
+  if (optionalServices !== null) return new Set();
+  if (categoryFilter === null) return null;
+  if (categoryFilter.has("mcps")) return new Set([null]);
+  return selectedAssetCategories(categoryFilter);
+}
+
+function mcpEntryAssetCategories(entries, categories) {
+  return Object.fromEntries(entries.flatMap(([id]) => {
+    const category = assetCategoryFor(categories, "services", id);
+    return category === null ? [] : [[id, category]];
+  }));
+}
+
+function configEntryAssetCategory(entry, id, categories) {
+  return entry.asset_categories?.[id] ?? assetCategoryFor(categories, "services", id);
+}
+
+function previousConfigIds(entries, relativeOutput, format, pruneCategories, categories) {
   return uniqueStrings(
     entries
       .filter((entry) => entry.path === relativeOutput && entry.format === format)
-      .flatMap((entry) => entry.ids),
+      .flatMap((entry) => entry.ids.filter(
+        (id) => pruneCategories === null
+          || pruneCategories.has(configEntryAssetCategory(entry, id, categories)),
+      )),
   );
 }
 
@@ -506,8 +554,13 @@ function groupedConfigEntries(entries) {
     const current = grouped.get(key);
     if (current) {
       current.ids = uniqueStrings([...current.ids, ...entry.ids]);
+      current.asset_categories = { ...current.asset_categories, ...entry.asset_categories };
     } else {
-      grouped.set(key, { ...entry, ids: [...entry.ids] });
+      grouped.set(key, {
+        ...entry,
+        ids: [...entry.ids],
+        ...(entry.asset_categories ? { asset_categories: { ...entry.asset_categories } } : {}),
+      });
     }
   }
   return [...grouped.values()].sort((left, right) => configEntryKey(left.path, left.format).localeCompare(configEntryKey(right.path, right.format)));
@@ -582,7 +635,7 @@ async function addObsoleteConfigRouteMerges(
       entries: [],
       allowAbsoluteOutput: path.isAbsolute(entry.path),
       safetyRoot,
-    }, [staleEntry], true);
+    }, [staleEntry], null, {});
     if (isEmptyConfigNoop(prepared)) continue;
     mergeIndexesByPath.set(entry.path, configMerges.length);
     configMerges.push(prepared);
@@ -610,8 +663,12 @@ function mergeObsoleteConfigRoute(merge, entry, editContent) {
   };
 }
 
-function mergedManifestConfigEntries(previousEntries, configMerges, pruneConfigEntries, liveConfigRoutes = null) {
-  const next = new Map(previousEntries.map((entry) => [configEntryKey(entry.path, entry.format), { ...entry }]));
+function mergedManifestConfigEntries(previousEntries, configMerges, liveConfigRoutes = null) {
+  const next = new Map(previousEntries.map((entry) => [configEntryKey(entry.path, entry.format), {
+    ...entry,
+    ids: [...entry.ids],
+    ...(entry.asset_categories ? { asset_categories: { ...entry.asset_categories } } : {}),
+  }]));
   if (liveConfigRoutes) {
     for (const key of next.keys()) {
       if (!liveConfigRoutes.has(key)) next.delete(key);
@@ -621,12 +678,27 @@ function mergedManifestConfigEntries(previousEntries, configMerges, pruneConfigE
     const entry = manifestConfigEntryFromMerge(merge);
     if (!entry) continue;
     const key = configEntryKey(entry.path, entry.format);
-    const previousIds = next.get(key)?.ids ?? [];
-    const ids = pruneConfigEntries ? entry.ids : uniqueStrings([...previousIds, ...entry.ids]);
+    const previous = next.get(key) ?? { ids: [] };
+    const removed = new Set(merge.removeIds ?? []);
+    const ids = uniqueStrings([
+      ...previous.ids.filter((id) => !removed.has(id)),
+      ...entry.ids,
+    ]).sort();
+    const assetCategories = { ...(previous.asset_categories ?? {}) };
+    for (const id of removed) delete assetCategories[id];
+    for (const id of entry.ids) {
+      if (entry.asset_categories?.[id]) assetCategories[id] = entry.asset_categories[id];
+      else delete assetCategories[id];
+    }
     if (ids.length === 0) {
       next.delete(key);
     } else {
-      next.set(key, { path: entry.path, format: entry.format, ids });
+      next.set(key, {
+        path: entry.path,
+        format: entry.format,
+        ids,
+        ...(Object.keys(assetCategories).length > 0 ? { asset_categories: assetCategories } : {}),
+      });
     }
   }
   return [...next.values()].sort((left, right) => configEntryKey(left.path, left.format).localeCompare(configEntryKey(right.path, right.format)));
@@ -635,10 +707,15 @@ function mergedManifestConfigEntries(previousEntries, configMerges, pruneConfigE
 function manifestConfigEntryFromMerge(merge) {
   if (!["mcp", "kilo"].includes(merge.kind) || typeof merge.format !== "string") return null;
   const entries = merge.kind === "kilo" ? merge.mcpEntries : merge.entries;
+  const ids = uniqueStrings((entries ?? []).map(([id]) => id));
+  const assetCategories = Object.fromEntries(ids.flatMap((id) => (
+    typeof merge.assetCategories?.[id] === "string" ? [[id, merge.assetCategories[id]]] : []
+  )));
   return {
     path: merge.relativeOutput,
     format: merge.format,
-    ids: uniqueStrings((entries ?? []).map(([id]) => id)),
+    ids,
+    ...(Object.keys(assetCategories).length > 0 ? { asset_categories: assetCategories } : {}),
   };
 }
 
@@ -820,6 +897,7 @@ async function mcpConfigMerge(mcpConfig, installRoot, scope, context) {
     relativeOutput,
     format: mcpConfig.format,
     entries,
+    assetCategories: mcpEntryAssetCategories(entries, await readAssetCategories()),
     rootProperties: context.categoryFilter ? {} : mcpConfigRootProperties(mcpConfig, { ...context, scope }),
     replaceRootProperties: mcpConfig.replaceRootProperties ?? [],
     allowAbsoluteOutput: mcpConfig.allowAbsoluteOutput === true,
@@ -827,7 +905,7 @@ async function mcpConfigMerge(mcpConfig, installRoot, scope, context) {
   };
 }
 
-async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneConfigEntries) {
+async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneCategories, categories) {
   if (!merge.safetyRoot) {
     return { ...merge, action: "blocked", error: `unsafe MCP config path: ${merge.relativeOutput}` };
   }
@@ -835,8 +913,8 @@ async function prepareMcpConfigMerge(merge, previousConfigEntries, pruneConfigEn
   if (routeError) return { ...merge, action: "blocked", error: routeError };
 
   const currentIds = merge.entries.map(([id]) => id).sort();
-  const previousIds = previousConfigIds(previousConfigEntries, merge.relativeOutput, merge.format);
-  const removeIds = pruneConfigEntries ? previousIds.filter((id) => !currentIds.includes(id)) : [];
+  const previousIds = previousConfigIds(previousConfigEntries, merge.relativeOutput, merge.format, pruneCategories, categories);
+  const removeIds = previousIds.filter((id) => !currentIds.includes(id));
   const existing = await readFileIfExists(merge.output);
   const addMcpServers = currentIds;
   const removeMcpServers = removeIds;
@@ -966,6 +1044,13 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
     ...legacyScopedRuleInstructions,
     ...legacyLanguageRuleInstructions,
   ];
+  const mcpEntries = includeMcp
+    ? await selectedMcpServiceEntries(true, {
+      mode: "install",
+      categoryFilter: options.categoryFilter ?? null,
+      optionalServices: options.optionalServices ?? null,
+    })
+    : [];
   return {
     kind: "kilo",
     output: path.join(installRoot, relativeOutput),
@@ -976,13 +1061,8 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
     rootProperties: includeRootProperties
       ? { permission: { "*": "allow" }, share: "disabled" }
       : {},
-    mcpEntries: includeMcp
-      ? await selectedMcpServiceEntries(true, {
-        mode: "install",
-        categoryFilter: options.categoryFilter ?? null,
-        optionalServices: options.optionalServices ?? null,
-      })
-      : [],
+    mcpEntries,
+    assetCategories: mcpEntryAssetCategories(mcpEntries, await readAssetCategories()),
     safetyRoot: installRoot,
   };
 }
@@ -999,7 +1079,7 @@ async function applyConfigMerge(merge) {
   return { changed: true };
 }
 
-async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneConfigEntries) {
+async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneCategories, categories) {
   if (!isSafeRelativePath(merge.relativeOutput)) {
     return { ...merge, action: "blocked", error: `unsafe Kilo config path: ${merge.relativeOutput}` };
   }
@@ -1007,8 +1087,8 @@ async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneConfigE
   if (routeError) return { ...merge, action: "blocked", error: routeError };
 
   const currentMcpIds = merge.mcpEntries.map(([id]) => id).sort();
-  const previousMcpIds = previousConfigIds(previousConfigEntries, merge.relativeOutput, merge.format);
-  const removeMcpIds = pruneConfigEntries ? previousMcpIds.filter((id) => !currentMcpIds.includes(id)) : [];
+  const previousMcpIds = previousConfigIds(previousConfigEntries, merge.relativeOutput, merge.format, pruneCategories, categories);
+  const removeMcpIds = previousMcpIds.filter((id) => !currentMcpIds.includes(id));
   const existing = await readFileIfExists(merge.output);
   if (existing === null) {
     const content = {

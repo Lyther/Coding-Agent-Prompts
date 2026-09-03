@@ -43,7 +43,7 @@ Full DDL, manifest shape, codecs, and data dictionary: [data-model.md](data-mode
 
 ## Distribution
 
-Registry `first_party kind:"mcp"` grimoire entry (stdio `~/.local/bin/grimoire-server`) → rendered/merged across the **full synapse MCP host set** (zero new infra). A `served_by:["grimoire"]` link on each de-scoped source-pack (`anthropic-cybersecurity-skills`, `rev-skills`) tells the `check` rule which packs grimoire indexes. `rev-skills` sets `index_root: ".claude/skills"` because upstream does not use a top-level `skills/` directory. Invariant: `served_by` includes grimoire ⇒ `source-pack`, no `skill_roots`, pinned `commit`, present in the index. `check` fails if a served pack regains `skill_roots` or its skill names surface in any native catalog.
+Registry `first_party kind:"mcp"` grimoire entry (stdio `~/.local/bin/grimoire-server`) → rendered/merged across the **full synapse MCP host set** (zero new infra). A `served_by:["grimoire"]` link on each de-scoped source-pack (`anthropic-cybersecurity-skills`, `rev-skills`, `hack-skills`) tells the `check` rule which packs grimoire indexes. `rev-skills` sets `index_root: ".claude/skills"` because upstream does not use a top-level `skills/` directory. Invariant: `served_by` includes grimoire ⇒ `source-pack`, no `skill_roots`, pinned `commit`, present in the index. `check` fails if a served pack regains `skill_roots` or its skill names surface in any native catalog.
 
 ## Security
 
