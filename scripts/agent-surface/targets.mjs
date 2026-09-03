@@ -844,12 +844,13 @@ export async function produceSkillOutputs(adapter, skills, context) {
 export async function externalSkillOutputs(adapter, context) {
   const externalOutputRoot = adapter.externalSkillOutputRoot ?? adapter.skillOutputRoot;
   if (!externalOutputRoot) return [];
-  // External assets are part of the default distribution: a full install (no category
-  // filter) generates them so strict-sync keeps in-scope packs and prunes de-scoped ones.
-  // Only skip when an explicit category filter excludes "external".
+  // Required external packs are part of the default distribution. Optional packs are
+  // added only by an explicit external-category install; build mode keeps the full
+  // superset for generated-output validation.
   if (context.mode === "install" && context.categoryFilter && !context.categoryFilter.has("external")) return [];
   const outputs = [];
-  const roots = await externalSkillRoots();
+  const includeOptional = context.mode !== "install" || Boolean(context.categoryFilter?.has("external"));
+  const roots = await externalSkillRoots({ includeOptional });
   const outputRoot = outputRootFor(externalOutputRoot, context);
   const textExtensions = [".md", ".mdx", ".json", ".yaml", ".yml", ".toml", ".txt", ".sh", ".py", ".js", ".ts", ".ps1"];
 
@@ -943,7 +944,7 @@ export async function selectedMcpServiceEntries(defaultEnabled, context) {
   });
 }
 
-export async function externalSkillRoots() {
+export async function externalSkillRoots({ includeOptional = true } = {}) {
   const registry = await readOptionalServices();
   const candidates = [];
   const declaredPacks = [];
@@ -951,6 +952,7 @@ export async function externalSkillRoots() {
   for (const [serviceName, service] of Object.entries(registry.services)) {
     if (!["skill-pack", "behavior-pack"].includes(service.kind)) continue;
     const required = service.optional === false || service.status === "required";
+    if (!required && !includeOptional) continue;
     declaredPacks.push(serviceName);
     for (const item of service.skill_roots ?? []) {
       for (const dir of await expandSkillRoot(item)) {
