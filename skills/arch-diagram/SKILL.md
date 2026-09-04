@@ -189,11 +189,14 @@ Use the repository's established, reproducible toolchain when it can meet the ar
 |---|---|---|
 | Structurizr DSL/UI | Long-lived C4 model, reusable views, filtering, perspectives, zoom navigation, presentation | Requires its renderer for the richest interactive behavior; exported Mermaid/DOT views lose features |
 | D2 | Polished standalone diagrams, composed scenarios/steps, SVG/PDF/PPTX presentation output | Keep a shared model/evidence discipline; advanced layouts and exports depend on available engines |
+| Archify | Validated interactive HTML, presentation views, source-linked traces, and static or motion export | Optional external skill; use it as the renderer while this skill remains the architecture and evidence contract |
 | Graphviz DOT | Generated dependency, blast-radius, and other graph-heavy views | Not a full architecture model; choose layered versus force-directed layout by the question |
 | PlantUML | Detailed sequence, activity, state, and established UML/C4 repositories | Dense diagrams still need curation and presentation styling |
 | Mermaid | Portable Markdown, simple-to-moderate flow/sequence/ER views, zero-friction repository viewing | Portability is not presentation quality; configure theme/layout and render with a pinned compatible version |
 
 `auto` is not "always Mermaid." Prefer the existing repository standard; otherwise choose the simplest available tool that can produce the required model/view behavior and rendered quality. Use one primary model/renderer. Add a second only for a specialized view it materially improves, and record why.
+
+When the optional `archify` skill is installed and the requested delivery is interactive or presentation-grade, use its renderer and validation commands rather than recreating that rendering pipeline. Do not delegate architecture discovery or evidence classification to the renderer.
 
 Do not introduce an unreviewed hosted dependency or upload private architecture to an external service. Before adding a local dependency, follow the project's dependency-risk policy and pin the version used for rendering. If only Mermaid is available, use explicit frontmatter/configuration, a consistent theme, and ELK for non-trivial layered flow when supported. If no suitable renderer is available, finish the source but report rendered acceptance as `BLOCKED`; do not call source inspection a visual pass.
 

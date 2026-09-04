@@ -168,7 +168,7 @@ Migration posture:
 - `check:generated`: rebuild all implemented targets and compare expected output.
 - `doctor`: inspect local runtime/MCP/install health; diagnostics are evidence, not automatic repair.
 
-Unknown target IDs fail before writing. Scope support is adapter-owned. Category-only installs update only selected categories and must not remove unselected owned categories; retired-target cleanup runs only for an unfiltered full user-scope `--target all` install. Full installs reconcile all owned categories and stale routes.
+Unknown target IDs fail before writing. Scope support is adapter-owned. An unfiltered full install reconciles the general baseline, including removal of previously managed opt-in assets. Category-only installs are additive and prune only the selected category, so an installation profile is the general sync followed by each desired category. Retired-target cleanup runs only for an unfiltered full user-scope `--target all` install.
 
 ### Adapter contract
 

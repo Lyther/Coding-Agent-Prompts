@@ -12,5 +12,7 @@
     "stellaris-validate"
   ],
   "commands": [],
+  "rules": [],
+  "subagents": [],
   "services": []
 }

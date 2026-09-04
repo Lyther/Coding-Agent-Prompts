@@ -6,7 +6,8 @@ Notable changes to agent-surface and its first-party MCP services. Format: [Keep
 
 ### Added
 
-- **Asset categories and cybersecurity expansion** - separates general, optional external, cybersecurity, private, and modding installs without adding a profile layer; adds `hack-skills` to Grimoire and opt-in Fenjing/OpenOSINT/pentest-ai MCP declarations.
+- **Agent capability packs** - adds optional Chrome DevTools and IDA Pro MCP wiring plus the Archify interactive diagram renderer.
+- **Asset categories and cybersecurity expansion** - separates general, optional external, development, cybersecurity, private, and modding installs without adding a profile layer; development workflows, rules, subagents, and tools are no longer emitted by the general baseline, while `hack-skills` remains available through Grimoire and Fenjing/OpenOSINT/pentest-ai remain opt-in MCPs.
 - **`dev-core` staged development skill** - turns an independently specified RED core slice into one runnable architectural spine, then pauses before lower-effort feature expansion.
 - **Grimoire MCP (v0.1 package; v1.0 tool contract)** - read-only, just-in-time retrieval over the `anthropic-cybersecurity-skills`, `rev-skills`, and `hack-skills` packs from a self-contained `node:sqlite` FTS5 index. Four tools (`grimoire_search`/`list`/`get`/`file_get`) expose source/license attribution and fail closed on stale provenance.
 - **First-party MCP auto-wiring across all 22 MCP-capable hosts** - Synapse + Grimoire are generated and non-destructively merged into each host's native config across JSON, TOML, and YAML families. Full matrix: `docs/reference/targets.md`.
@@ -16,6 +17,7 @@ Notable changes to agent-surface and its first-party MCP services. Format: [Keep
 
 ### Changed
 
+- **Curated external portfolio** - keeps strong large skill catalogs in Grimoire, retains evaluated references as source-only submodules, and removes thirteen duplicate or unnecessary checkouts. Karpathy guidance is no longer mirrored because canonical workflow/project rules own the behavior; Sanyuan development distribution now keeps only skill authoring and review.
 - **Runtime/model routing refresh** - replaces the June model table with current Codex, Claude, DeepSeek, Grok, Cursor, Kimi, and Ollama Cloud recommendations; refreshes headless command shapes and prefers driver-native subagent or agent-manager tools before subprocess orchestration.
 - **`ops-clean` simplification gate** - requires a concrete reduction in owners, layers, dependencies, configuration axes, or failure modes instead of counting rearrangement or raw line changes as simplification.
 - **`ops-docs` skill** rewritten to the Diátaxis + minimalism model: aggressive, repo-fit, and concise by default.
@@ -24,7 +26,7 @@ Notable changes to agent-surface and its first-party MCP services. Format: [Keep
 
 ### Fixed
 
-- **MCP opt-in** — `--category mcps` without `--service` now selects first-party services only; external/secret-bearing MCPs (e.g. `agentmemory`) require an explicit `--service`.
+- **MCP opt-in** — `--category mcps` without `--service` now selects first-party services only; external MCPs such as `pentest-ai` require an explicit `--service`.
 - **Install correctness** — `grimoire-index` wrapper resolves the real entrypoint (derived from `package.json#bin`); a missing required pack fails the install (exit 1) non-destructively instead of silently succeeding.
 - **Grimoire provenance and lifecycle** - requires explicit attribution, marks Git-less input `uncommitted`, fingerprints complete skill source, cleans failed publication temporaries, and reopens atomic index replacements.
 - **Reinstall safety** - cleans exact declared Gemini/VSCodium and adapter-migration routes while preserving outputs still shared with active targets; maintained JSONC, TOML, and YAML libraries preserve unrelated config; Claude Code and Copilot can share the standard project `.mcp.json` route.

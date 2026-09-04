@@ -27,6 +27,7 @@ export async function readOptionalServices() {
 }
 
 export const assetCategoryFiles = {
+  development: "development-assets.json",
   cybersecurity: "cybersecurity-assets.json",
   private: "private-secret.json",
   modding: "modding.json",
@@ -50,6 +51,16 @@ export function assetCategoryFor(categories, kind, id) {
     if (category[kind].includes(id)) return name;
   }
   return null;
+}
+
+export function selectedAssetCategories(categoryFilter) {
+  return new Set([...(categoryFilter ?? [])].filter((name) => assetCategoryNames.has(name)));
+}
+
+export function assetCategoryAllowed(context, category) {
+  if (context.mode !== "install") return true;
+  const selected = selectedAssetCategories(context.categoryFilter);
+  return selected.size > 0 ? category !== null && selected.has(category) : category === null;
 }
 
 export async function packageVersion() {

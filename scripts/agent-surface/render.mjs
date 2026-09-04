@@ -2,7 +2,7 @@
 // Pure text transforms (+ small format/access helpers); no fs, no producers.
 import path from "node:path";
 import { tomlMultilineString, tomlString, yamlString } from "./format.mjs";
-import { readRules } from "./rules.mjs";
+import { readRulesForContext } from "./rules.mjs";
 import { fail } from "./util.mjs";
 
 export async function renderClineWorkflow(source) {
@@ -406,8 +406,9 @@ export function renderAntigravityCliRuleDocument(rule) {
   ].join("\n");
 }
 
-export async function renderInstructionDocument(title, subtitle) {
-  const rules = (await readRules()).filter((rule) => rule.alwaysApply !== false);
+export async function renderInstructionDocument(title, subtitle, context = {}) {
+  const rules = (await readRulesForContext(context, { includeBaseline: true }))
+    .filter((rule) => rule.alwaysApply !== false);
   return [
     `# ${title}`,
     "",
@@ -458,14 +459,14 @@ export function renderKiroRuleDocument(rule) {
   ].join("\n");
 }
 
-export async function renderVsCodeInstructionDocument(title, target) {
+export async function renderVsCodeInstructionDocument(title, target, context = {}) {
   return [
     "---",
     `description: "${yamlString(title)}"`,
     'applyTo: "**"',
     "---",
     "",
-    await renderInstructionDocument(title, `${target} global instruction file`),
+    await renderInstructionDocument(title, `${target} global instruction file`, context),
   ].join("\n");
 }
 

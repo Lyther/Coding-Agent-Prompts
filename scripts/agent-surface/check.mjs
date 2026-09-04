@@ -16,7 +16,7 @@ import { readAssetCategories, readOptionalServices, readSourceKinds, relative, r
 import { vsCodeUserRoot } from "./roots.mjs";
 import { readRules } from "./rules.mjs";
 import { readSkills } from "./skills.mjs";
-import { subagentValidationErrors } from "./source-primitives.mjs";
+import { readSubagents, subagentValidationErrors } from "./source-primitives.mjs";
 import { generatedOutputMinimums, producerEmitsFor, sourceKindPolicy, targetOutputs, targetProducers, targets } from "./targets.mjs";
 import { argValue, exists, fail, globMatches, isPathInside, isSafeTargetName, sha256 } from "./util.mjs";
 
@@ -50,6 +50,7 @@ export const registrySchemaFiles = [
   { schema: "artifacts.schema.json", file: "registry/artifacts.json" },
   { schema: "source-kinds.schema.json", file: "registry/source-kinds.json" },
   { schema: "optional-services.schema.json", file: "registry/optional-services.json" },
+  { schema: "asset-category.schema.json", file: "registry/development-assets.json" },
   { schema: "asset-category.schema.json", file: "registry/cybersecurity-assets.json" },
   { schema: "asset-category.schema.json", file: "registry/private-secret.json" },
   { schema: "asset-category.schema.json", file: "registry/modding.json" },
@@ -259,12 +260,16 @@ async function checkAssetCategories(commands, skills, errors) {
   const services = await readOptionalServices();
   const commandNames = new Set(commands.map((command) => command.name));
   const skillNames = new Set(skills.map((skill) => skill.name));
+  const ruleNames = new Set((await readRules()).map((rule) => path.basename(rule.file, ".mdc")));
+  const subagentNames = new Set((await readSubagents()).map((subagent) => subagent.metadata.name));
   const owners = new Map();
 
   for (const [categoryName, category] of Object.entries(categories)) {
     for (const [kind, known] of [
       ["commands", commandNames],
       ["skills", skillNames],
+      ["rules", ruleNames],
+      ["subagents", subagentNames],
       ["services", new Set(Object.keys(services.services))],
     ]) {
       for (const id of category[kind]) {
@@ -827,7 +832,7 @@ export function validateGeneratedTarget(target, outputs) {
   const skillFrontmatter = /^(?:\uFEFF)?---\r?\n/;
 
   if (outputs.length === 0) errors.push("no outputs generated");
-  for (const optionalPack of ["external/andrej-karpathy-skills/", "external/sanyuan-skills/"]) {
+  for (const optionalPack of ["external/sanyuan-skills/"]) {
     if (!outputs.some((output) => output.source.startsWith(optionalPack))) {
       errors.push(`optional skill pack is not distributed: ${optionalPack}`);
     }
@@ -858,7 +863,7 @@ export function validateGeneratedTarget(target, outputs) {
     requireContains(path.join(".agents", "skills", "ops-nuke", "SKILL.md"), /disable-model-invocation: true/);
   } else if (target === "grok-build") {
     requireContains(path.join(".grok", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
-    requireContains(path.join(".grok", "skills", "red-team-command-doctrine", "SKILL.md"), skillFrontmatter);
+    requireContains(path.join(".grok", "skills", "redteam-boundary-policy", "SKILL.md"), skillFrontmatter);
     requireContains(path.join(".grok", "config.toml"), /^\[ui\]$/m);
     requireContains(path.join(".grok", "config.toml"), /^permission_mode = "always-approve"$/m);
     requireContains(path.join(".grok", "config.toml"), /^\[mcp_servers\.synapse\]$/m);
@@ -874,13 +879,12 @@ export function validateGeneratedTarget(target, outputs) {
   } else if (target === "pool") {
     requireContains(path.join(".config", "poolside", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".config", "poolside", ".poolside"), /agent-surface Poolside rules/);
-    requireContains(path.join(".config", "poolside", "skills", "redteam-web-detail-pack", "SKILL.md"), skillFrontmatter);
+    requireContains(path.join(".config", "poolside", "skills", "redteam-boundary-policy", "SKILL.md"), skillFrontmatter);
   } else if (target === "cline") {
     requirePath(path.join(".cline", "skills", "ops-flow", "SKILL.md"));
     requirePath(path.join("Documents", "Cline", "Workflows", "ops-nuke.md"));
     requireContains(path.join("Documents", "Cline", "Rules", "agent-surface.md"), /agent-surface Cline global rules/);
     requireContains(path.join(".cline", "agents", "boss.yaml"), /^---\nname: boss\n/);
-    requireContains(path.join(".cline", "skills", "karpathy-guidelines", "SKILL.md"), skillFrontmatter);
     const mcp = requireJson(path.join(".cline", "data", "settings", "cline_mcp_settings.json"));
     if (mcp && mcp.mcpServers?.synapse?.command !== "~/.local/bin/synapse-bridge") {
       errors.push("Cline synapse MCP must use the first-party local bridge binary");
@@ -916,9 +920,6 @@ export function validateGeneratedTarget(target, outputs) {
     }
     if (mcp?.mcpServers?.synapse && Object.hasOwn(mcp.mcpServers.synapse, "type")) {
       errors.push("Kimi Code MCP entries must let the runtime infer stdio transport");
-    }
-    if (byPath.has(path.join("skills", "karpathy-guidelines", "SKILL.md"))) {
-      requireContains(path.join("skills", "karpathy-guidelines", "SKILL.md"), skillFrontmatter);
     }
   } else if (target === "qoder") {
     requireContains(path.join(".qoder", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
@@ -981,9 +982,6 @@ export function validateGeneratedTarget(target, outputs) {
     if (mcp && mcp.mcpServers?.grimoire?.command !== "~/.local/bin/grimoire-server") {
       errors.push("Droid grimoire MCP must use the first-party local server binary");
     }
-    if (outputs.some((output) => output.relativeOutput.startsWith(path.join(".factory", "skills") + path.sep))) {
-      requireContains(path.join(".factory", "skills", "karpathy-guidelines", "SKILL.md"), skillFrontmatter);
-    }
   } else if (target === "copilot") {
     const userRoot = vsCodeUserRoot("Code", { scope: "user" });
     requirePath(path.join(".copilot", "skills", "ops-flow", "SKILL.md"));
@@ -1019,7 +1017,7 @@ export function validateGeneratedTarget(target, outputs) {
   } else if (target === "zed") {
     requireContains(path.join(".agents", "skills", "ops-flow", "SKILL.md"), /^---\nname: ops-flow\n/);
     requireContains(path.join(".config", "zed", "AGENTS.md"), /agent-surface Zed rules/);
-    requireContains(path.join(".agents", "skills", "redteam-api-detail-pack", "SKILL.md"), skillFrontmatter);
+    requireContains(path.join(".agents", "skills", "redteam-boundary-policy", "SKILL.md"), skillFrontmatter);
   }
 
   return errors;

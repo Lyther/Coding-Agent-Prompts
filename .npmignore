@@ -10,3 +10,40 @@ mcps/*/dist/
 
 # Local-only command source (gitignored); keep it out of the pack payload too.
 commands/ops-server.md
+
+# Candidate source repositories stay in Git; package only registered runtime/index inputs.
+external/**
+
+!external/anthropic-cybersecurity-skills/
+!external/anthropic-cybersecurity-skills/**
+
+!external/archify/
+!external/archify/archify/
+!external/archify/archify/**
+
+!external/codex-redteam-mode/
+!external/codex-redteam-mode/agents/
+!external/codex-redteam-mode/agents/skills/
+!external/codex-redteam-mode/agents/skills/**
+
+!external/ctf-skills/
+!external/ctf-skills/**
+
+!external/hack-skills/
+!external/hack-skills/**
+
+!external/rev-skills/
+!external/rev-skills/**
+
+!external/sanyuan-skills/
+!external/sanyuan-skills/skills/
+!external/sanyuan-skills/skills/book-study/
+!external/sanyuan-skills/skills/book-study/**
+!external/sanyuan-skills/skills/sigma/
+!external/sanyuan-skills/skills/sigma/**
+!external/sanyuan-skills/skills/skill-forge/
+!external/sanyuan-skills/skills/skill-forge/**
+!external/sanyuan-skills/skills/skill-review/
+!external/sanyuan-skills/skills/skill-review/**
+!external/sanyuan-skills/skills/wiki-ingest/
+!external/sanyuan-skills/skills/wiki-ingest/**

@@ -3,6 +3,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assetCategoryAllowed, assetCategoryFor, readAssetCategories } from "./registry.mjs";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(moduleDir, "../..");
@@ -82,9 +83,12 @@ export async function subagentOutputs(adapter, context = {}) {
   }
 
   const outputs = [];
+  const categories = await readAssetCategories();
   const resolvedRoot = resolveOutputRoot(adapter.subagentOutputRoot, context);
   const outputRoots = Array.isArray(resolvedRoot) ? resolvedRoot : [resolvedRoot];
   for (const subagent of subagents) {
+    const assetCategory = assetCategoryFor(categories, "subagents", subagent.metadata.name);
+    if (!assetCategoryAllowed(context, assetCategory)) continue;
     if (subagent.metadata.targets?.[adapter.subagentTarget] !== true) continue;
     const extension = adapter.subagentOutputExtension ?? ".md";
     const outputName = adapter.subagentOutputName ? adapter.subagentOutputName(subagent, context) : `${subagent.metadata.name}${extension}`;
@@ -93,6 +97,7 @@ export async function subagentOutputs(adapter, context = {}) {
         source: subagent.relativePath,
         relativeOutput: path.join(outputRoot, outputName),
         content: adapter.renderSubagent(subagent),
+        assetCategory,
       });
     }
   }
@@ -110,7 +115,7 @@ async function readIgnores() {
   return ignoreSourceCache;
 }
 
-async function readSubagents() {
+export async function readSubagents() {
   if (subagentSourceCache !== undefined) return subagentSourceCache;
   const sourceRoot = path.join(root, "subagents");
   if (!(await exists(sourceRoot))) {

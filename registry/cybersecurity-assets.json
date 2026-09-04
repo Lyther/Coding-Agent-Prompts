@@ -2,12 +2,17 @@
   "category": "cybersecurity",
   "skills": [],
   "commands": [],
+  "rules": [
+    "04-cybersecurity"
+  ],
+  "subagents": [],
   "services": [
     "anthropic-cybersecurity-skills",
     "codex-redteam-mode",
     "ctf-skills",
     "fenjing",
     "hack-skills",
+    "ida-pro-mcp",
     "openosint",
     "rev-skills"
   ]
