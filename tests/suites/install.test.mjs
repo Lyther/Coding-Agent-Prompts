@@ -105,7 +105,7 @@ const qwenCodeCybersecurityPlan = dryRun("qwen-code", ["--category", "cybersecur
 planHas(qwenCodeCybersecurityPlan, [
   /\.qwen\/skills\/ctf-ai-ml\/SKILL\.md/,
   /\.qwen\/skills\/red-team-command-doctrine\/SKILL\.md/,
-  /\.qwen\/settings\.json MCP \+= openosint/,
+  /\.qwen\/settings\.json MCP \+= fenjing, openosint/,
 ], "qwen-code cybersecurity assets");
 planLacks(qwenCodeCybersecurityPlan, [/karpathy-guidelines/, /skills\/stellaris-design\//, /pentest-ai/], "qwen-code cybersecurity isolation");
 
@@ -305,15 +305,17 @@ SUBSTITUTE_JUSTIFICATION
     writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     const configEntry = manifest.config_entries.find((entry) => entry.path === ".qwen/settings.json");
-    assert.deepEqual(configEntry.asset_categories, { openosint: "cybersecurity" });
+    assert.deepEqual(configEntry.asset_categories, { fenjing: "cybersecurity", openosint: "cybersecurity" });
     configEntry.ids.push("old-cyber");
-    configEntry.asset_categories = { openosint: "cybersecurity", "old-cyber": "cybersecurity" };
+    configEntry.asset_categories = { fenjing: "cybersecurity", openosint: "cybersecurity", "old-cyber": "cybersecurity" };
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
     run(["install", "--target", "qwen-code", "--scope", "user", "--dest", dest, "--category", "cybersecurity"]);
     assert.equal(Object.hasOwn(JSON.parse(readFileSync(settingsPath, "utf8")).mcpServers, "old-cyber"), false);
     run(["install", "--target", "qwen-code", "--scope", "user", "--dest", dest, "--category", "mcps"]);
-    assert.equal(Object.hasOwn(JSON.parse(readFileSync(settingsPath, "utf8")).mcpServers, "openosint"), true);
+    const mcpServers = JSON.parse(readFileSync(settingsPath, "utf8")).mcpServers;
+    assert.equal(Object.hasOwn(mcpServers, "fenjing"), true);
+    assert.equal(Object.hasOwn(mcpServers, "openosint"), true);
     run(["install", "--target", "qwen-code", "--scope", "user", "--dest", dest, "--category", "external"]);
     assert.equal(existsSync(cyberSkill), true);
   } finally {
