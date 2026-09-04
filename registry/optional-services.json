@@ -224,6 +224,29 @@
         "Kept out of runtime startup catalogs because its coverage overlaps other large security packs."
       ]
     },
+    "fenjing": {
+      "status": "optional-caution",
+      "source_url": "https://github.com/Marven11/Fenjing",
+      "kind": "mcp",
+      "optional": true,
+      "mcp": {
+        "server": {
+          "type": "stdio",
+          "command": "fenjing",
+          "args": [
+            "mcp"
+          ]
+        },
+        "validation_hint": "Install the pinned Fenjing application with its MCP extra through MOMO, then call the host MCP status command and list its SSTI tools."
+      },
+      "local_wiring": [
+        "MCP-capable runtimes: opt-in cybersecurity MCP named fenjing over stdio."
+      ],
+      "notes": [
+        "Fenjing automates Jinja2 SSTI payload generation and WAF bypass for authorized CTF and security testing.",
+        "MOMO owns installation and application readiness for the fenjing executable and pins the compatible MCP v1 dependency."
+      ]
+    },
     "openosint": {
       "status": "optional-caution",
       "source_url": "https://github.com/OpenOSINT/OpenOSINT",

@@ -6,7 +6,7 @@ Notable changes to agent-surface and its first-party MCP services. Format: [Keep
 
 ### Added
 
-- **Asset categories and cybersecurity expansion** - separates general, optional external, cybersecurity, private, and modding installs without adding a profile layer; adds `hack-skills` to Grimoire and opt-in OpenOSINT/pentest-ai MCP declarations.
+- **Asset categories and cybersecurity expansion** - separates general, optional external, cybersecurity, private, and modding installs without adding a profile layer; adds `hack-skills` to Grimoire and opt-in Fenjing/OpenOSINT/pentest-ai MCP declarations.
 - **`dev-core` staged development skill** - turns an independently specified RED core slice into one runnable architectural spine, then pauses before lower-effort feature expansion.
 - **Grimoire MCP (v0.1 package; v1.0 tool contract)** - read-only, just-in-time retrieval over the `anthropic-cybersecurity-skills`, `rev-skills`, and `hack-skills` packs from a self-contained `node:sqlite` FTS5 index. Four tools (`grimoire_search`/`list`/`get`/`file_get`) expose source/license attribution and fail closed on stale provenance.
 - **First-party MCP auto-wiring across all 22 MCP-capable hosts** - Synapse + Grimoire are generated and non-destructively merged into each host's native config across JSON, TOML, and YAML families. Full matrix: `docs/reference/targets.md`.
