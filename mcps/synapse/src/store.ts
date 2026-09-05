@@ -9,7 +9,7 @@ import type {
   CompactMemory, FullMemory, IClock, IRedactor, IStore, LockRecord, Offset, RecallQuery, RecallResult,
   Store as Scope,
 } from "./contract.js";
-import { SynapseInputError, utf8Bytes } from "./contract.js";
+import { LIMITS, SynapseInputError, SynapsePayloadError, utf8Bytes } from "./contract.js";
 import { SCHEMA_SQL, SCHEMA_VERSION, crossProjectId, decId, extId, rowToCompact, rowToFull, rowToLock, type LockRow, type MemoryRow } from "./model.js";
 import { resolveProjectRef } from "./namespace.js";
 
@@ -136,15 +136,28 @@ export class Store implements IStore {
   // ---- reads ---------------------------------------------------------------
   recall(q: RecallQuery): RecallResult {
     const primaryDb: DatabaseSync | null = q.project ? this.crossDb(q.project) : this.rwDb(q.projectDbPath);
+    // A query-less recall that carries a cursor is a forward drain: page the project
+    // ASCending so delivered rows form a contiguous block above `since` and the cursor
+    // can advance without ever skipping the sub-window (id-DESC + MAX(id) would strand it).
+    const incremental = !q.query && q.since !== undefined;
     const sources: { db: DatabaseSync | null; store: Scope; since: number }[] = [
       { db: primaryDb, store: "project", since: q.since ?? 0 },
       { db: this.globalDb(), store: "global", since: 0 }, // global always re-scanned (low churn)
     ];
 
     const hits: { row: MemoryRow; store: Scope; rank?: number; readOnly?: true }[] = [];
+    let sourceCapped = false; // browse: any source filled its page (informational "there is more")
+    let projectCapped = false; // drain: the project page was full ⇒ more project rows lie beyond it
+    let projectScannedMax = q.since ?? 0; // drain: highest project id the SQL scanned (safe to skip past)
     for (const s of sources) {
       if (!s.db) continue;
-      const rows = q.query ? this.searchRows(s.db, q.query, s.since, q.limit) : this.recentRows(s.db, s.since, q.limit);
+      const order = incremental && s.store === "project" ? "asc" : "desc";
+      const rows = q.query ? this.searchRows(s.db, q.query, s.since, q.limit) : this.recentRows(s.db, s.since, q.limit, order);
+      if (rows.length >= q.limit) sourceCapped = true; // more rows may remain beyond this page
+      if (s.store === "project") {
+        projectCapped = rows.length >= q.limit;
+        if (incremental && rows.length) projectScannedMax = rows[rows.length - 1]!.row.id; // ASC ⇒ last is max
+      }
       for (const r of rows) {
         if (q.tags && q.tags.length) {
           const t = r.row.tags ? (JSON.parse(r.row.tags) as string[]) : [];
@@ -156,28 +169,55 @@ export class Store implements IStore {
           : { row: r.row, store: s.store, ...(readOnly ? { readOnly } : {}) });
       }
     }
-    hits.sort((a, b) => (q.query ? (a.rank ?? 0) - (b.rank ?? 0) || b.row.id - a.row.id : b.row.id - a.row.id));
+    // search → bm25 relevance; drain → project rows first in ascending id (so a byte cut
+    // drops the newest-in-page and the cursor stays a no-skip floor); browse → newest first
+    // by ts, which is the only field comparable across the separate project and global DBs
+    // (raw rowids are per-DB sequences and would let the larger DB crowd out the other).
+    if (q.query) {
+      hits.sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0) || b.row.ts - a.row.ts || b.row.id - a.row.id);
+    } else if (incremental) {
+      hits.sort((a, b) =>
+        (a.store === b.store ? 0 : a.store === "project" ? -1 : 1)
+        || (a.store === "project" ? a.row.id - b.row.id : b.row.ts - a.row.ts || b.row.id - a.row.id));
+    } else {
+      hits.sort((a, b) => b.row.ts - a.row.ts || b.row.id - a.row.id);
+    }
 
     const results: (CompactMemory | FullMemory)[] = [];
     let bytes = 0;
     let truncated = false;
+    // Drain path only: the first project row that was deliverable but cut by the limit/budget.
+    // Because project rows sort first, a cut on a project row means every project row from here
+    // up is undelivered; a cut on a global row means all project rows were already delivered.
+    let firstDroppedProjectId = 0;
     for (const h of hits) {
-      if (results.length >= q.limit) { truncated = true; break; }
+      if (results.length >= q.limit) { truncated = true; if (h.store === "project") firstDroppedProjectId = h.row.id; break; }
       const rec = q.mode === "full" ? rowToFull(h.row, h.store) : rowToCompact(h.row, h.store, h.rank);
       if (h.readOnly) {
         rec.id = crossProjectId(h.row.id);
         if ("supersedes" in rec && rec.supersedes !== undefined) rec.supersedes = crossProjectId(rec.supersedes);
         rec.readOnly = true;
       }
-      const size = utf8Bytes(q.mode === "full" ? (rec as FullMemory).content : (rec as CompactMemory).snippet);
-      if (bytes + size > q.maxBytes && results.length > 0) { truncated = true; break; }
+      // Budget on the whole serialized record (id/ts/agent/tags/provenance), not just the
+      // snippet — that is what actually reaches the caller's context. First record is always
+      // admitted so recall makes progress even under a tiny budget.
+      const size = utf8Bytes(JSON.stringify(rec));
+      if (bytes + size > q.maxBytes && results.length > 0) { truncated = true; if (h.store === "project") firstDroppedProjectId = h.row.id; break; }
       results.push(rec);
       bytes += size;
     }
-    const max = primaryDb
-      ? primaryDb.prepare("SELECT COALESCE(MAX(id),0) AS m FROM memory").get() as unknown as { m: number }
-      : { m: 0 };
-    return { results, truncated, cursor: max.m };
+    if (incremental) {
+      // Cursor/`truncated` reflect PROJECT drain only: global is re-scanned from 0 every call and
+      // can never be advanced by the cursor, so counting it would loop forever once the project is
+      // drained. Advance past scanned project rows (delivered or filtered); stop before the first
+      // budget-cut project row so it is refetched next call.
+      const cursor = firstDroppedProjectId ? firstDroppedProjectId - 1 : projectScannedMax;
+      return { results, truncated: firstDroppedProjectId !== 0 || projectCapped, cursor };
+    }
+    const browseCursor = primaryDb
+      ? (primaryDb.prepare("SELECT COALESCE(MAX(id),0) AS m FROM memory").get() as unknown as { m: number }).m
+      : 0;
+    return { results, truncated: truncated || sourceCapped, cursor: browseCursor };
   }
 
   private searchRows(db: DatabaseSync, query: string, since: number, limit: number): RowHit[] {
@@ -190,9 +230,11 @@ export class Store implements IStore {
     return rows.map((r) => ({ row: r, rank: r.rank }));
   }
 
-  private recentRows(db: DatabaseSync, since: number, limit: number): RowHit[] {
+  private recentRows(db: DatabaseSync, since: number, limit: number, order: "asc" | "desc" = "desc"): RowHit[] {
+    // `order` is an internal literal (never user input): ASC drains forward from a cursor,
+    // DESC shows the newest slice for browse.
     const rows = db.prepare(
-      "SELECT id,ts,agent_id,content,tags,supersedes,status FROM memory WHERE status='live' AND id > ? ORDER BY id DESC LIMIT ?",
+      `SELECT id,ts,agent_id,content,tags,supersedes,status FROM memory WHERE status='live' AND id > ? ORDER BY id ${order === "asc" ? "ASC" : "DESC"} LIMIT ?`,
     ).all(since, limit) as unknown as MemoryRow[];
     return rows.map((row) => ({ row }));
   }
@@ -206,13 +248,22 @@ export class Store implements IStore {
       if (arr) arr.push(d.rowid); else byStore.set(d.store, [d.rowid]);
     }
     const out: FullMemory[] = [];
+    let bytes = 0;
     for (const [store, rowids] of byStore) {
       if (!rowids.length) continue;
       const ph = rowids.map(() => "?").join(",");
       const rows = this.dbFor(store, q.projectDbPath).prepare(
         `SELECT id,ts,agent_id,content,tags,supersedes,status FROM memory WHERE id IN (${ph}) AND status!='redacted'`,
       ).all(...rowids) as unknown as MemoryRow[];
-      for (const r of rows) out.push(rowToFull(r, store));
+      for (const r of rows) {
+        // Aggregate content ceiling: get expands caller-chosen ids, so fail loud rather than
+        // silently flooding context. A single record is always ≤ CONTENT_BYTES_MAX ⇒ always fetchable.
+        bytes += utf8Bytes(r.content);
+        if (bytes > LIMITS.GET_MAXBYTES) {
+          throw new SynapsePayloadError(`memory_get content exceeds ${LIMITS.GET_MAXBYTES} bytes; request fewer ids or use compact recall`);
+        }
+        out.push(rowToFull(r, store));
+      }
     }
     return out;
   }

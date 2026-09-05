@@ -3,116 +3,96 @@ name: ops-deps
 description: "Audit and refresh dependency health and supply-chain state."
 ---
 
-## OBJECTIVE
+# Dependency Maintenance
 
-**THE MECHANIC.**
-Dependencies are not pets; they are cattle.
-If a dependency is old, it is a security risk. If it is dead, it is a liability.
-**Your Goal**: Keep the supply chain fresh.
-**The Philosophy**: If an upgrade breaks your code, **YOUR CODE IS WRONG**. Fix the code, don't pin the version.
+## Objective
 
-## CONTEXT STRATEGY (TOKEN ECONOMICS)
+Keep dependencies supported, compatible, secure, and reproducible. An update is a compatibility change, not a freshness contest.
 
-1. **Focused Updates**:
-    - Don't list all 1000 packages.
-    - Focus on **Critical** (Security) and **Major** (Breaking) updates first.
+## Workflow
 
-## VIBE CODING INTEGRATION
+### 1. Read Repository Policy
 
-AI often suggests outdated packages from training data. This command:
+- Identify the package manager, manifests, lockfiles, runtime constraints, CI version, and dependency-update automation already in use.
+- Preserve the repository's versioning strategy. Do not replace exact pins, ranges, lockfiles, vendoring, or workspace constraints without an explicit migration reason.
+- Prefer repository scripts over ad hoc global commands.
 
-- Catches AI's outdated dependency suggestions
-- Prevents AI from using deprecated APIs
-- Keeps manifest in sync with AI-generated code
+### 2. Find Concrete Work
 
-## PROTOCOL
+Use the ecosystem's existing tooling, such as `npm outdated`, `cargo outdated`, `uv lock --upgrade-package`, or the repository's dependency bot configuration.
 
-### Phase 1: The Health Scan (Discovery)
+Prioritize:
 
-*Identify the rotting flesh.*
+1. known exploitable advisories affecting the actual resolved version and used path;
+2. unsupported or abandoned dependencies;
+3. versions blocking a required feature, runtime, or platform;
+4. routine updates with a clear maintenance benefit.
 
-1. **Check Status**:
-    - **JS/TS**: `npm outdated` / `pnpm outdated`.
-    - **Rust**: `cargo outdated`.
-    - **Python**: `uv pip list --outdated`.
-2. **Categorize**:
-    - **Patch/Minor** (e.g., 1.2.0 -> 1.2.1): Should be safe.
-    - **Major** (e.g., 1.0 -> 2.0): **Breaking Changes**. Requires attention.
-    - **Zombie**: Archived or no release in > 24 months → **FLAG FOR REPLACEMENT**.
-3. **Security Signals**:
-    - Query **OSV**/**NVD** for known CVEs; prefer packages with active maintenance
-    - If in SEC policy (KEV/EPSS) → treat as urgent
+Do not upgrade solely because a newer version exists.
 
-### Phase 2: The Upgrade Strategy (Atomic & Aggressive)
+### 3. Check the Candidate
 
-*Do not upgrade everything at once. That is suicide.*
+Before changing a dependency, inspect proportionately:
 
-1. **Select Target**: Pick ONE package (or tight group like `@babel/*`).
-2. **Execute Upgrade**:
-    - **JS/TS**: `npm install lib@latest`.
-    - **Python**: `uv pip install -U <package>` then `uv sync`.
-    - **Constraint**: DO NOT use `--legacy-peer-deps` or `--force`. Resolve conflicts.
-3. **Verify**:
-    - Run `verify-test` (Unit) + type-check
-    - Run `build` where applicable
+- release notes and migration guidance;
+- runtime and toolchain compatibility;
+- maintenance status and known advisories;
+- license fit when relevant;
+- install/build scripts, native binaries, and transitive footprint;
+- manifest and lockfile impact.
 
-### Phase 3: The Breakage Protocol (Fix Forward)
+Use a maintained existing dependency when it already solves the need. Do not add a second library for the same job without a concrete advantage.
 
-*The upgrade broke the build. Good. Now we work.*
+### 4. Choose the Version Deliberately
 
-**Scenario A: Type Error / API Change**
+- Use the repository's normal manifest constraint and regenerate its lockfile.
+- Pin tools, actions, containers, and other build inputs when the repository requires reproducible identity.
+- Do not write `@latest`, a mutable branch, or an unbounded version into durable automation merely to obtain the newest release.
+- A major upgrade may be deferred when migration cost exceeds the current benefit.
 
-- **Action**: Read the Changelog.
-- **Fix**: Update *our* code to match the new API.
-- **Rule**: Do NOT downgrade unless the new version has a confirmed Critical Bug.
+### 5. Update One Coherent Unit
 
-**Scenario B: The Zombie/Abandonware**
+Change one dependency or a tightly coupled family. Keep required source changes, generated metadata, and the lockfile in the same patch. Do not combine unrelated upgrades.
 
-- **Trigger**: Library is broken and unmaintained.
-- **Action**: **MIGRATE** to supported alternative.
+Never use `--force`, `--legacy-peer-deps`, ignored resolver failures, or manual lockfile editing to manufacture a successful install.
 
-### Phase 4: Automation (Keep it Fresh)
+### 6. Verify the Real Path
 
-1. **Renovate/Dependabot**: Enable; weekly schedule; group minor/patch by ecosystem
-2. **Lockfile Policy**:
-    - Commit lockfiles (`package-lock.json`, `Cargo.lock`, `uv` lock)
-    - Recreate lockfiles when registry metadata changes
-3. **CI Gate**: Add "deps" workflow to run upgrades PRs with tests/lints/audit
+Run the cheapest relevant checks first, then the repository gate appropriate to the affected surface:
 
-## OUTPUT FORMAT
+- dependency resolution or locked install;
+- type-check, compile, or import check;
+- focused tests for changed APIs;
+- broader tests/build when the dependency is shared or production-facing;
+- audit or scanner re-check for security-driven updates.
 
-**The Upgrade Report**
+If the selected release is broken or incompatible, report the evidence and either choose a supported compatible release, defer the upgrade, replace the dependency, or roll back. Do not assume application code must always fix forward around an upstream defect.
+
+## Output
 
 ```markdown
-# 🔧 DEPENDENCY UPGRADE LOG
+# Dependency Report
 
-## 🟢 Successfully Upgraded
-- `react`: 18.2 -> 18.3 (Patch) - Tests Passed.
-- `zod`: 3.22 -> 3.23 (Minor) - Tests Passed.
+## Changed
+- package: old -> new
+- reason: advisory / support / required capability / maintenance
+- manifest policy: preserved or intentionally changed
+- lockfile: updated / unchanged / not applicable
 
-## 🔴 Breaking Changes (Action Required)
-- **Target**: `uuid` (8.0 -> 9.0)
-- **Error**: `v4()` import changed to named export.
-- **Fix Applied**: Updated `src/utils/id.ts` to use new syntax.
-- **Status**: ✅ FIXED & UPGRADED.
+## Verification
+- command -> passed / failed / not run
 
-## 💀 ZOMBIE DETECTED
-- **Target**: `moment`
-- **Recommendation**: Plan `migration` to `date-fns` immediately.
+## Deferred
+- package -> evidence and unblock condition
+
+## Risk
+- migration, compatibility, native-build, or supply-chain limits
 ```
 
-## EXECUTION RULES
+## Hard Rules
 
-1. **COMMIT LOCKFILES**: `package-lock.json` / `Cargo.lock` MUST be committed after every upgrade.
-2. **NO PINNING**: Avoid exact pins unless a documented bug ticket exists; default caret (`^`). For Python, commit the **lockfile** generated by `uv` along with `pyproject.toml`.
-3. **TESTS ARE SACRED**: You cannot merge an upgrade if `test` fails. Fix the code.
-4. **NO GARBAGE FLAGS**: `--legacy-peer-deps`, `--force` are banned. Resolve root cause.
-
-## AI GUARDRAILS
-
-| AI Pattern | Problem | Solution |
-|------------|---------|----------|
-| Suggesting deprecated packages | `moment`, `request` | Use modern alternatives |
-| Wrong API version | AI uses v2 syntax for v3 lib | Check changelog after upgrade |
-| Phantom dependencies | AI imports uninstalled package | Verify in manifest before using |
-| Conflicting versions | AI suggests incompatible deps | Resolve conflicts properly |
+1. Respect the repository's package manager, manifests, and lockfile.
+2. Verify package names, versions, APIs, and advisories from authoritative current sources.
+3. Never weaken tests, type checks, audits, or resolver policy to land an update.
+4. Do not claim a security fix unless the vulnerable resolved version and affected path were actually removed or mitigated.
+5. Keep the change atomic and report failed or blocked checks honestly.

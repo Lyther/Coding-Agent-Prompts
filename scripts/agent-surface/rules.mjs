@@ -1,8 +1,15 @@
 // Rule sources: load rules/*.mdc and parse their frontmatter (description, alwaysApply,
 // globs). Parsing only — reference validation + rendering live in the check/render layers.
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { files } from "./fs-tree.mjs";
-import { relative } from "./registry.mjs";
+import {
+  assetCategoryAllowed,
+  assetCategoryFor,
+  readAssetCategories,
+  relative,
+  selectedAssetCategories,
+} from "./registry.mjs";
 
 export async function readRules() {
   const ruleFiles = await files("rules", [".mdc"]);
@@ -14,6 +21,16 @@ export async function readRules() {
   }
 
   return rules;
+}
+
+export async function readRulesForContext(context = {}, { includeBaseline = false } = {}) {
+  const categories = await readAssetCategories();
+  const selectedCategories = selectedAssetCategories(context.categoryFilter);
+  return (await readRules()).map((rule) => {
+    const name = path.basename(rule.file, ".mdc");
+    return { ...rule, assetCategory: assetCategoryFor(categories, "rules", name) };
+  }).filter((rule) => assetCategoryAllowed(context, rule.assetCategory)
+    || (includeBaseline && selectedCategories.size > 0 && rule.assetCategory === null));
 }
 
 export function parseRule(file, text) {

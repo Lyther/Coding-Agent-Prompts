@@ -6,11 +6,14 @@
     "category",
     "skills",
     "commands",
+    "rules",
+    "subagents",
     "services"
   ],
   "properties": {
     "category": {
       "enum": [
+        "development",
         "cybersecurity",
         "private",
         "modding"
@@ -25,6 +28,22 @@
       }
     },
     "commands": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      }
+    },
+    "subagents": {
       "type": "array",
       "uniqueItems": true,
       "items": {

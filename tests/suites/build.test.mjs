@@ -132,14 +132,24 @@ for (const target of [
     );
   }
   assert.equal(
-    targetFiles.some((file) => file.includes(`${path.sep}karpathy-guidelines${path.sep}SKILL.md`)),
-    true,
-    `${target}: optional andrej-karpathy-skills pack missing`,
-  );
-  assert.equal(
     targetFiles.some((file) => file.includes(`${path.sep}book-study${path.sep}SKILL.md`)),
     true,
     `${target}: optional sanyuan-skills pack missing`,
+  );
+  assert.equal(
+    targetFiles.some((file) => file.includes(`${path.sep}archify${path.sep}SKILL.md`)),
+    true,
+    `${target}: optional archify pack missing`,
+  );
+  assert.equal(
+    targetFiles.some((file) => file.includes(`${path.sep}archify${path.sep}bin${path.sep}archify.mjs`)),
+    true,
+    `${target}: optional archify CLI missing`,
+  );
+  assert.equal(
+    targetFiles.some((file) => file.includes(`${path.sep}archify${path.sep}assets${path.sep}template.html`)),
+    true,
+    `${target}: optional archify template missing`,
   );
 }
 

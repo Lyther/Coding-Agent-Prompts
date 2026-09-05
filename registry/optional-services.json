@@ -100,37 +100,59 @@
       "kind": "skill-pack",
       "optional": true,
       "skill_roots": [
-        "external/sanyuan-skills/skills/*"
+        "external/sanyuan-skills/skills/book-study",
+        "external/sanyuan-skills/skills/sigma",
+        "external/sanyuan-skills/skills/wiki-ingest"
       ],
       "local_wiring": [
         "All supported Agent Skills runtimes: mirror the reviewed skills into each target's native skill directory."
       ],
       "notes": [
-        "Optional production-grade skills for review, tutoring, skill creation, wiki ingestion, and book study."
+        "Optional general-purpose skills for tutoring, wiki ingestion, and book study."
       ]
     },
-    "andrej-karpathy-skills": {
+    "sanyuan-development-skills": {
       "status": "optional",
-      "source_url": "https://github.com/multica-ai/andrej-karpathy-skills",
-      "path": "external/andrej-karpathy-skills",
-      "commit": "2c606141936f1eeef17fa3043a72095b4765b9c2",
+      "source_url": "https://github.com/sanyuan0704/sanyuan-skills",
+      "path": "external/sanyuan-skills",
+      "commit": "08b6572ef108f22d4e8a3ecf9182a4bbef097744",
       "kind": "skill-pack",
       "optional": true,
       "skill_roots": [
-        "external/andrej-karpathy-skills/skills/karpathy-guidelines"
+        "external/sanyuan-skills/skills/skill-forge",
+        "external/sanyuan-skills/skills/skill-review"
       ],
       "local_wiring": [
-        "All supported Agent Skills runtimes: mirror karpathy-guidelines into each target's native skill directory."
+        "Development-category Agent Skills runtimes: mirror the reviewed development skills into each target's native skill directory."
       ],
       "notes": [
-        "Optional coding-behavior guideline skill focused on assumptions, simplicity, surgical changes, and verification."
+        "Development-only skill authoring and skill review from the shared Sanyuan source pack.",
+        "code-review-expert is intentionally not distributed because qa-review owns that capability."
+      ]
+    },
+    "archify": {
+      "status": "optional",
+      "source_url": "https://github.com/tt-a1i/archify",
+      "path": "external/archify",
+      "commit": "06dd052602dd9a369e4d034e24faef0917b5a60c",
+      "kind": "skill-pack",
+      "optional": true,
+      "skill_roots": [
+        "external/archify/archify"
+      ],
+      "local_wiring": [
+        "All supported Agent Skills runtimes: mirror the Archify skill and its deterministic renderer into each target's native skill directory."
+      ],
+      "notes": [
+        "Optional presentation-grade renderer for architecture, workflow, sequence, data-flow, and lifecycle diagrams.",
+        "Complements arch-diagram: the canonical skill owns architecture evidence and view selection; Archify renders validated interactive artifacts when selected."
       ]
     },
     "ctf-skills": {
       "status": "required",
       "source_url": "https://github.com/ljagiello/ctf-skills",
       "path": "external/ctf-skills",
-      "commit": "1af14f9030fee9da46014a8a3ed61a555b81ab98",
+      "commit": "36c72e53a96a035791821caff7440882ea0f5c57",
       "kind": "skill-pack",
       "optional": false,
       "skill_roots": [
@@ -148,7 +170,7 @@
       "status": "required",
       "source_url": "https://github.com/mukul975/Anthropic-Cybersecurity-Skills",
       "path": "external/anthropic-cybersecurity-skills",
-      "commit": "04450304b12645cb2b974ab96d28c0664758a88d",
+      "commit": "54a798831d2266a3ca61ce68a7acb80b81160d57",
       "attribution": "Anthropic-Cybersecurity-Skills by Mahipal Jangra and contributors; source https://github.com/mukul975/Anthropic-Cybersecurity-Skills; Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0; Grimoire serves the SKILL.md body separately from its frontmatter.",
       "kind": "source-pack",
       "optional": false,
@@ -190,18 +212,19 @@
       "status": "required",
       "source_url": "https://github.com/chAng-L19/codex-redteam-mode",
       "path": "external/codex-redteam-mode",
-      "commit": "c2d676ce26b177be1cecafe601a5f727c1945218",
+      "commit": "cd8db548fd379d67fe6ec74e382ce7c101ca603f",
       "kind": "skill-pack",
       "optional": false,
       "skill_roots": [
         "external/codex-redteam-mode/agents/skills/*"
       ],
       "local_wiring": [
-        "Agent Skills runtimes: mirror red-team-command-doctrine and redteam-* detail packs into each target's native skill directory.",
+        "Agent Skills runtimes: mirror redteam-boundary-policy into each target's native skill directory.",
         "Codex-compatible skill roots: ~/.agents/skills/<skill-name> or .agents/skills/<skill-name>."
       ],
       "notes": [
-        "Required red-team skill pack requested as an external asset."
+        "Required compact operational-boundary skill for durable red-team workflows.",
+        "The upstream project removed its former routing and detail-pack cards; HackSkills remains the just-in-time source for detailed offensive methods."
       ]
     },
     "hack-skills": {
@@ -222,6 +245,31 @@
       "notes": [
         "Pinned cybersecurity source pack with 102 native Agent Skills.",
         "Kept out of runtime startup catalogs because its coverage overlaps other large security packs."
+      ]
+    },
+    "chrome-devtools": {
+      "status": "optional",
+      "source_url": "https://github.com/ChromeDevTools/chrome-devtools-mcp",
+      "kind": "mcp",
+      "optional": true,
+      "mcp": {
+        "server": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "chrome-devtools-mcp@1.8.0",
+            "--no-usage-statistics"
+          ]
+        },
+        "validation_hint": "Install Google Chrome or Chrome for Testing, then list the chrome-devtools MCP tools or run the upstream performance-trace smoke prompt."
+      },
+      "local_wiring": [
+        "MCP-capable runtimes: explicit opt-in general MCP named chrome-devtools over stdio."
+      ],
+      "notes": [
+        "Official Chrome DevTools MCP pinned to npm release 1.8.0; usage statistics are disabled in the generated command.",
+        "The server starts its supported Chrome browser only when a browser tool is first called."
       ]
     },
     "fenjing": {
@@ -245,6 +293,31 @@
       "notes": [
         "Fenjing automates Jinja2 SSTI payload generation and WAF bypass for authorized CTF and security testing.",
         "MOMO owns installation and application readiness for the fenjing executable and pins the compatible MCP v1 dependency."
+      ]
+    },
+    "ida-pro-mcp": {
+      "status": "optional-caution",
+      "source_url": "https://github.com/mrexodia/ida-pro-mcp",
+      "commit": "3c97954d74d70063ba076411570a33118a9d691f",
+      "kind": "mcp",
+      "optional": true,
+      "mcp": {
+        "server": {
+          "type": "stdio",
+          "command": "idalib-mcp",
+          "args": [
+            "--stdio"
+          ]
+        },
+        "validation_hint": "PyPI 1.4.0 does not provide idalib-mcp. Install ida-pro-mcp from pinned upstream revision 3c97954d74d70063ba076411570a33118a9d691f (2.0.0), activate a licensed IDA Pro 8.3+ idalib environment, then list the idalib MCP tools and open a disposable analysis database."
+      },
+      "local_wiring": [
+        "MCP-capable runtimes: opt-in cybersecurity MCP named ida-pro-mcp over stdio."
+      ],
+      "notes": [
+        "Provides live IDA and headless idalib analysis; complements the methodology served by rev-skills.",
+        "The configured idalib-mcp entrypoint comes from pinned upstream 2.0.0; the latest PyPI release remains 1.4.0 and does not provide it.",
+        "Agent-surface does not install or license IDA Pro. The executable remains unavailable until the operator installs the Python package and activates idalib."
       ]
     },
     "openosint": {

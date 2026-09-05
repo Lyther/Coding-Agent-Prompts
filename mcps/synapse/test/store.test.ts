@@ -274,3 +274,85 @@ test("F003: `since` is incremental for project but global is always re-scanned (
     assert.deepEqual([...new Set(stores)], ["global", "project"]);
   } finally { cleanup(); }
 });
+
+test("R2: since-drain sees every project record when the backlog exceeds one page", () => {
+  const { store, P, cleanup } = setup();
+  try {
+    for (let i = 0; i < 31; i++) store.remember({ projectDbPath: P, agentId: "a", content: `backlog record ${i}` });
+    const seen = new Set<number>();
+    let since = 0;
+    for (let guard = 0; guard < 20; guard++) {
+      const r = store.recall(recall(P, { since, limit: 20 }));
+      for (const rec of r.results) if (rec.store === "project") seen.add(rec.id);
+      if (!r.truncated) break;
+      assert.ok(r.cursor > since, `cursor must advance past ${since}, got ${r.cursor}`);
+      since = r.cursor;
+    }
+    assert.equal(seen.size, 31, `since-drain must eventually deliver all 31 records (saw ${seen.size})`);
+  } finally { cleanup(); }
+});
+
+test("R2b: since-drain terminates once the project is drained even when global memory fills a page", () => {
+  const { store, P, clock, cleanup } = setup();
+  try {
+    for (let i = 0; i < 31; i++) { clock.advance(1); store.remember({ projectDbPath: P, agentId: "a", content: `project record ${i}` }); }
+    for (let i = 0; i < 40; i++) { clock.advance(1); store.remember({ projectDbPath: P, agentId: "a", content: `global pref ${i}`, global: true }); }
+    const seen = new Set<number>();
+    let since = 0, pages = 0;
+    let last = store.recall(recall(P, { since, limit: 20 }));
+    for (; pages < 100; pages++) {
+      last = store.recall(recall(P, { since, limit: 20 }));
+      for (const rec of last.results) if (rec.store === "project") seen.add(rec.id);
+      if (!last.truncated) break;
+      assert.ok(last.cursor > since, `cursor must advance while draining (was ${since}, got ${last.cursor})`);
+      since = last.cursor;
+    }
+    assert.ok(pages < 100, "drain must terminate, not loop on re-scanned global memory");
+    assert.equal(seen.size, 31, `all 31 project records delivered (saw ${seen.size})`);
+    // The exact stranding case: project fully drained, global still returns a full page.
+    const beyond = store.recall(recall(P, { since: 1_000_000, limit: 20 }));
+    assert.ok(beyond.results.some((r) => r.store === "global") && beyond.results.every((r) => r.store === "global"), "global is still surfaced, no project rows remain");
+    assert.equal(beyond.truncated, false, "project-exhausted drain must report not-truncated despite re-scanned global (no infinite loop)");
+  } finally { cleanup(); }
+});
+
+test("R3: recall ranks project and global by recency, not by incomparable per-DB row ids", () => {
+  const { store, P, clock, cleanup } = setup();
+  try {
+    for (let i = 0; i < 25; i++) store.remember({ projectDbPath: P, agentId: "a", content: `older global pref ${i}`, global: true });
+    clock.advance(10_000);
+    store.remember({ projectDbPath: P, agentId: "a", content: "fresh project decision phi" });
+    const r = store.recall(recall(P, { limit: 20 }));
+    assert.ok(
+      r.results.some((x) => x.store === "project"),
+      "the newest record (a project row) must survive ranking against many older, higher-rowid global rows",
+    );
+  } finally { cleanup(); }
+});
+
+test("R4: recall byte budget accounts for the whole serialized record, not just the snippet", () => {
+  const { store, P, cleanup } = setup();
+  try {
+    for (let i = 0; i < 20; i++) {
+      store.remember({ projectDbPath: P, agentId: "agent-with-long-identifier", content: `x${i}`, tags: ["alpha", "beta"] });
+    }
+    const r = store.recall(recall(P, { maxBytes: 256, limit: 200 }));
+    const serialized = r.results.reduce((n, rec) => n + Buffer.byteLength(JSON.stringify(rec), "utf8"), 0);
+    assert.ok(r.results.length >= 1, "always make progress with at least one record");
+    assert.ok(serialized <= 256 + 300, `serialized results must respect maxBytes plus one record (got ${serialized} across ${r.results.length})`);
+  } finally { cleanup(); }
+});
+
+test("R4b: memory_get fails loud (PAYLOAD_TOO_LARGE) when combined content is too large", () => {
+  const { store, P, cleanup } = setup();
+  try {
+    const big = "z".repeat(40 * 1024); // < CONTENT_BYTES_MAX, so a single record is always fetchable
+    const a = store.remember({ projectDbPath: P, agentId: "a", content: big });
+    const b = store.remember({ projectDbPath: P, agentId: "a", content: big });
+    const tools = buildToolSet(store, { projectDbPath: P, agentId: "a" });
+    assert.ok(!tools.call("memory_get", { ids: [a.id] }).isError, "a single large record still fetches");
+    const tooBig = tools.call("memory_get", { ids: [a.id, b.id] });
+    assert.equal(tooBig.isError, true);
+    assert.equal(JSON.parse(tooBig.content[0]!.text).code, "PAYLOAD_TOO_LARGE");
+  } finally { cleanup(); }
+});

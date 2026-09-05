@@ -63,7 +63,7 @@ for (const [target, adapter] of Object.entries(targets)) {
       `${target}: private local ops-server command is distributed`,
     );
   }
-  for (const optionalPack of ["external/andrej-karpathy-skills/", "external/sanyuan-skills/"]) {
+  for (const optionalPack of ["external/archify/", "external/sanyuan-skills/"]) {
     assert.equal(
       outputs.some((output) => output.source.startsWith(optionalPack)),
       true,

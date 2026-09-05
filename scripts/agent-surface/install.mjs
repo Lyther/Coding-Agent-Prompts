@@ -12,9 +12,9 @@ import { exportableCatalog, outputSourceKindError, requireKnownSourceKind } from
 import { readFileIfExists, readJsonIfExists, removeTree } from "./io.mjs";
 import { mergeKiloInstructionJsonc, parseJsoncResult, setJsoncRootProperty } from "./jsonc.mjs";
 import { YAML_MCP_FORMATS, assertJsonPropertyType, mergeCodexMcpToml, mergeJsonMcpConfig, mergeKiroPermissions, mergeYamlMcpConfig, optionalServiceMcpServers, renderMcpConfig } from "./merge.mjs";
-import { assetCategoryFor, assetCategoryNames, packageVersion, readAssetCategories, readSourceKinds, relative, root } from "./registry.mjs";
+import { assetCategoryFor, assetCategoryNames, packageVersion, readAssetCategories, readSourceKinds, relative, root, selectedAssetCategories } from "./registry.mjs";
 import { readRules } from "./rules.mjs";
-import { adapterMcpConfigs, kiloRuleInstructionPaths, mcpConfigRootProperties, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, retiredInstallTargets, selectedAssetCategories, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
+import { adapterMcpConfigs, kiloRuleInstructionPaths, mcpConfigRootProperties, mcpConfigScopeAllows, outputAppliesToCategory, outputAppliesToScope, outputRootFor, retiredInstallTargets, selectedMcpServiceEntries, targetOutputs, targets } from "./targets.mjs";
 import { argValue, argValues, fail, isPathInside, isSafeRelativePath, isSafeTargetName, splitArgValues, uniqueStrings } from "./util.mjs";
 
 export async function build(args) {
@@ -71,8 +71,8 @@ export async function install(args) {
 
   if (!["project", "user"].includes(scope)) fail(`unsupported install scope: ${scope}`);
   if (!isSafeTargetName(agentName)) fail(`unsafe --agent: ${agentName}`);
-  if (optionalServices && !categoryFilter?.has("mcps")) {
-    fail("--service currently applies only to --category mcps");
+  if (optionalServices && !categoryFilter?.has("mcps") && selectedAssetCategories(categoryFilter).size === 0) {
+    fail("--service requires --category mcps or an asset category");
   }
   if (!dryRun && !dest && !allowScopeRoot) {
     fail("live install requires explicit --dest or --allow-scope-root after reviewing --dry-run");
@@ -350,9 +350,12 @@ async function installPlan(target, adapter, installRoot, scope, rootSource, opti
       (id) => selectedCategories.has(configEntryAssetCategory(entry, id, categoryRegistry)),
     ))
   );
-  if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps") || categorySelectsMcp)) {
+  const categorySelectsRules = [...selectedCategories].some(
+    (category) => categoryRegistry[category].rules.length > 0,
+  );
+  if (target === "kilo" && (!categoryFilter || categoryFilter.has("rules") || categoryFilter.has("mcps") || categorySelectsMcp || categorySelectsRules)) {
     const merge = await kiloConfigMerge(installRoot, scope, {
-      includeInstructions: !categoryFilter || categoryFilter.has("rules"),
+      includeInstructions: !categoryFilter || categoryFilter.has("rules") || categorySelectsRules,
       includeMcp: !categoryFilter || categoryFilter.has("mcps") || categorySelectsMcp,
       includeRootProperties: !categoryFilter,
       categoryFilter,
@@ -1026,7 +1029,12 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
   const includeInstructions = options.includeInstructions !== false;
   const includeMcp = options.includeMcp === true;
   const includeRootProperties = options.includeRootProperties === true;
-  const instructions = includeInstructions ? await kiloRuleInstructionPaths(scope) : [];
+  const instructions = includeInstructions
+    ? await kiloRuleInstructionPaths(scope, {
+      mode: "install",
+      categoryFilter: options.categoryFilter ?? null,
+    })
+    : [];
   const legacyRuleRoot = scope === "user" ? "./rules" : ".kilo/rules";
   const legacyScopedRuleInstructions = (await readRules())
     .filter((rule) => rule.alwaysApply === false)
@@ -1044,6 +1052,14 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
     ...legacyScopedRuleInstructions,
     ...legacyLanguageRuleInstructions,
   ];
+  // Every always-on rule path this installer can manage, across all categories. A full general
+  // install (no category/service filter) prunes the category rule FILES, so it must also drop
+  // their now-dangling instruction entries instead of only appending — otherwise kilo.jsonc keeps
+  // pointing at removed `.kilo/rules/*.md` files after `general -> development -> general`.
+  const managedRuleInstructions = (await readRules())
+    .filter((rule) => rule.alwaysApply !== false)
+    .map((rule) => `${legacyRuleRoot}/${path.basename(rule.file, ".mdc")}.md`);
+  const pruneStaleInstructions = includeInstructions && !options.categoryFilter && !options.optionalServices;
   const mcpEntries = includeMcp
     ? await selectedMcpServiceEntries(true, {
       mode: "install",
@@ -1058,6 +1074,8 @@ async function kiloConfigMerge(installRoot, scope, options = {}) {
     format: "local-command-map",
     instructions,
     legacyInstructions: includeInstructions ? legacyInstructions : [],
+    managedRuleInstructions,
+    pruneStaleInstructions,
     rootProperties: includeRootProperties
       ? { permission: { "*": "allow" }, share: "disabled" }
       : {},
@@ -1138,6 +1156,11 @@ async function prepareKiloConfigMerge(merge, previousConfigEntries, pruneCategor
     }
     missing = merge.instructions.filter((item) => !instructions.includes(item));
     remove = merge.legacyInstructions.filter((item) => instructions.includes(item));
+    if (merge.pruneStaleInstructions) {
+      const keep = new Set(merge.instructions);
+      const stale = merge.managedRuleInstructions.filter((item) => instructions.includes(item) && !keep.has(item));
+      if (stale.length > 0) remove = [...new Set([...remove, ...stale])];
+    }
     if (missing.length > 0 || remove.length > 0) {
       content = mergeKiloInstructionJsonc(content, missing, remove);
     }
