@@ -182,6 +182,17 @@ Exit gate: docs, generated output, local distribution, and manifests agree with 
 
 ## Later / Not Now
 
+### Deferred MCP Configuration (2026-09-05)
+
+The selected distribution includes all asset categories but only Synapse and Grimoire. Kilo's measured all-enabled startup cost is accepted; no further context optimization is requested. These external-service gaps do not block the selected profile:
+
+- The service registry currently distributes stdio command/args only; application settings and local credential references are not implemented.
+- OpenOSINT's MCP entry point does not load `.env` like its CLI. Optional provider credentials were not available in the checked environment; `holehe`, `sublist3r`, and `phoneinfoga` were absent from PATH. Application installation remains outside agent-surface.
+- IDA Pro MCP's configured executable is missing; licensed `idalib` readiness remains unverified.
+- Pentest-AI's executable is missing. Its MCP client supplies the model, so a separate LLM key is not the missing configuration. Installation and activation remain deferred.
+
+### Runtime Candidates
+
 - Amp: strong skills, subagents, and skill-scoped MCP; revisit after a real CLI probe.
 - Auggie: strong plugin/skills/MCP surface but currently beta; revisit with account access.
 - Warp: strong local/cloud agent product, but account-synced configuration needs an ownership design before file generation.

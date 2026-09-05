@@ -764,13 +764,14 @@ export function targetProducers(adapter) {
 export async function targetOutputs(adapter, catalog, context) {
   const outputs = [];
   const selectedCategories = selectedAssetCategories(context.categoryFilter);
-  const selectedCategory = selectedCategories.size === 1 ? [...selectedCategories][0] : null;
-  const selectedRuleCategory = selectedCategory
-    && (await readRulesForContext(context)).some(
-      (rule) => rule.assetCategory === selectedCategory && rule.alwaysApply !== false,
-    )
-    ? selectedCategory
-    : null;
+  // The aggregate always-on instruction document is owned by whichever selected asset category
+  // actually supplies always-on rules. Resolve it across the WHOLE selection (not just a single
+  // category) so a combined install like `--category development,cybersecurity` still emits the
+  // always-on rules instead of installing that category's skills without its instruction document.
+  const contextRules = await readRulesForContext(context);
+  const selectedRuleCategory = [...selectedCategories].find(
+    (category) => contextRules.some((rule) => rule.assetCategory === category && rule.alwaysApply !== false),
+  ) ?? null;
 
   for (const producer of targetProducers(adapter)) {
     const produced = await producer.produce(catalog, context);

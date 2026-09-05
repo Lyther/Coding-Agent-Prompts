@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import * as TOML from "@decimalturn/toml-patch";
 import assert from "node:assert/strict";
-import { readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { run } from "../lib/helpers.mjs";
 
@@ -57,6 +58,14 @@ for (const target of [
       ]);
       assert.deepEqual(developmentConfig.permission, { "*": "allow" });
       assert.equal(developmentConfig.share, "disabled");
+      // A later full general install reconciles the instruction list back to the baseline —
+      // the development rule paths must not linger after their .kilo/rules files are pruned.
+      run(installArgs);
+      const restoredConfig = JSON.parse(readFileSync(path.join(targetDest, "kilo.jsonc"), "utf8"));
+      assert.deepEqual(restoredConfig.instructions, [
+        ".kilo/rules/00-precedence-and-safety.md",
+        ".kilo/rules/01-response-style.md",
+      ]);
     }
     if (target === "codex") {
       const instructionPath = path.join(targetDest, ".codex", "AGENTS.md");
@@ -69,6 +78,21 @@ for (const target of [
       const cybersecurityInstructions = readFileSync(instructionPath, "utf8");
       assert.match(cybersecurityInstructions, /^## 00-precedence-and-safety\.mdc$/m);
       assert.match(cybersecurityInstructions, /^## 02-agent-workflow\.mdc$/m);
+      // A combined asset-category install must still emit the always-on instruction document
+      // (not just the category's skills), carrying baseline + development always-on rules.
+      run([...installArgs, "--category", "development,cybersecurity"]);
+      const combinedInstructions = readFileSync(instructionPath, "utf8");
+      assert.match(combinedInstructions, /^## 00-precedence-and-safety\.mdc$/m);
+      assert.match(combinedInstructions, /^## 02-agent-workflow\.mdc$/m);
+
+      run(installArgs);
+      run([...installArgs, "--category", "development,cybersecurity,private,modding", "--service", "synapse,grimoire"]);
+      const primaryMcpConfig = TOML.parse(readFileSync(path.join(targetDest, ".codex", "config.toml"), "utf8"));
+      assert.deepEqual(Object.keys(primaryMcpConfig.mcp_servers).sort(), ["grimoire", "synapse"]);
+      assert.match(readFileSync(instructionPath, "utf8"), /^## 02-agent-workflow\.mdc$/m);
+      for (const skill of ["dev-feature", "solve-challenge", "stellaris-design"]) {
+        assert.ok(existsSync(path.join(targetDest, ".agents", "skills", skill, "SKILL.md")), skill);
+      }
     }
     if (target === "opencode") {
       const openCodeConfig = JSON.parse(readFileSync(path.join(targetDest, ".opencode", "opencode.json"), "utf8"));
